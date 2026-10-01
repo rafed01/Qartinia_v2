@@ -1,0 +1,8 @@
+{
+  "name": "Nexora",
+  "description": "Enterprise Deep-Tech Scouting, Technology Transfer, and Open Innovation Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
