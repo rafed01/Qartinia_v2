@@ -16,12 +16,16 @@ import {
   ProjectDocument,
   UserAccount,
   UserRole,
+  SupabaseOrganization,
   EnterpriseMember,
+  SupabaseAccessRequest,
+  CatalogRelationshipEdge,
+  CatalogBookmark,
   AtomicApprovalItem,
   AuditActivityItem,
 } from './types/qartinia';
 import { QartiniaCrestSvg } from './components/QartiniaLogo';
-import { LogIn, ShieldCheck } from 'lucide-react';
+import { LogIn, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<QartiniaSection>('overview');
@@ -31,9 +35,13 @@ export default function App() {
   const [frontiers, setFrontiers] = useState<FrontierBenchmark[]>([]);
   const [projects, setProjects] = useState<ProtectedProjectRoom[]>([]);
   const [evidenceNodes, setEvidenceNodes] = useState<EvidenceNode[]>([]);
+  const [catalogRelationships, setCatalogRelationships] = useState<CatalogRelationshipEdge[]>([]);
+  const [bookmarks, setBookmarks] = useState<CatalogBookmark[]>([]);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
+  const [organizations, setOrganizations] = useState<SupabaseOrganization[]>([]);
   const [enterpriseMembers, setEnterpriseMembers] = useState<EnterpriseMember[]>([]);
+  const [requests, setRequests] = useState<SupabaseAccessRequest[]>([]);
   const [approvals, setApprovals] = useState<AtomicApprovalItem[]>([]);
   const [activityLog, setActivityLog] = useState<AuditActivityItem[]>([]);
 
@@ -51,12 +59,17 @@ export default function App() {
   } | null>(null);
 
   const applyServerState = (data: any) => {
+    if (!data) return;
     setFrontiers(data.frontiers || []);
     setProjects(data.projects || []);
     setEvidenceNodes(data.evidenceNodes || []);
+    setCatalogRelationships(data.catalogRelationships || []);
+    setBookmarks(data.bookmarks || []);
     setCurrentUser(data.currentUser || null);
     setAccounts(data.accounts || []);
+    setOrganizations(data.organizations || []);
     setEnterpriseMembers(data.enterpriseMembers || []);
+    setRequests(data.requests || []);
     setApprovals(data.approvals || []);
     setActivityLog(data.activityLog || []);
   };
@@ -87,7 +100,12 @@ export default function App() {
     }
   };
 
-  const handleLogin = async (payload: { email: string; fullName?: string }) => {
+  const handleLogin = async (payload: {
+    email?: string;
+    password?: string;
+    fullName?: string;
+    profileId?: string;
+  }) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,13 +116,19 @@ export default function App() {
     applyServerState(data.state);
   };
 
+  const handleQuickSwitchAccount = async (profileId: string) => {
+    await handleLogin({ profileId });
+  };
+
   const handleRegister = async (payload: {
     email: string;
+    password?: string;
     fullName: string;
     role: UserRole;
     organizationName: string;
     department: string;
     title: string;
+    taxId?: string;
     requireApproval: boolean;
   }) => {
     const res = await fetch('/api/auth/register', {
@@ -138,12 +162,15 @@ export default function App() {
   };
 
   const handleManageOrganization = async (payload: {
-    action: 'invite' | 'approve_member' | 'suspend_member' | 'remove_member';
+    action: 'invite' | 'approve_member' | 'suspend_member' | 'remove_member' | 'update_member_status';
     memberId?: string;
+    userId?: string;
+    organizationId?: string;
+    decision?: 'approved' | 'rejected';
     fullName?: string;
     email?: string;
     organizationName?: string;
-    role?: EnterpriseMember['role'];
+    role?: string;
     department?: string;
     requireApproval?: boolean;
   }) => {
@@ -159,9 +186,12 @@ export default function App() {
   };
 
   const handleApproval = async (payload: {
-    action?: 'create' | 'decide';
+    action?: 'create' | 'decide' | 'reset_to_pending';
     approvalId?: string;
-    decision?: 'Approved' | 'Rejected';
+    targetProfileId?: string;
+    organizationId?: string | null;
+    decision?: 'Approved' | 'Rejected' | 'approved' | 'rejected';
+    reason?: string;
     workflowType?: AtomicApprovalItem['workflowType'];
     subjectName?: string;
     subjectEmail?: string;
@@ -177,6 +207,24 @@ export default function App() {
     if (res.ok) {
       const data = await res.json();
       applyServerState(data.state);
+    }
+  };
+
+  const handleRunInvestorScenario = async (
+    scenario: 'seed_bp_wedge' | 'simulate_pending_approval' | 'run_trust_isolation_audit'
+  ) => {
+    const res = await fetch('/api/dev/investor-scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      applyServerState(data.state);
+      if (scenario === 'seed_bp_wedge') {
+        setActiveFrontierId('frt-bp-800v-sic');
+        setActiveProjectId('prj-bp-800v-sic');
+      }
     }
   };
 
@@ -261,6 +309,55 @@ export default function App() {
     const res = await fetch(`/api/evidence/${id}`, { method: 'DELETE' });
     if (res.ok) {
       await fetchState();
+    }
+  };
+
+  const handleToggleBookmark = async (catalogId: string, notes?: string) => {
+    const res = await fetch('/api/bookmarks/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ catalogId, notes }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      applyServerState(data.state);
+    }
+  };
+
+  const handleCreateRelationship = async (payload: {
+    sourceId: string;
+    targetId: string;
+    relationshipType: string;
+    description: string;
+  }) => {
+    const res = await fetch('/api/catalog-relationships', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      applyServerState(data.state);
+    }
+  };
+
+  const handleDeleteRelationship = async (id: string) => {
+    const res = await fetch(`/api/catalog-relationships/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      applyServerState(data.state);
+    }
+  };
+
+  const handleUpdateRequestStatus = async (id: string, status: string) => {
+    const res = await fetch(`/api/requests/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      applyServerState(data.state);
     }
   };
 
@@ -421,7 +518,9 @@ export default function App() {
     }
   };
 
-  const pendingApprovalsCount = approvals.filter((a) => a.status === 'Pending').length;
+  const pendingApprovalsCount = approvals.filter(
+    (a) => String(a.status).toLowerCase() === 'pending'
+  ).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#0F2537]">
@@ -440,22 +539,30 @@ export default function App() {
       {devModeEnabled && (
         <div className="bg-[#0F2537] text-white border-b border-slate-700">
           <div className="max-w-[1400px] mx-auto px-6 py-2 flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <span className="font-mono text-[#C59B47] font-semibold flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>DEV MODE ACTIVE</span>
+                <span>DEV MODE · SUPABASE LIVE</span>
               </span>
               <span className="text-slate-300">
-                Session:{' '}
+                Active Session:{' '}
                 <strong className="text-white">
                   {currentUser
-                    ? `${currentUser.fullName} (${currentUser.role} · ${currentUser.status})`
+                    ? `${currentUser.fullName} (${currentUser.email} · ${currentUser.role} · ${currentUser.status})`
                     : 'Guest (Unauthenticated)'}
                 </strong>
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleRunInvestorScenario('seed_bp_wedge')}
+                className="px-2.5 py-1 rounded bg-[#108548] hover:bg-[#0d6e3b] text-white font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-[#C59B47]" />
+                <span>Provision 800V SiC BP Wedge</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveSection('dev-console')}
@@ -465,7 +572,7 @@ export default function App() {
                     : 'text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                Auth, Enterprise &amp; Admin Console
+                DB, Auth &amp; Atomic RPC Console
               </button>
               <button
                 type="button"
@@ -473,7 +580,7 @@ export default function App() {
                 className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-white flex items-center gap-1 cursor-pointer"
               >
                 <LogIn className="w-3 h-3 text-[#C59B47]" />
-                <span>Login / Register Modal</span>
+                <span>Switch / Login Account</span>
               </button>
             </div>
           </div>
@@ -524,8 +631,15 @@ export default function App() {
         {activeSection === 'evidence' && (
           <EvidenceGraphView
             evidenceNodes={evidenceNodes}
+            frontiers={frontiers}
+            projects={projects}
+            catalogRelationships={catalogRelationships}
+            bookmarks={bookmarks}
             onCreateEvidenceNode={handleCreateEvidenceNode}
             onDeleteEvidenceNode={handleDeleteEvidenceNode}
+            onToggleBookmark={handleToggleBookmark}
+            onCreateRelationship={handleCreateRelationship}
+            onDeleteRelationship={handleDeleteRelationship}
             onLaunchProjectFromEvidence={handleLaunchProjectFromEvidence}
           />
         )}
@@ -538,14 +652,23 @@ export default function App() {
           <DevModeConsoleView
             currentUser={currentUser}
             accounts={accounts}
+            organizations={organizations}
             enterpriseMembers={enterpriseMembers}
+            requests={requests}
             approvals={approvals}
             activityLog={activityLog}
+            frontiersCount={frontiers.length}
+            projectsCount={projects.length}
+            evidenceCount={evidenceNodes.length}
+            onNavigate={setActiveSection}
             onOpenAuthModal={() => setAuthModalOpen(true)}
+            onQuickSwitchAccount={handleQuickSwitchAccount}
             onLogout={handleLogout}
             onUpdateProfile={handleUpdateProfile}
             onManageOrganization={handleManageOrganization}
             onHandleApproval={handleApproval}
+            onRunInvestorScenario={handleRunInvestorScenario}
+            onUpdateRequestStatus={handleUpdateRequestStatus}
             onResetWorkspace={handleResetWorkspace}
           />
         )}
@@ -554,6 +677,8 @@ export default function App() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
+        accounts={accounts}
+        currentUser={currentUser}
         onLogin={handleLogin}
         onRegister={handleRegister}
       />

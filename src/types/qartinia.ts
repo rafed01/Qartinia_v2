@@ -19,6 +19,27 @@ export interface EvidenceNode {
   manufacturabilityAndReliability: string;
   relevanceToGap: string;
   linkedFrontierId?: string;
+  publicationState?: 'draft' | 'published' | 'archived' | 'in_review';
+  createdAt: string;
+}
+
+export interface CatalogRelationshipEdge {
+  id: string;
+  sourceId: string;
+  sourceTitle?: string;
+  targetId: string;
+  targetTitle?: string;
+  relationshipType: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface CatalogBookmark {
+  id: string;
+  userId: string;
+  catalogId: string;
+  folder: string;
+  notes: string;
   createdAt: string;
 }
 
@@ -109,56 +130,143 @@ export interface ProtectedProjectRoom {
 }
 
 export type UserRole =
+  | 'admin'
+  | 'company'
+  | 'employee'
+  | 'user'
   | 'platform_admin'
   | 'enterprise_admin'
   | 'enterprise_employee'
   | 'researcher'
   | 'startup_founder';
 
-export type AccountStatus = 'approved' | 'onboarding' | 'pending_approval' | 'rejected';
+export type AccountStatus =
+  | 'approved'
+  | 'pending'
+  | 'rejected'
+  | 'onboarding'
+  | 'pending_approval';
 
 export interface UserAccount {
   id: string;
   email: string;
   fullName: string;
-  role: UserRole;
-  status: AccountStatus;
+  role: string;
+  status: string;
+  approvalStatus: string;
   organizationName: string;
-  organizationDomain: string;
+  organizationId: string | null;
+  focusArea: string | null;
   department: string;
   title: string;
+  taxId: string | null;
+  techStack: string[];
+  bio: string | null;
+  onboardingCompleted: boolean;
+  createdAt: string;
+}
+
+export interface SupabaseOrganization {
+  id: string;
+  name: string;
+  tier: string;
+  approvalStatus: string;
+  ownerId: string | null;
+  domain: string | null;
+  industry: string | null;
+  description: string | null;
   createdAt: string;
 }
 
 export interface EnterpriseMember {
   id: string;
+  organizationId: string;
+  organizationName: string;
+  userId: string;
   fullName: string;
   email: string;
-  organizationName: string;
-  role: 'Organization Admin' | 'R&D Lead' | 'Technology Scout' | 'IP & Legal Counsel';
+  role: 'owner' | 'admin' | 'employee' | 'collaborator' | string;
+  title: string;
   department: string;
-  status: 'Active' | 'Pending Approval' | 'Suspended';
+  approvalStatus: string;
   joinedAt: string;
+}
+
+export type SupabaseRequestType =
+  | 'access_briefing'
+  | 'nda'
+  | 'collaboration_proposal'
+  | 'due_diligence'
+  | 'report_download'
+  | 'challenge_application'
+  | 'expert_consultation';
+
+export type SupabaseRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'in_review'
+  | 'cancelled';
+
+export interface SupabaseAccessRequest {
+  id: string;
+  name: string;
+  email: string;
+  organization: string;
+  requestType: SupabaseRequestType | string;
+  status: SupabaseRequestStatus | string;
+  catalogId?: string | null;
+  proposalBrief: string;
+  decisionNotes?: string | null;
+  createdAt: string;
 }
 
 export interface AtomicApprovalItem {
   id: string;
-  workflowType: 'enterprise_employee_seat' | 'organization_verification' | 'evidence_submission';
+  targetProfileId: string;
+  organizationId: string | null;
+  workflowType: 'top_level_account' | 'enterprise_employee_seat' | 'organization_verification';
   subjectName: string;
   subjectEmail: string;
   organizationName: string;
   requestedRoleOrTier: string;
   notes: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'pending' | 'approved' | 'rejected';
   submittedAt: string;
 }
 
 export interface AuditActivityItem {
   id: string;
+  userId?: string | null;
   actor: string;
   action: string;
   target: string;
-  category: 'auth' | 'frontier' | 'project' | 'governance';
+  category: 'auth' | 'frontier' | 'project' | 'governance' | 'scout_query';
+  metadata?: Record<string, any>;
   timestamp: string;
 }
 
+export interface DatabaseDiagnosticReport {
+  connected: boolean;
+  supabaseUrl: string;
+  latencyMs: number;
+  tables: {
+    table: string;
+    status: 'OK' | 'ERROR';
+    rowCount: number;
+    columnsCount: number;
+    detail: string;
+  }[];
+  enums: {
+    name: string;
+    allowedValues: string[];
+    mappingNote: string;
+  }[];
+  rpcs: {
+    name: string;
+    status: 'VERIFIED' | 'MISSING';
+    purpose: string;
+    lastResult?: string;
+  }[];
+  checkedAt: string;
+}
