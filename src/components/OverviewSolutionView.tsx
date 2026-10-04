@@ -123,10 +123,10 @@ export const OverviewSolutionView: React.FC<OverviewSolutionViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onNavigate('investor-bp')}
+                onClick={() => onNavigate('evidence')}
                 className="px-4 py-3 text-sm font-semibold text-slate-700 hover:text-[#0F2537] border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
               >
-                Business Model & 10-Year Plan
+                Inspect Evidence Graph
               </button>
             </div>
           </div>

@@ -4,13 +4,16 @@ import {
   LegalStage,
   ProjectParticipant,
   ProjectDocument,
+  UserAccount,
 } from '../types/qartinia';
-import { Lock, ShieldCheck, Plus, Send, Check, FileText, Users, Flag, X, Trash2 } from 'lucide-react';
+import { getUserPermissions } from '../utils/permissions';
+import { Lock, ShieldCheck, Plus, Send, Check, FileText, Users, Flag, X, Trash2, Download, ShieldAlert } from 'lucide-react';
 
 interface ProjectsEngineViewProps {
   projects: ProtectedProjectRoom[];
   activeProjectId: string | null;
   onSelectProject: (id: string) => void;
+  currentUser?: UserAccount | null;
   onCreateProject: (payload: {
     title: string;
     domain: string;
@@ -72,6 +75,7 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
   projects,
   activeProjectId,
   onSelectProject,
+  currentUser,
   onCreateProject,
   onUpdateProjectStageOrGovernance,
   onAddParticipant,
@@ -83,6 +87,8 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
   pendingDraftFromFrontier,
   onClearPendingDraft,
 }) => {
+  const permissions = getUserPermissions(currentUser || null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Create Room Form State
@@ -112,9 +118,24 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
   const [docClass, setDocClass] = useState<ProjectDocument['classification']>('Mutual NDA');
   const [docAuthor, setDocAuthor] = useState('');
 
-  const [chatSenderName, setChatSenderName] = useState('');
-  const [chatSenderOrg, setChatSenderOrg] = useState('');
+  const [chatSenderName, setChatSenderName] = useState(
+    currentUser?.fullName || (currentUser?.email ? currentUser.email.split('@')[0] : '')
+  );
+  const [chatSenderOrg, setChatSenderOrg] = useState(
+    currentUser?.organizationName || 'Project Participant'
+  );
   const [chatContent, setChatContent] = useState('');
+
+  useEffect(() => {
+    if (currentUser) {
+      if (!chatSenderName) {
+        setChatSenderName(currentUser.fullName || currentUser.email.split('@')[0]);
+      }
+      if (!chatSenderOrg || chatSenderOrg === 'Project Participant') {
+        setChatSenderOrg(currentUser.organizationName || 'Project Participant');
+      }
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (pendingDraftFromFrontier) {
@@ -345,23 +366,59 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDeleteProject(selectedProject.id)}
-                      aria-label="Delete Project Room"
-                      className="p-2 text-slate-400 hover:text-red-600 border border-slate-200 rounded-lg hover:bg-red-50 cursor-pointer"
+                      onClick={() => window.print()}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      title="Export or print room charter and IP schedule"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Export Charter</span>
                     </button>
+
+                    {/* Delete Project Room button: Hidden for employees; visible only for Administrators */}
+                    {permissions.canDeleteProjects && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteProject(selectedProject.id)}
+                        aria-label="Delete Project Room"
+                        title="Delete Project Room (Admin Only)"
+                        className="p-2 text-slate-400 hover:text-red-600 border border-slate-200 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* Structured Legal Stages Selector (Reduces friction around NDA, IP, publication rights & handover) */}
                 <div>
-                  <div className="text-xs font-bold text-[#108548] mb-2">
-                    STRUCTURED LEGAL & HANDOVER STAGE
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-[#108548]">
+                      STRUCTURED LEGAL & HANDOVER STAGE
+                    </span>
+                    {!permissions.canEditProjectGovernance && (
+                      <span className="text-[10px] font-mono text-slate-400">
+                        Read-Only (Admin / Lead Authorized)
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                     {LEGAL_STAGES.map((stage, idx) => {
                       const isCurrent = selectedProject.legalStage === stage;
+                      if (!permissions.canEditProjectGovernance) {
+                        return (
+                          <div
+                            key={stage}
+                            className={`p-2.5 rounded-lg border text-left ${
+                              isCurrent
+                                ? 'bg-[#0F2537] text-white border-[#0F2537]'
+                                : 'bg-[#FAF9F6] text-slate-500 border-slate-200 opacity-80'
+                            }`}
+                          >
+                            <div className="text-[10px] font-mono opacity-75">Stage 0{idx + 1}</div>
+                            <div className="text-xs font-semibold mt-0.5 leading-snug">{stage}</div>
+                          </div>
+                        );
+                      }
                       return (
                         <button
                           key={stage}

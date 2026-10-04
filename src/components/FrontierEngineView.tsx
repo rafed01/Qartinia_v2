@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
-import { FrontierBenchmark, EvidenceNode } from '../types/qartinia';
-import { Compass, RefreshCw, Lock, BookmarkPlus, Check, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FrontierBenchmark, EvidenceNode, UserAccount } from '../types/qartinia';
+import { getUserPermissions } from '../utils/permissions';
+import {
+  Compass,
+  RefreshCw,
+  Lock,
+  BookmarkPlus,
+  Check,
+  Trash2,
+  Download,
+  ShieldAlert,
+  Edit3,
+  X,
+  Sparkles,
+} from 'lucide-react';
 
 interface FrontierEngineViewProps {
   frontiers: FrontierBenchmark[];
   activeFrontierId: string | null;
+  currentUser?: UserAccount | null;
   onSelectFrontier: (id: string) => void;
   onRunFrontierAnalysis: (payload: {
     title: string;
@@ -19,6 +33,7 @@ interface FrontierEngineViewProps {
   }) => Promise<FrontierBenchmark>;
   onReevaluateFrontier: (frontierId: string) => Promise<void>;
   onDeleteFrontier: (frontierId: string) => Promise<void>;
+  onUpdateFrontier?: (frontierId: string, updates: Partial<FrontierBenchmark>) => Promise<void>;
   onSaveEvidenceNode: (node: EvidenceNode) => Promise<void>;
   onLaunchProjectFromFrontier: (frontier: FrontierBenchmark, selectedEvidence?: EvidenceNode) => void;
 }
@@ -26,13 +41,16 @@ interface FrontierEngineViewProps {
 export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
   frontiers,
   activeFrontierId,
+  currentUser,
   onSelectFrontier,
   onRunFrontierAnalysis,
   onReevaluateFrontier,
   onDeleteFrontier,
+  onUpdateFrontier,
   onSaveEvidenceNode,
   onLaunchProjectFromFrontier,
 }) => {
+  const permissions = getUserPermissions(currentUser || null);
   const [title, setTitle] = useState('');
   const [domain, setDomain] = useState('');
   const [technologySystem, setTechnologySystem] = useState('');
@@ -45,11 +63,74 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isReevaluating, setIsReevaluating] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
+  // Edit Frontier Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDomain, setEditDomain] = useState('');
+  const [editTechnologySystem, setEditTechnologySystem] = useState('');
+  const [editMetricName, setEditMetricName] = useState('');
+  const [editMetricUnit, setEditMetricUnit] = useState('');
+  const [editOperatingEnvelope, setEditOperatingEnvelope] = useState('');
+  const [editGapAnalysis, setEditGapAnalysis] = useState('');
+  const [editMaturityTrl, setEditMaturityTrl] = useState('');
+
   const selectedFrontier =
     frontiers.find((f) => f.id === activeFrontierId) || frontiers[0] || null;
+
+  useEffect(() => {
+    if (selectedFrontier) {
+      setEditTitle(selectedFrontier.title || '');
+      setEditDomain(selectedFrontier.domain || '');
+      setEditTechnologySystem(selectedFrontier.technologySystem || '');
+      setEditMetricName(selectedFrontier.metricName || '');
+      setEditMetricUnit(selectedFrontier.metricUnit || '');
+      setEditOperatingEnvelope(selectedFrontier.operatingEnvelope || '');
+      setEditGapAnalysis(selectedFrontier.gapRootCauseAnalysis || '');
+      setEditMaturityTrl(selectedFrontier.maturityTrl || 'TRL 6');
+    }
+  }, [selectedFrontier]);
+
+  const handleOpenEditModal = () => {
+    if (!selectedFrontier) return;
+    setEditTitle(selectedFrontier.title || '');
+    setEditDomain(selectedFrontier.domain || '');
+    setEditTechnologySystem(selectedFrontier.technologySystem || '');
+    setEditMetricName(selectedFrontier.metricName || '');
+    setEditMetricUnit(selectedFrontier.metricUnit || '');
+    setEditOperatingEnvelope(selectedFrontier.operatingEnvelope || '');
+    setEditGapAnalysis(selectedFrontier.gapRootCauseAnalysis || '');
+    setEditMaturityTrl(selectedFrontier.maturityTrl || 'TRL 6');
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveFrontierEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFrontier || !onUpdateFrontier) return;
+    setIsSavingEdit(true);
+    try {
+      await onUpdateFrontier(selectedFrontier.id, {
+        title: editTitle.trim(),
+        domain: editDomain.trim(),
+        technologySystem: editTechnologySystem.trim(),
+        metricName: editMetricName.trim(),
+        metricUnit: editMetricUnit.trim(),
+        operatingEnvelope: editOperatingEnvelope.trim(),
+        gapRootCauseAnalysis: editGapAnalysis.trim(),
+        maturityTrl: editMaturityTrl.trim(),
+      });
+      setIsEditModalOpen(false);
+      setSavedNotice('Frontier benchmark updated successfully.');
+      setTimeout(() => setSavedNotice(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update frontier benchmark.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,12 +478,40 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDeleteFrontier(selectedFrontier.id)}
-                      aria-label="Delete Frontier Benchmark"
-                      className="p-2 text-slate-400 hover:text-red-600 rounded-lg border border-slate-200 hover:bg-red-50 cursor-pointer"
+                      onClick={() => window.print()}
+                      className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      title="Export or print executive benchmark report"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Export Brief</span>
                     </button>
+
+                    {/* Edit Frontier Benchmark button: Hidden for employees; visible only for Administrators */}
+                    {permissions.canEditFrontier && onUpdateFrontier && (
+                      <button
+                        type="button"
+                        onClick={handleOpenEditModal}
+                        aria-label="Edit Frontier Benchmark"
+                        title="Edit Frontier Benchmark (Admin Only)"
+                        className="px-3 py-2 text-xs font-semibold text-[#0F2537] bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-[#108548]" />
+                        <span>Edit Frontier</span>
+                      </button>
+                    )}
+
+                    {/* Delete Frontier Benchmark button: Hidden for employees; visible only for Administrators */}
+                    {permissions.canDeleteFrontier && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteFrontier(selectedFrontier.id)}
+                        aria-label="Delete Frontier Benchmark"
+                        title="Delete Frontier Benchmark (Admin Only)"
+                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg border border-slate-200 hover:bg-red-50 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -566,6 +675,151 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
           )}
         </div>
       </div>
+      {/* Edit Frontier Benchmark Modal (Admin Only) */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F2537]/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 bg-[#FAF9F6] border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[#108548]">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#0F2537]">Edit Frontier Benchmark Standard</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Admin Privilege · Standard Ref: {selectedFrontier?.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFrontierEdit} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              <div>
+                <label className="block font-semibold text-[#0F2537] mb-1">Benchmark Standard Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-medium focus:outline-none focus:border-[#108548]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">Technology Domain</label>
+                  <input
+                    type="text"
+                    required
+                    value={editDomain}
+                    onChange={(e) => setEditDomain(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">Technology System</label>
+                  <input
+                    type="text"
+                    required
+                    value={editTechnologySystem}
+                    onChange={(e) => setEditTechnologySystem(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">Primary Metric Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editMetricName}
+                    onChange={(e) => setEditMetricName(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-mono focus:outline-none focus:border-[#108548]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">Metric Unit</label>
+                  <input
+                    type="text"
+                    value={editMetricUnit}
+                    onChange={(e) => setEditMetricUnit(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-mono focus:outline-none focus:border-[#108548]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">Maturity Stage</label>
+                  <select
+                    value={editMaturityTrl}
+                    onChange={(e) => setEditMaturityTrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-medium focus:outline-none focus:border-[#108548]"
+                  >
+                    <option value="TRL 4">TRL 4 — Lab Validation</option>
+                    <option value="TRL 5">TRL 5 — Relevant Environment</option>
+                    <option value="TRL 6">TRL 6 — Prototype Verification</option>
+                    <option value="TRL 7">TRL 7 — System Demonstration</option>
+                    <option value="TRL 8">TRL 8 — Qualified Commercial</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#0F2537] mb-1">Operating Envelope &amp; Conditions</label>
+                <input
+                  type="text"
+                  value={editOperatingEnvelope}
+                  onChange={(e) => setEditOperatingEnvelope(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                  placeholder="e.g. 800V DC bus, 175°C junction temp, liquid cooling"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#0F2537] mb-1">
+                  Gap Root Cause Analysis (Engineering Breakdown)
+                </label>
+                <textarea
+                  rows={4}
+                  value={editGapAnalysis}
+                  onChange={(e) => setEditGapAnalysis(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] leading-relaxed focus:outline-none focus:border-[#108548]"
+                  placeholder="Explain physical, materials, or topological bottleneck limiting current systems..."
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="px-5 py-2 bg-[#108548] text-white font-semibold rounded-lg hover:bg-[#0d6d3b] transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {isSavingEdit ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Benchmark Standard</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

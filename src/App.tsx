@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Navbar, QartiniaSection } from './components/Navbar';
-import { OverviewSolutionView } from './components/OverviewSolutionView';
+import { Navbar } from './components/Navbar';
+import { UserDashboardView } from './components/UserDashboardView';
+import { PlatformArchitectureView } from './components/PlatformArchitectureView';
 import { FrontierEngineView } from './components/FrontierEngineView';
 import { ProjectsEngineView } from './components/ProjectsEngineView';
 import { EvidenceGraphView } from './components/EvidenceGraphView';
-import { InvestorBlueprintView } from './components/InvestorBlueprintView';
-import { DevModeConsoleView } from './components/DevModeConsoleView';
+import { SuppliersHubView } from './components/SuppliersHubView';
+import { LaboratoriesHubView } from './components/LaboratoriesHubView';
+import { ExpertsHubView } from './components/ExpertsHubView';
+import { SimulationHubView } from './components/SimulationHubView';
+import { BrainstormingHubView } from './components/BrainstormingHubView';
 import { AuthModal } from './components/AuthModal';
+import { ProfileEditModal } from './components/ProfileEditModal';
+import { CommandPaletteModal } from './components/CommandPaletteModal';
+import { NotificationToastContainer, ToastNotification } from './components/NotificationToastContainer';
 import {
+  QartiniaSection,
   FrontierBenchmark,
   ProtectedProjectRoom,
   EvidenceNode,
@@ -23,20 +31,48 @@ import {
   CatalogBookmark,
   AtomicApprovalItem,
   AuditActivityItem,
+  SupplierItem,
+  LabItem,
+  ExpertItem,
+  SimulationJob,
+  BrainstormRoom,
+  BrainstormTask,
+  NotificationItem,
 } from './types/qartinia';
 import { QartiniaCrestSvg } from './components/QartiniaLogo';
-import { LogIn, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState<QartiniaSection>('overview');
-  const [devModeEnabled, setDevModeEnabled] = useState(false);
+  const [activeSection, setActiveSection] = useState<QartiniaSection>('dashboard');
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [autoOpenEvidenceModal, setAutoOpenEvidenceModal] = useState(false);
+
+  // Global Command Palette Shortcut: Ctrl+K / Cmd+K
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   const [frontiers, setFrontiers] = useState<FrontierBenchmark[]>([]);
   const [projects, setProjects] = useState<ProtectedProjectRoom[]>([]);
   const [evidenceNodes, setEvidenceNodes] = useState<EvidenceNode[]>([]);
   const [catalogRelationships, setCatalogRelationships] = useState<CatalogRelationshipEdge[]>([]);
   const [bookmarks, setBookmarks] = useState<CatalogBookmark[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
+  const [labs, setLabs] = useState<LabItem[]>([]);
+  const [experts, setExperts] = useState<ExpertItem[]>([]);
+  const [simulations, setSimulations] = useState<SimulationJob[]>([]);
+  const [brainstormRooms, setBrainstormRooms] = useState<BrainstormRoom[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
   const [organizations, setOrganizations] = useState<SupabaseOrganization[]>([]);
@@ -58,13 +94,21 @@ export default function App() {
     initialPartnerOrg?: string;
   } | null>(null);
 
-  const applyServerState = (data: any) => {
+  const applyServerState = useCallback((data: any) => {
     if (!data) return;
     setFrontiers(data.frontiers || []);
     setProjects(data.projects || []);
     setEvidenceNodes(data.evidenceNodes || []);
     setCatalogRelationships(data.catalogRelationships || []);
     setBookmarks(data.bookmarks || []);
+    setSuppliers(data.suppliers || []);
+    setLabs(data.labs || []);
+    setExperts(data.experts || []);
+    setSimulations(data.simulations || []);
+    setBrainstormRooms(data.brainstormRooms || []);
+    if (Array.isArray(data.notifications)) {
+      setNotifications(data.notifications);
+    }
     setCurrentUser(data.currentUser || null);
     setAccounts(data.accounts || []);
     setOrganizations(data.organizations || []);
@@ -72,7 +116,7 @@ export default function App() {
     setRequests(data.requests || []);
     setApprovals(data.approvals || []);
     setActivityLog(data.activityLog || []);
-  };
+  }, []);
 
   const fetchState = useCallback(async () => {
     try {
@@ -82,23 +126,93 @@ export default function App() {
         applyServerState(data);
       }
     } catch {
-      // Initial empty state
+      // initial load
     }
-  }, []);
+  }, [applyServerState]);
 
   useEffect(() => {
     fetchState();
   }, [fetchState]);
 
-  const handleToggleDevMode = () => {
-    const next = !devModeEnabled;
-    setDevModeEnabled(next);
-    if (next) {
-      setActiveSection('dev-console');
-    } else if (activeSection === 'dev-console') {
-      setActiveSection('overview');
-    }
-  };
+  // Real-time Server-Sent Events (SSE) stream listener for live notifications
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: any = null;
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource('/api/events');
+
+        eventSource.addEventListener('notification', (e) => {
+          try {
+            const parsed = JSON.parse(e.data);
+            if (parsed.notification) {
+              const newNotif: NotificationItem = parsed.notification;
+
+              setNotifications((prev) => {
+                if (prev.some((n) => n.id === newNotif.id)) return prev;
+                return [newNotif, ...prev];
+              });
+
+              // Trigger interactive floating toast
+              setToasts((prev) => [
+                ...prev,
+                {
+                  ...newNotif,
+                  toastId: `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                },
+              ]);
+
+              // Live background sync of workspace state
+              fetchState();
+            }
+          } catch (err) {
+            console.error('[SSE Notification Parse Error]', err);
+          }
+        });
+
+        eventSource.addEventListener('workspace_state_updated', (e) => {
+          try {
+            const parsed = JSON.parse(e.data);
+            if (parsed.state) {
+              applyServerState(parsed.state);
+            } else {
+              fetchState();
+            }
+          } catch {}
+        });
+
+        eventSource.addEventListener('notification_read', (e) => {
+          try {
+            const parsed = JSON.parse(e.data);
+            if (parsed.id) {
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === parsed.id ? { ...n, read: true } : n))
+              );
+            }
+          } catch {}
+        });
+
+        eventSource.addEventListener('notification_mark_all_read', () => {
+          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        });
+
+        eventSource.onerror = () => {
+          eventSource?.close();
+          reconnectTimer = setTimeout(connectSSE, 4000);
+        };
+      } catch (err) {
+        console.warn('SSE subscription fallback:', err);
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      if (eventSource) eventSource.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, [fetchState]);
 
   const handleLogin = async (payload: {
     email?: string;
@@ -122,14 +236,14 @@ export default function App() {
 
   const handleRegister = async (payload: {
     email: string;
-    password?: string;
     fullName: string;
+    password?: string;
     role: UserRole;
-    organizationName: string;
-    department: string;
-    title: string;
+    organizationName?: string;
+    department?: string;
+    title?: string;
     taxId?: string;
-    requireApproval: boolean;
+    requireApproval?: boolean;
   }) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -143,10 +257,8 @@ export default function App() {
 
   const handleLogout = async () => {
     const res = await fetch('/api/auth/logout', { method: 'POST' });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-    }
+    const data = await res.json();
+    applyServerState(data.state);
   };
 
   const handleUpdateProfile = async (updates: Partial<UserAccount>) => {
@@ -156,89 +268,98 @@ export default function App() {
       body: JSON.stringify(updates),
     });
     if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
+      await fetchState();
     }
   };
 
-  const handleManageOrganization = async (payload: {
-    action: 'invite' | 'approve_member' | 'suspend_member' | 'remove_member' | 'update_member_status';
-    memberId?: string;
-    userId?: string;
-    organizationId?: string;
-    decision?: 'approved' | 'rejected';
-    fullName?: string;
-    email?: string;
-    organizationName?: string;
-    role?: string;
-    department?: string;
-    requireApproval?: boolean;
-  }) => {
-    const res = await fetch('/api/organizations/manage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-    }
-  };
-
-  const handleApproval = async (payload: {
-    action?: 'create' | 'decide' | 'reset_to_pending';
-    approvalId?: string;
-    targetProfileId?: string;
-    organizationId?: string | null;
-    decision?: 'Approved' | 'Rejected' | 'approved' | 'rejected';
-    reason?: string;
-    workflowType?: AtomicApprovalItem['workflowType'];
-    subjectName?: string;
-    subjectEmail?: string;
-    organizationName?: string;
-    requestedRoleOrTier?: string;
-    notes?: string;
-  }) => {
-    const res = await fetch('/api/admin/approvals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-    }
-  };
-
-  const handleRunInvestorScenario = async (
-    scenario: 'seed_bp_wedge' | 'simulate_pending_approval' | 'run_trust_isolation_audit'
+  const handleUpdateRequestStatus = async (
+    requestId: string,
+    status: string,
+    decisionNotes?: string
   ) => {
-    const res = await fetch('/api/dev/investor-scenario', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-      if (scenario === 'seed_bp_wedge') {
-        setActiveFrontierId('frt-bp-800v-sic');
-        setActiveProjectId('prj-bp-800v-sic');
+    try {
+      const res = await fetch(`/api/requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, decisionNotes }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) {
+          applyServerState(data.state);
+        } else {
+          await fetchState();
+        }
       }
+    } catch (err) {
+      console.error('Request status update failed:', err);
     }
   };
 
-  const handleResetWorkspace = async () => {
-    const res = await fetch('/api/dev/reset', { method: 'POST' });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-      setActiveFrontierId(null);
-      setActiveProjectId(null);
+  const handleDeleteRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/requests/${requestId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) {
+          applyServerState(data.state);
+        } else {
+          await fetchState();
+        }
+      }
+    } catch (err) {
+      console.error('Request deletion failed:', err);
     }
   };
 
-  const handleRunFrontierAnalysis = async (payload: {
+  // Real-Time Notification Actions
+  const handleMarkNotificationAsRead = async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+  };
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to mark all notifications read:', err);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  };
+
+  const handleDismissToast = (toastId: string) => {
+    setToasts((prev) => prev.filter((t) => t.toastId !== toastId));
+  };
+
+  const handleNavigateToNotification = (section: QartiniaSection, linkId?: string) => {
+    setActiveSection(section);
+    if (section === 'projects' && linkId) {
+      setActiveProjectId(linkId);
+    }
+    if (section === 'frontier' && linkId) {
+      setActiveFrontierId(linkId);
+    }
+  };
+
+  // Frontier Handlers
+  const handleRunFrontierAnalysis = async (params: {
     title: string;
     domain: string;
     technologySystem: string;
@@ -249,28 +370,36 @@ export default function App() {
     operatingEnvelope: string;
     constraints: string;
   }): Promise<FrontierBenchmark> => {
-    const res = await fetch('/api/frontier/analyze', {
+    const res = await fetch('/api/frontier/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(params),
     });
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to compute frontier benchmark.');
-    }
     await fetchState();
     return data.frontier;
   };
 
   const handleReevaluateFrontier = async (frontierId: string) => {
+    const frontier = frontiers.find((f) => f.id === frontierId);
+    if (!frontier) return;
+    const customerPos =
+      frontier.positions.find((p) => p.position === 'Customer technology')?.valueDisplay || '0';
+    const targetPos =
+      frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || '0';
     const res = await fetch(`/api/frontier/${frontierId}/reevaluate`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerValue: customerPos,
+        targetValue: targetPos,
+        operatingEnvelope: frontier.operatingEnvelope,
+        constraints: frontier.constraints,
+      }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to re-evaluate frontier.');
+    if (res.ok) {
+      await fetchState();
     }
-    await fetchState();
   };
 
   const handleDeleteFrontier = async (frontierId: string) => {
@@ -283,7 +412,116 @@ export default function App() {
     }
   };
 
+  const handleUpdateFrontier = async (frontierId: string, updates: Partial<FrontierBenchmark>) => {
+    const res = await fetch(`/api/frontiers/${frontierId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) {
+        applyServerState(data.state);
+      } else {
+        await fetchState();
+      }
+    }
+  };
+
+  const handleInviteMember = async (payload: {
+    organizationId?: string;
+    organizationName?: string;
+    fullName: string;
+    email: string;
+    role: string;
+    title?: string;
+    department?: string;
+    permissions?: string[];
+  }) => {
+    const res = await fetch('/api/enterprise/members/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) {
+        applyServerState(data.state);
+      } else {
+        await fetchState();
+      }
+    }
+  };
+
+  const handleUpdateMember = async (id: string, updates: Partial<EnterpriseMember>) => {
+    const res = await fetch(`/api/enterprise/members/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) {
+        applyServerState(data.state);
+      } else {
+        await fetchState();
+      }
+
+      if (
+        data.member &&
+        currentUser &&
+        data.member.email &&
+        data.member.email.toLowerCase() === currentUser.email.toLowerCase() &&
+        updates.status === 'active'
+      ) {
+        setCurrentUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                organizationName: data.member.organizationName,
+                organizationId: data.member.organizationId,
+                role: data.member.role,
+                title: data.member.title || prev.title,
+                department: data.member.department || prev.department,
+              }
+            : null
+        );
+      }
+    }
+  };
+
+  const handleDeleteMember = async (id: string) => {
+    const res = await fetch(`/api/enterprise/members/${id}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) {
+        applyServerState(data.state);
+      } else {
+        await fetchState();
+      }
+    }
+  };
+
   const handleSaveEvidenceNode = async (node: EvidenceNode) => {
+    const targetFrontierId = node.linkedFrontierId || activeFrontierId || frontiers[0]?.id;
+    if (targetFrontierId) {
+      const res = await fetch(`/api/frontier/${targetFrontierId}/evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(node),
+      });
+      if (res.ok) {
+        await fetchState();
+      }
+    }
+  };
+
+  // Evidence Graph Handlers
+  const handleCreateEvidenceNode = async (
+    node: Omit<EvidenceNode, 'id' | 'createdAt'>
+  ): Promise<void> => {
     const res = await fetch('/api/evidence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -294,33 +532,21 @@ export default function App() {
     }
   };
 
-  const handleCreateEvidenceNode = async (node: Omit<EvidenceNode, 'id' | 'createdAt'>) => {
-    const res = await fetch('/api/evidence', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(node),
-    });
-    if (res.ok) {
-      await fetchState();
-    }
-  };
-
-  const handleDeleteEvidenceNode = async (id: string) => {
-    const res = await fetch(`/api/evidence/${id}`, { method: 'DELETE' });
+  const handleDeleteEvidenceNode = async (nodeId: string) => {
+    const res = await fetch(`/api/evidence/${nodeId}`, { method: 'DELETE' });
     if (res.ok) {
       await fetchState();
     }
   };
 
   const handleToggleBookmark = async (catalogId: string, notes?: string) => {
-    const res = await fetch('/api/bookmarks/toggle', {
+    const res = await fetch('/api/bookmarks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogId, notes }),
     });
     if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
+      await fetchState();
     }
   };
 
@@ -330,52 +556,37 @@ export default function App() {
     relationshipType: string;
     description: string;
   }) => {
-    const res = await fetch('/api/catalog-relationships', {
+    const res = await fetch('/api/catalog/relationships', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
+      await fetchState();
     }
   };
 
-  const handleDeleteRelationship = async (id: string) => {
-    const res = await fetch(`/api/catalog-relationships/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
-    }
-  };
-
-  const handleUpdateRequestStatus = async (id: string, status: string) => {
-    const res = await fetch(`/api/requests/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+  const handleDeleteRelationship = async (relationshipId: string) => {
+    const res = await fetch(`/api/catalog/relationships/${relationshipId}`, {
+      method: 'DELETE',
     });
     if (res.ok) {
-      const data = await res.json();
-      applyServerState(data.state);
+      await fetchState();
     }
   };
 
+  // Projects Handlers
   const handleLaunchProjectFromFrontier = (
     frontier: FrontierBenchmark,
     selectedEvidence?: EvidenceNode
   ) => {
     const targetPos =
-      frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || '';
+      frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || 'Target';
     setPendingDraftFromFrontier({
-      title: selectedEvidence
-        ? `${frontier.technologySystem} × ${selectedEvidence.institutionOrCompany}`
-        : `${frontier.title} — Protected Execution Room`,
+      title: `Protected Project: ${frontier.title}`,
       domain: frontier.domain,
-      problemStatement: selectedEvidence
-        ? `Closing the frontier gap on ${frontier.technologySystem} (${frontier.operatingEnvelope}) via ${selectedEvidence.title}. ${selectedEvidence.relevanceToGap}`
-        : frontier.gapRootCauseAnalysis,
-      targetSpec: `${frontier.metricName}: ${targetPos} (${frontier.operatingEnvelope})`,
+      problemStatement: `${frontier.gapRootCauseAnalysis} (Operating Envelope: ${frontier.operatingEnvelope})`,
+      targetSpec: `${frontier.metricName}: ${targetPos} ${frontier.metricUnit}`,
       originatingFrontierId: frontier.id,
       initialPartnerName: selectedEvidence?.leadContributor,
       initialPartnerOrg: selectedEvidence?.institutionOrCompany,
@@ -518,9 +729,163 @@ export default function App() {
     }
   };
 
-  const pendingApprovalsCount = approvals.filter(
-    (a) => String(a.status).toLowerCase() === 'pending'
-  ).length;
+  // Platform Architecture Hub Actions (Suppliers, Labs, Experts, Simulations, Brainstorm)
+  const handleRequestSample = async (payload: {
+    supplierId: string;
+    componentId: string;
+    componentName: string;
+    quantity: string;
+    targetApplication: string;
+    notes: string;
+  }) => {
+    const res = await fetch('/api/requests/sample', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        requesterId: currentUser?.id,
+        requesterName:
+          currentUser?.fullName ||
+          (currentUser?.email ? currentUser.email.split('@')[0] : 'Lead R&D Engineer'),
+        requesterEmail: currentUser?.email || 'engineer@qartinia-client.internal',
+        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+      }),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleBookLab = async (payload: {
+    labId: string;
+    labName: string;
+    equipmentId: string;
+    equipmentName: string;
+    testingDomain: string;
+    testRequirements: string;
+    requestedDates: string;
+  }) => {
+    const res = await fetch('/api/requests/lab', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        requesterId: currentUser?.id,
+        requesterName:
+          currentUser?.fullName ||
+          (currentUser?.email ? currentUser.email.split('@')[0] : 'Principal Test Engineer'),
+        requesterEmail: currentUser?.email || 'lab-ops@qartinia-client.internal',
+        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+      }),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleBookExpert = async (payload: {
+    expertId: string;
+    expertName: string;
+    topic: string;
+    projectContext: string;
+    preferredFormat: string;
+    hours: number;
+  }) => {
+    const res = await fetch('/api/requests/expert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        requesterId: currentUser?.id,
+        requesterName:
+          currentUser?.fullName ||
+          (currentUser?.email ? currentUser.email.split('@')[0] : 'Engineering Director'),
+        requesterEmail: currentUser?.email || 'rd-advisory@qartinia-client.internal',
+        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+      }),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleRunSimulation = async (payload: {
+    title: string;
+    tool: any;
+    domain: string;
+    parameters: Record<string, string | number>;
+  }) => {
+    const res = await fetch('/api/simulations/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleCreateBrainstormRoom = async (payload: {
+    title: string;
+    topic: string;
+    domain: string;
+    isPrivate: boolean;
+    tags: string[];
+    participants: string[];
+  }) => {
+    const res = await fetch('/api/brainstorm/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleSendBrainstormMessage = async (roomId: string, content: string) => {
+    const res = await fetch(`/api/brainstorm/${roomId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderName: currentUser?.fullName || 'Engineering Lead',
+        senderRole: currentUser?.role || 'Collaborator',
+        content,
+      }),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleToggleBrainstormTask = async (
+    roomId: string,
+    taskId: string,
+    nextStatus: BrainstormTask['status']
+  ) => {
+    const res = await fetch(`/api/brainstorm/${roomId}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, status: nextStatus }),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleAddBrainstormTask = async (
+    roomId: string,
+    task: { title: string; assignee: string; priority: BrainstormTask['priority'] }
+  ) => {
+    const res = await fetch(`/api/brainstorm/${roomId}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#0F2537]">
@@ -530,70 +895,63 @@ export default function App() {
         frontiersCount={frontiers.length}
         projectsCount={projects.length}
         evidenceCount={evidenceNodes.length}
-        devModeEnabled={devModeEnabled}
-        onToggleDevMode={handleToggleDevMode}
-        pendingApprovalsCount={pendingApprovalsCount}
+        suppliersCount={suppliers.length}
+        labsCount={labs.length}
+        expertsCount={experts.length}
+        simulationsCount={simulations.length}
+        brainstormCount={brainstormRooms.length}
+        currentUser={currentUser}
+        notifications={notifications}
+        unreadNotificationsCount={notifications.filter((n) => !n.read).length}
+        onMarkNotificationAsRead={handleMarkNotificationAsRead}
+        onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+        onDeleteNotification={handleDeleteNotification}
+        onNavigateToNotification={handleNavigateToNotification}
+        onOpenAuthModal={() => setAuthModalOpen(true)}
+        onOpenProfileModal={() => setProfileModalOpen(true)}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onLogout={handleLogout}
       />
 
-      {/* Dev Mode Toolbar Strip (Only visible when Dev Mode is toggled ON) */}
-      {devModeEnabled && (
-        <div className="bg-[#0F2537] text-white border-b border-slate-700">
-          <div className="max-w-[1400px] mx-auto px-6 py-2 flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="font-mono text-[#C59B47] font-semibold flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>DEV MODE · SUPABASE LIVE</span>
-              </span>
-              <span className="text-slate-300">
-                Active Session:{' '}
-                <strong className="text-white">
-                  {currentUser
-                    ? `${currentUser.fullName} (${currentUser.email} · ${currentUser.role} · ${currentUser.status})`
-                    : 'Guest (Unauthenticated)'}
-                </strong>
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleRunInvestorScenario('seed_bp_wedge')}
-                className="px-2.5 py-1 rounded bg-[#108548] hover:bg-[#0d6e3b] text-white font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3 text-[#C59B47]" />
-                <span>Provision 800V SiC BP Wedge</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSection('dev-console')}
-                className={`px-2.5 py-1 rounded font-semibold cursor-pointer ${
-                  activeSection === 'dev-console'
-                    ? 'bg-[#C59B47] text-[#0F2537]'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                DB, Auth &amp; Atomic RPC Console
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthModalOpen(true)}
-                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-white flex items-center gap-1 cursor-pointer"
-              >
-                <LogIn className="w-3 h-3 text-[#C59B47]" />
-                <span>Switch / Login Account</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <main className="flex-1">
-        {activeSection === 'overview' && (
-          <OverviewSolutionView
+        {activeSection === 'dashboard' && (
+          <UserDashboardView
+            currentUser={currentUser}
+            accounts={accounts}
+            projects={projects}
+            frontiers={frontiers}
+            requests={requests}
+            bookmarks={bookmarks}
+            suppliers={suppliers}
+            labs={labs}
+            experts={experts}
+            simulations={simulations}
+            enterpriseMembers={enterpriseMembers}
+            onNavigate={setActiveSection}
+            onSelectProject={setActiveProjectId}
+            onSelectFrontier={setActiveFrontierId}
+            onOpenAuthModal={() => setAuthModalOpen(true)}
+            onOpenProfileModal={() => setProfileModalOpen(true)}
+            onQuickSwitchAccount={handleQuickSwitchAccount}
+            onUpdateRequestStatus={handleUpdateRequestStatus}
+            onDeleteRequest={handleDeleteRequest}
+            onInviteMember={handleInviteMember}
+            onUpdateMember={handleUpdateMember}
+            onDeleteMember={handleDeleteMember}
+          />
+        )}
+
+        {activeSection === 'architecture' && (
+          <PlatformArchitectureView
             onNavigate={setActiveSection}
             frontiersCount={frontiers.length}
             projectsCount={projects.length}
             evidenceCount={evidenceNodes.length}
+            suppliersCount={suppliers.length}
+            labsCount={labs.length}
+            expertsCount={experts.length}
+            simulationsCount={simulations.length}
+            brainstormCount={brainstormRooms.length}
           />
         )}
 
@@ -601,10 +959,12 @@ export default function App() {
           <FrontierEngineView
             frontiers={frontiers}
             activeFrontierId={activeFrontierId}
+            currentUser={currentUser}
             onSelectFrontier={setActiveFrontierId}
             onRunFrontierAnalysis={handleRunFrontierAnalysis}
             onReevaluateFrontier={handleReevaluateFrontier}
             onDeleteFrontier={handleDeleteFrontier}
+            onUpdateFrontier={handleUpdateFrontier}
             onSaveEvidenceNode={handleSaveEvidenceNode}
             onLaunchProjectFromFrontier={handleLaunchProjectFromFrontier}
           />
@@ -615,6 +975,7 @@ export default function App() {
             projects={projects}
             activeProjectId={activeProjectId}
             onSelectProject={setActiveProjectId}
+            currentUser={currentUser}
             onCreateProject={handleCreateProject}
             onUpdateProjectStageOrGovernance={handleUpdateProjectStageOrGovernance}
             onAddParticipant={handleAddParticipant}
@@ -635,6 +996,9 @@ export default function App() {
             projects={projects}
             catalogRelationships={catalogRelationships}
             bookmarks={bookmarks}
+            currentUser={currentUser}
+            autoOpenCreateModal={autoOpenEvidenceModal}
+            onResetAutoOpen={() => setAutoOpenEvidenceModal(false)}
             onCreateEvidenceNode={handleCreateEvidenceNode}
             onDeleteEvidenceNode={handleDeleteEvidenceNode}
             onToggleBookmark={handleToggleBookmark}
@@ -644,32 +1008,41 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'investor-bp' && (
-          <InvestorBlueprintView onNavigate={setActiveSection} />
+        {activeSection === 'suppliers' && (
+          <SuppliersHubView
+            suppliers={suppliers}
+            onRequestSample={handleRequestSample}
+          />
         )}
 
-        {activeSection === 'dev-console' && (
-          <DevModeConsoleView
-            currentUser={currentUser}
-            accounts={accounts}
-            organizations={organizations}
-            enterpriseMembers={enterpriseMembers}
-            requests={requests}
-            approvals={approvals}
-            activityLog={activityLog}
-            frontiersCount={frontiers.length}
-            projectsCount={projects.length}
-            evidenceCount={evidenceNodes.length}
-            onNavigate={setActiveSection}
-            onOpenAuthModal={() => setAuthModalOpen(true)}
-            onQuickSwitchAccount={handleQuickSwitchAccount}
-            onLogout={handleLogout}
-            onUpdateProfile={handleUpdateProfile}
-            onManageOrganization={handleManageOrganization}
-            onHandleApproval={handleApproval}
-            onRunInvestorScenario={handleRunInvestorScenario}
-            onUpdateRequestStatus={handleUpdateRequestStatus}
-            onResetWorkspace={handleResetWorkspace}
+        {activeSection === 'laboratories' && (
+          <LaboratoriesHubView
+            labs={labs}
+            onBookLab={handleBookLab}
+          />
+        )}
+
+        {activeSection === 'experts' && (
+          <ExpertsHubView
+            experts={experts}
+            onBookExpert={handleBookExpert}
+          />
+        )}
+
+        {activeSection === 'simulations' && (
+          <SimulationHubView
+            simulations={simulations}
+            onRunSimulation={handleRunSimulation}
+          />
+        )}
+
+        {activeSection === 'brainstorming' && (
+          <BrainstormingHubView
+            rooms={brainstormRooms}
+            onCreateRoom={handleCreateBrainstormRoom}
+            onSendMessage={handleSendBrainstormMessage}
+            onToggleTaskStatus={handleToggleBrainstormTask}
+            onAddTask={handleAddBrainstormTask}
           />
         )}
       </main>
@@ -683,36 +1056,64 @@ export default function App() {
         onRegister={handleRegister}
       />
 
+      <ProfileEditModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        enterpriseMembers={enterpriseMembers}
+        onStateUpdate={fetchState}
+        onUpdateProfile={handleUpdateProfile}
+      />
+
+      <CommandPaletteModal
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        currentUser={currentUser}
+        projects={projects}
+        frontiers={frontiers}
+        onNavigate={(section) => setActiveSection(section)}
+        onSelectProject={(id) => setActiveProjectId(id)}
+        onSelectFrontier={(id) => setActiveFrontierId(id)}
+        onInitiateEvidenceNode={() => setAutoOpenEvidenceModal(true)}
+        onOpenInviteModal={() => setProfileModalOpen(true)}
+      />
+
+      <NotificationToastContainer
+        toasts={toasts}
+        onDismissToast={handleDismissToast}
+        onNavigateToNotification={handleNavigateToNotification}
+      />
+
       <footer className="bg-white border-t border-slate-200 mt-16">
-        <div className="max-w-[1400px] mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="max-w-[1440px] mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
           <div className="flex items-center gap-3">
-            <QartiniaCrestSvg className="w-6 h-6" />
+            <QartiniaCrestSvg className="w-6 h-6 text-[#0F2537]" />
             <span className="font-brand font-bold text-[#0F2537] tracking-widest">QARTINIΛ</span>
             <span>·</span>
             <span>FROM RESEARCH TO INDUSTRY</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <button
               type="button"
-              onClick={() => setActiveSection('overview')}
+              onClick={() => setActiveSection('dashboard')}
               className="hover:text-[#0F2537] cursor-pointer"
             >
-              The Qartinia Solution
+              My Workspace
             </button>
             <button
               type="button"
               onClick={() => setActiveSection('frontier')}
               className="hover:text-[#0F2537] cursor-pointer"
             >
-              Qartinia Frontier
+              Frontier Engine
             </button>
             <button
               type="button"
               onClick={() => setActiveSection('projects')}
               className="hover:text-[#0F2537] cursor-pointer"
             >
-              Qartinia Projects
+              Protected Projects
             </button>
             <button
               type="button"
@@ -723,10 +1124,45 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveSection('investor-bp')}
+              onClick={() => setActiveSection('suppliers')}
               className="hover:text-[#0F2537] cursor-pointer"
             >
-              Business Model &amp; 10-Yr Plan
+              Suppliers &amp; Fabs
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('laboratories')}
+              className="hover:text-[#0F2537] cursor-pointer"
+            >
+              Laboratories
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('experts')}
+              className="hover:text-[#0F2537] cursor-pointer"
+            >
+              Domain Experts
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('simulations')}
+              className="hover:text-[#0F2537] cursor-pointer"
+            >
+              Simulation Studio
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('brainstorming')}
+              className="hover:text-[#0F2537] cursor-pointer"
+            >
+              Brainstorming
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection('architecture')}
+              className="hover:text-[#0F2537] cursor-pointer font-medium text-[#108548]"
+            >
+              Platform Architecture
             </button>
           </div>
         </div>

@@ -1,3 +1,15 @@
+export type QartiniaSection =
+  | 'dashboard'
+  | 'frontier'
+  | 'projects'
+  | 'evidence'
+  | 'suppliers'
+  | 'laboratories'
+  | 'experts'
+  | 'simulations'
+  | 'brainstorming'
+  | 'architecture';
+
 export type EvidenceCategory =
   | 'Publication'
   | 'Patent'
@@ -66,6 +78,8 @@ export interface FrontierBenchmark {
   evidenceRecords: EvidenceNode[];
   recommendedNextActions: string[];
   monitored: boolean;
+  maturityTrl?: string;
+  updatedAt?: string;
   createdAt: string;
   lastEvaluatedAt: string;
 }
@@ -127,6 +141,149 @@ export interface ProtectedProjectRoom {
   documents: ProjectDocument[];
   messages: ProjectMessage[];
   createdAt: string;
+  createdById?: string;
+  createdByEmail?: string;
+  createdByOrg?: string;
+}
+
+// ----------------------------------------------------
+// ARCHITECTURE BLUEPRINT ENTITIES
+// ----------------------------------------------------
+
+export interface SupplierComponent {
+  id: string;
+  name: string;
+  partNumber: string;
+  category: string;
+  specSummary: string;
+  keyMetrics: Record<string, string>;
+  leadTimeWeeks: number;
+  sampleAvailable: boolean;
+  datasheetUrl?: string;
+}
+
+export interface SupplierItem {
+  id: string;
+  name: string;
+  country: string;
+  headquarters: string;
+  domain: string;
+  tier: 'Tier 1 Certified' | 'Tier 2 Qualified' | 'Specialist Fabricator';
+  description: string;
+  certifications: string[];
+  capabilities: string[];
+  components: SupplierComponent[];
+  contactEmail: string;
+  minOrderQuantity: string;
+  verified: boolean;
+}
+
+export interface LabEquipment {
+  id: string;
+  name: string;
+  model: string;
+  manufacturer: string;
+  operatingRange: string;
+  standardsCompliant: string[];
+  sampleThroughput: string;
+  hourlyRateEst: string;
+}
+
+export interface LabItem {
+  id: string;
+  name: string;
+  institution: string;
+  location: string;
+  accreditations: string[];
+  testingDomains: string[];
+  equipmentList: LabEquipment[];
+  leadScientist: string;
+  availabilityStatus: 'Available' | 'Booking 2-3 Weeks Out' | 'Restricted Access';
+  description: string;
+  verified: boolean;
+}
+
+export interface ExpertItem {
+  id: string;
+  name: string;
+  title: string;
+  affiliation: string;
+  location: string;
+  domainExpertise: string[];
+  yearsExperience: number;
+  publicationsCount: number;
+  patentsCount: number;
+  advisoryFee: string;
+  availability: 'Open for Consultations' | 'Project Advisory Only' | 'Waitlist';
+  bio: string;
+  rating: number;
+  verified: boolean;
+}
+
+export interface BrainstormTask {
+  id: string;
+  title: string;
+  assignee: string;
+  status: 'Todo' | 'In Progress' | 'Completed';
+  priority: 'High' | 'Medium' | 'Low';
+}
+
+export interface BrainstormMessage {
+  id: string;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  isAi?: boolean;
+  timestamp: string;
+  attachments?: string[];
+}
+
+export interface BrainstormRoom {
+  id: string;
+  title: string;
+  topic: string;
+  domain: string;
+  isPrivate: boolean;
+  createdBy: string;
+  membersCount: number;
+  participants: string[];
+  tags: string[];
+  summary?: string;
+  tasks: BrainstormTask[];
+  messages: BrainstormMessage[];
+  createdAt: string;
+}
+
+export type SimulationToolType = 'SPICE' | 'TCAD' | 'DFT/CASTEP' | 'Multiphysics FEA';
+
+export interface SimulationJob {
+  id: string;
+  title: string;
+  tool: SimulationToolType;
+  domain: string;
+  status: 'Queued' | 'Running' | 'Completed' | 'Failed';
+  parameters: Record<string, string | number>;
+  runtimeSeconds: number;
+  submittedAt: string;
+  completedAt?: string;
+  summaryMetrics?: Record<string, string>;
+  outputWaveformData?: { time: number; value: number }[];
+  resultReport?: string;
+}
+
+export interface KnowledgeItem {
+  id: string;
+  title: string;
+  type: 'Paper' | 'Standard' | 'Technical Tutorial' | 'Datasheet' | 'Patent';
+  authorsOrOrg: string;
+  doiOrRef: string;
+  domain: string;
+  abstract: string;
+  keyFindings: string[];
+  tags: string[];
+  citationsCount: number;
+  year: number;
+  downloadUrl?: string;
 }
 
 export type UserRole =
@@ -138,7 +295,10 @@ export type UserRole =
   | 'enterprise_admin'
   | 'enterprise_employee'
   | 'researcher'
-  | 'startup_founder';
+  | 'startup_founder'
+  | 'supplier'
+  | 'expert'
+  | 'lab_director';
 
 export type AccountStatus =
   | 'approved'
@@ -151,6 +311,7 @@ export interface UserAccount {
   id: string;
   email: string;
   fullName: string;
+  username?: string;
   role: string;
   status: string;
   approvalStatus: string;
@@ -190,6 +351,10 @@ export interface EnterpriseMember {
   department: string;
   approvalStatus: string;
   joinedAt: string;
+  permissions?: string[];
+  status?: 'active' | 'pending' | 'invited' | 'suspended' | 'declined';
+  invitedBy?: string;
+  lastActive?: string;
 }
 
 export type SupabaseRequestType =
@@ -210,6 +375,7 @@ export type SupabaseRequestStatus =
 
 export interface SupabaseAccessRequest {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   organization: string;
@@ -269,4 +435,48 @@ export interface DatabaseDiagnosticReport {
     lastResult?: string;
   }[];
   checkedAt: string;
+}
+
+export type NotificationType =
+  | 'request_status_updated'
+  | 'project_added'
+  | 'milestone_created'
+  | 'milestone_updated'
+  | 'document_uploaded'
+  | 'message_received'
+  | 'general';
+
+export interface NotificationItem {
+  id: string;
+  recipientUserId?: string | null;
+  recipientEmail?: string | null;
+  recipientOrg?: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  linkSection?: QartiniaSection;
+  linkId?: string;
+  read: boolean;
+  timestamp: string;
+  createdAt: string;
+  metadata?: {
+    requestId?: string;
+    requestType?: string;
+    newStatus?: string;
+    decisionNotes?: string;
+    projectId?: string;
+    projectTitle?: string;
+    projectCode?: string;
+    milestoneId?: string;
+    milestoneTitle?: string;
+    milestoneStatus?: string;
+    actorName?: string;
+    actorOrg?: string;
+    frontierId?: string;
+    memberId?: string;
+    email?: string;
+    role?: string;
+    organizationName?: string;
+    [key: string]: any;
+  };
 }

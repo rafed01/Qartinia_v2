@@ -6,7 +6,9 @@ import {
   CatalogBookmark,
   FrontierBenchmark,
   ProtectedProjectRoom,
+  UserAccount,
 } from '../types/qartinia';
+import { getUserPermissions } from '../utils/permissions';
 import {
   Search,
   Plus,
@@ -25,6 +27,9 @@ interface EvidenceGraphViewProps {
   projects: ProtectedProjectRoom[];
   catalogRelationships: CatalogRelationshipEdge[];
   bookmarks: CatalogBookmark[];
+  currentUser?: UserAccount | null;
+  autoOpenCreateModal?: boolean;
+  onResetAutoOpen?: () => void;
   onCreateEvidenceNode: (node: Omit<EvidenceNode, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteEvidenceNode: (id: string) => Promise<void>;
   onToggleBookmark: (catalogId: string, notes?: string) => Promise<void>;
@@ -55,6 +60,9 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
   projects,
   catalogRelationships,
   bookmarks,
+  currentUser,
+  autoOpenCreateModal,
+  onResetAutoOpen,
   onCreateEvidenceNode,
   onDeleteEvidenceNode,
   onToggleBookmark,
@@ -62,12 +70,20 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
   onDeleteRelationship,
   onLaunchProjectFromEvidence,
 }) => {
+  const permissions = getUserPermissions(currentUser || null);
   const [selectedCategory, setSelectedCategory] = useState<
     'All' | EvidenceCategory | 'Bookmarked'
   >('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+
+  React.useEffect(() => {
+    if (autoOpenCreateModal) {
+      setShowAddModal(true);
+      if (onResetAutoOpen) onResetAutoOpen();
+    }
+  }, [autoOpenCreateModal, onResetAutoOpen]);
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<EvidenceCategory>('Publication');
@@ -344,14 +360,19 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                         >
                           <Bookmark className="w-3.5 h-3.5 fill-current" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteEvidenceNode(node.id)}
-                          aria-label="Remove Evidence Node"
-                          className="p-1 text-slate-400 hover:text-red-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+
+                        {/* Delete Evidence Node button: Hidden for employees; visible only for Administrators */}
+                        {permissions.canDeleteEvidence && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteEvidenceNode(node.id)}
+                            aria-label="Remove Evidence Node"
+                            title="Delete Evidence Record (Admin Only)"
+                            className="p-1 text-slate-400 hover:text-red-600 cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
