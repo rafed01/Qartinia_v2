@@ -8,6 +8,7 @@ export type QartiniaSection =
   | 'experts'
   | 'simulations'
   | 'brainstorming'
+  | 'community'
   | 'architecture';
 
 export type EvidenceCategory =
@@ -17,6 +18,13 @@ export type EvidenceCategory =
   | 'Standard'
   | 'Research Laboratory'
   | 'Domain Expert';
+
+export type EvidenceProvenanceType =
+  | 'verified_empirical'
+  | 'peer_reviewed_literature'
+  | 'patent_specification'
+  | 'ai_synthesis'
+  | 'model_estimate';
 
 export interface EvidenceNode {
   id: string;
@@ -32,6 +40,11 @@ export interface EvidenceNode {
   relevanceToGap: string;
   linkedFrontierId?: string;
   publicationState?: 'draft' | 'published' | 'archived' | 'in_review';
+  provenanceType?: EvidenceProvenanceType;
+  verificationStatus?: 'verified' | 'in_review' | 'synthetic_hypothesis' | 'model_estimate';
+  confidenceLevel?: 'High' | 'Medium' | 'Analytical';
+  doiOrPatentRef?: string;
+  conditionAwareMetrics?: Record<string, string | number>;
   createdAt: string;
 }
 
@@ -323,8 +336,50 @@ export interface UserAccount {
   taxId: string | null;
   techStack: string[];
   bio: string | null;
+  avatarUrl?: string | null;
+  domainExpertise?: string[];
+  credentials?: string | null;
+  advisoryHistory?: string | null;
+  linkedinUrl?: string | null;
+  timezone?: string | null;
   onboardingCompleted: boolean;
   createdAt: string;
+}
+
+export interface SocialPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  authorRole: string;
+  authorOrg: string;
+  authorAvatarUrl?: string;
+  content: string;
+  imageUrl?: string;
+  likesCount: number;
+  likedBy?: string[];
+  tags?: string[];
+  createdAt: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  content: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface UserConnection {
+  id: string;
+  requesterId: string;
+  targetId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+  user?: UserAccount;
 }
 
 export interface SupabaseOrganization {

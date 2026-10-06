@@ -28,6 +28,9 @@ import {
   SimulationJob,
   KnowledgeItem,
   NotificationItem,
+  SocialPost,
+  DirectMessage,
+  UserConnection,
 } from './src/types/qartinia.ts';
 import {
   INITIAL_SUPPLIERS,
@@ -50,7 +53,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const PRIMARY_ADMIN_UUID = '091e8ba5-4ed0-4aa4-b8dd-c6f29088e170';
+let dynamicAdminUuid: string | null = null;
 
 const supabaseAdmin: SupabaseClient | null =
   SUPABASE_URL && SUPABASE_SERVICE_KEY
@@ -261,7 +264,7 @@ function resolveValidActorUuid(userId?: string | null): string {
   ) {
     return localStore.currentUserId;
   }
-  return PRIMARY_ADMIN_UUID;
+  return dynamicAdminUuid || '091e8ba5-4ed0-4aa4-b8dd-c6f29088e170';
 }
 
 /**
@@ -395,11 +398,174 @@ async function syncEvidenceToCatalog(node: EvidenceNode) {
         operatingConditions: node.operatingConditions,
         demonstratedPerformance: node.demonstratedPerformance,
         manufacturabilityAndReliability: node.manufacturabilityAndReliability,
+        provenanceType: node.provenanceType || 'verified_empirical',
+        verificationStatus: node.verificationStatus || 'verified',
+        confidenceLevel: node.confidenceLevel || 'High',
+        doiOrPatentRef: node.doiOrPatentRef || node.sourceIdentifier,
         qartinia_payload: node,
       },
     });
   } catch (err) {
     console.warn('[Supabase Catalog Evidence Sync]', err);
+  }
+}
+
+async function syncSupplierToCatalog(sup: SupplierItem) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: sup.id,
+      type: 'supplier',
+      title: sup.name,
+      category: sup.domain,
+      organization: sup.headquarters,
+      trl: 9,
+      trl_stage: sup.tier,
+      status: sup.verified ? 'Verified' : 'Qualified',
+      description: sup.description,
+      location: sup.country,
+      verifiedBy: 'Qartinia Fabricator Audit',
+      verified_by: 'Qartinia Fabricator Audit',
+      publication_state: 'published',
+      created_by: resolveValidActorUuid(),
+      metadata: {
+        qartinia_kind: 'supplier',
+        qartinia_payload: sup,
+      },
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Supplier Sync]', err);
+  }
+}
+
+async function syncLabToCatalog(lab: LabItem) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: lab.id,
+      type: 'lab',
+      title: lab.name,
+      category: lab.testingDomains[0] || 'Characterization & Testing',
+      organization: lab.institution,
+      trl: 8,
+      trl_stage: lab.availabilityStatus,
+      status: lab.verified ? 'Accredited' : 'Verified',
+      description: lab.description,
+      location: lab.location,
+      verifiedBy: lab.leadScientist,
+      verified_by: lab.leadScientist,
+      publication_state: 'published',
+      created_by: resolveValidActorUuid(),
+      metadata: {
+        qartinia_kind: 'lab',
+        qartinia_payload: lab,
+      },
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Lab Sync]', err);
+  }
+}
+
+async function syncExpertToCatalog(exp: ExpertItem) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: exp.id,
+      type: 'expert',
+      title: exp.name,
+      category: exp.domainExpertise[0] || 'Domain Specialist',
+      organization: exp.affiliation,
+      trl: 9,
+      trl_stage: exp.availability,
+      status: exp.verified ? 'Verified Fellow' : 'Verified',
+      description: exp.bio,
+      location: exp.location,
+      verifiedBy: exp.title,
+      verified_by: exp.title,
+      publication_state: 'published',
+      created_by: resolveValidActorUuid(),
+      metadata: {
+        qartinia_kind: 'expert',
+        qartinia_payload: exp,
+      },
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Expert Sync]', err);
+  }
+}
+
+async function syncKnowledgeToCatalog(ki: KnowledgeItem) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: ki.id,
+      type: 'knowledge',
+      title: ki.title,
+      category: ki.type,
+      organization: ki.authorsOrOrg,
+      trl: 6,
+      trl_stage: `${ki.year} Publication`,
+      status: 'Indexed',
+      description: ki.abstract,
+      location: ki.doiOrRef,
+      verifiedBy: 'Qartinia Scientific Index',
+      verified_by: 'Qartinia Scientific Index',
+      publication_state: 'published',
+      created_by: resolveValidActorUuid(),
+      metadata: {
+        qartinia_kind: 'knowledge',
+        qartinia_payload: ki,
+      },
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Knowledge Sync]', err);
+  }
+}
+
+async function ensureDatabaseCatalogSeeded() {
+  if (!supabaseAdmin) return;
+  try {
+    const { data: profs } = await supabaseAdmin.from('profiles').select('id, role');
+    if (profs && profs.length > 0) {
+      const admin = profs.find((p) => p.role === 'admin') || profs[0];
+      dynamicAdminUuid = admin.id;
+    }
+
+    const { data: existing, error } = await supabaseAdmin.from('catalog').select('id, type');
+    if (error) {
+      console.warn('[Supabase Catalog Pre-check]', error);
+      return;
+    }
+
+    const existingIds = new Set((existing || []).map((e) => e.id));
+
+    for (const sup of INITIAL_SUPPLIERS) {
+      if (!existingIds.has(sup.id)) {
+        await syncSupplierToCatalog(sup);
+      }
+    }
+
+    for (const lab of INITIAL_LABS) {
+      if (!existingIds.has(lab.id)) {
+        await syncLabToCatalog(lab);
+      }
+    }
+
+    for (const exp of INITIAL_EXPERTS) {
+      if (!existingIds.has(exp.id)) {
+        await syncExpertToCatalog(exp);
+      }
+    }
+
+    for (const ki of INITIAL_KNOWLEDGE_ITEMS) {
+      if (!existingIds.has(ki.id)) {
+        await syncKnowledgeToCatalog(ki);
+      }
+    }
+
+    console.log('[Supabase Catalog] Enterprise knowledge catalog verified & authoritative in Supabase.');
+  } catch (err) {
+    console.warn('[Supabase Catalog Seed Warning]', err);
   }
 }
 
@@ -411,14 +577,16 @@ function mapProfileRow(row: any): UserAccount {
     id: row.id,
     email: row.email || '',
     fullName: row.full_name || (row.email ? row.email.split('@')[0] : 'User'),
+    username: row.username || (row.email ? row.email.split('@')[0] : undefined),
     role: row.role || 'user',
     status: rawStatus,
     approvalStatus: rawStatus,
     organizationName: row.organization || row.company_name || 'Independent',
     organizationId: row.organization_id || null,
     focusArea: row.focus_area || null,
-    department: row.focus_area || row.metadata?.department || 'R&D & Engineering',
+    department: row.department || row.focus_area || row.metadata?.department || 'R&D & Engineering',
     title:
+      row.title ||
       row.metadata?.title ||
       (row.role === 'admin'
         ? 'Platform Founder & Admin'
@@ -428,6 +596,12 @@ function mapProfileRow(row: any): UserAccount {
     taxId: row.tax_id || null,
     techStack: Array.isArray(row.tech_stack) ? row.tech_stack : [],
     bio: row.bio || null,
+    avatarUrl: row.avatar_url || null,
+    domainExpertise: Array.isArray(row.domain_expertise) ? row.domain_expertise : [],
+    credentials: row.credentials || null,
+    advisoryHistory: row.advisory_history || null,
+    linkedinUrl: row.linkedin_url || null,
+    timezone: row.timezone || null,
     onboardingCompleted: onboardingDone,
     createdAt: row.created_at ? String(row.created_at).slice(0, 10) : '',
   };
@@ -630,10 +804,15 @@ async function fetchFullWorkspaceState() {
       };
     });
 
-    // Hydrate Frontiers, Protected Project Rooms, and Evidence Nodes from Supabase `public.catalog` if present
+    // Hydrate Frontiers, Protected Projects, Evidence, Suppliers, Labs, Experts, Knowledge & Posts from Supabase `public.catalog`
     const dbFrontiers: FrontierBenchmark[] = [];
     const dbProjects: ProtectedProjectRoom[] = [];
     const dbEvidence: EvidenceNode[] = [];
+    const dbSuppliers: SupplierItem[] = [];
+    const dbLabs: LabItem[] = [];
+    const dbExperts: ExpertItem[] = [];
+    const dbKnowledge: KnowledgeItem[] = [];
+    const dbPosts: SocialPost[] = [];
 
     for (const c of catalogRows) {
       const kind = c.metadata?.qartinia_kind || c.type;
@@ -664,18 +843,26 @@ async function fetchFullWorkspaceState() {
             createdAt: c.updated_at ? String(c.updated_at).slice(0, 10) : '',
           });
         }
+      } else if (kind === 'supplier' && c.metadata?.qartinia_payload) {
+        dbSuppliers.push(c.metadata.qartinia_payload as SupplierItem);
+      } else if (kind === 'lab' && c.metadata?.qartinia_payload) {
+        dbLabs.push(c.metadata.qartinia_payload as LabItem);
+      } else if (kind === 'expert' && c.metadata?.qartinia_payload) {
+        dbExperts.push(c.metadata.qartinia_payload as ExpertItem);
+      } else if (kind === 'knowledge' && c.metadata?.qartinia_payload) {
+        dbKnowledge.push(c.metadata.qartinia_payload as KnowledgeItem);
+      } else if (kind === 'social_post' && c.metadata?.qartinia_payload) {
+        dbPosts.push(c.metadata.qartinia_payload as SocialPost);
       }
     }
 
-    if (dbFrontiers.length > 0 && localStore.frontiers.length === 0) {
-      localStore.frontiers = dbFrontiers;
-    }
-    if (dbProjects.length > 0 && localStore.projects.length === 0) {
-      localStore.projects = dbProjects;
-    }
-    if (dbEvidence.length > 0 && localStore.evidenceNodes.length === 0) {
-      localStore.evidenceNodes = dbEvidence;
-    }
+    if (dbFrontiers.length > 0) localStore.frontiers = dbFrontiers;
+    if (dbProjects.length > 0) localStore.projects = dbProjects;
+    if (dbEvidence.length > 0) localStore.evidenceNodes = dbEvidence;
+    if (dbSuppliers.length > 0) localStore.suppliers = dbSuppliers;
+    if (dbLabs.length > 0) localStore.labs = dbLabs;
+    if (dbExperts.length > 0) localStore.experts = dbExperts;
+    if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
   }
 
   let currentUser = accounts.find((a) => a.id === localStore.currentUserId) || null;
@@ -691,16 +878,26 @@ async function fetchFullWorkspaceState() {
     enterpriseMembers = localStore.enterpriseMembers || [];
   }
 
+  const frontiers = localStore.frontiers && localStore.frontiers.length > 0 ? localStore.frontiers : [];
+  const projects = localStore.projects && localStore.projects.length > 0 ? localStore.projects : [];
+  const evidenceNodes = localStore.evidenceNodes && localStore.evidenceNodes.length > 0 ? localStore.evidenceNodes : [];
+  const suppliers = localStore.suppliers && localStore.suppliers.length > 0 ? localStore.suppliers : INITIAL_SUPPLIERS;
+  const labs = localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS;
+  const experts = localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS;
+  const knowledgeItems = localStore.knowledgeItems && localStore.knowledgeItems.length > 0 ? localStore.knowledgeItems : INITIAL_KNOWLEDGE_ITEMS;
+  const brainstormRooms = localStore.brainstormRooms && localStore.brainstormRooms.length > 0 ? localStore.brainstormRooms : INITIAL_BRAINSTORM_ROOMS;
+  const simulations = localStore.simulations && localStore.simulations.length > 0 ? localStore.simulations : INITIAL_SIMULATIONS;
+
   return {
-    frontiers: localStore.frontiers,
-    projects: localStore.projects,
-    evidenceNodes: localStore.evidenceNodes,
-    suppliers: localStore.suppliers,
-    labs: localStore.labs,
-    experts: localStore.experts,
-    brainstormRooms: localStore.brainstormRooms,
-    simulations: localStore.simulations,
-    knowledgeItems: localStore.knowledgeItems,
+    frontiers,
+    projects,
+    evidenceNodes,
+    suppliers,
+    labs,
+    experts,
+    brainstormRooms,
+    simulations,
+    knowledgeItems,
     notifications: localStore.notifications || [],
     catalogRelationships,
     bookmarks,
@@ -803,6 +1000,10 @@ Instructions:
                       maturityTrl: { type: Type.STRING },
                       manufacturabilityAndReliability: { type: Type.STRING },
                       relevanceToGap: { type: Type.STRING },
+                      provenanceType: { type: Type.STRING },
+                      verificationStatus: { type: Type.STRING },
+                      confidenceLevel: { type: Type.STRING },
+                      doiOrPatentRef: { type: Type.STRING },
                     },
                     required: [
                       'title',
@@ -895,6 +1096,23 @@ Instructions:
           maturityTrl: ev.maturityTrl,
           manufacturabilityAndReliability: ev.manufacturabilityAndReliability,
           relevanceToGap: ev.relevanceToGap,
+          provenanceType: [
+            'verified_empirical',
+            'peer_reviewed_literature',
+            'patent_specification',
+            'ai_synthesis',
+            'model_estimate',
+          ].includes(ev.provenanceType)
+            ? ev.provenanceType
+            : ev.category === 'Product Datasheet'
+            ? 'verified_empirical'
+            : ev.category === 'Patent'
+            ? 'patent_specification'
+            : 'peer_reviewed_literature',
+          verificationStatus:
+            ev.verificationStatus || (ev.category === 'Product Datasheet' ? 'verified' : 'in_review'),
+          confidenceLevel: ev.confidenceLevel || 'High',
+          doiOrPatentRef: ev.doiOrPatentRef || ev.sourceIdentifier,
           publicationState: 'published',
           createdAt: new Date().toISOString().split('T')[0],
         })
@@ -1008,6 +1226,9 @@ Instructions:
 async function startServer() {
   const app = express();
   app.use(express.json());
+
+  // Bootstrap & verify authoritative Supabase catalog persistence
+  await ensureDatabaseCatalogSeeded();
 
   // 1. GET /api/state — Live Supabase + Local Workspace State
   app.get('/api/state', async (_req, res) => {
@@ -1429,6 +1650,19 @@ async function startServer() {
       if (req.body.onboardingCompleted !== undefined) {
         updates.onboarding_completed = Boolean(req.body.onboardingCompleted);
       }
+      if (req.body.bio !== undefined) updates.bio = req.body.bio;
+      if (req.body.avatarUrl !== undefined) updates.avatar_url = req.body.avatarUrl;
+      if (req.body.domainExpertise !== undefined && Array.isArray(req.body.domainExpertise)) {
+        updates.domain_expertise = req.body.domainExpertise;
+      }
+      if (req.body.techStack !== undefined && Array.isArray(req.body.techStack)) {
+        updates.tech_stack = req.body.techStack;
+      }
+      if (req.body.credentials !== undefined) updates.credentials = req.body.credentials;
+      if (req.body.advisoryHistory !== undefined) updates.advisory_history = req.body.advisoryHistory;
+      if (req.body.linkedinUrl !== undefined) updates.linkedin_url = req.body.linkedinUrl;
+      if (req.body.timezone !== undefined) updates.timezone = req.body.timezone;
+      if (req.body.taxId !== undefined) updates.tax_id = req.body.taxId;
 
       updates.metadata = currentMetadata;
 
@@ -2103,6 +2337,20 @@ async function startServer() {
     }
   });
 
+  // Alias routes for frontend consistency
+  app.post('/api/catalog/relationships', async (req, res) => {
+    req.url = '/api/catalog-relationships';
+    (app as any)._router.handle(req, res);
+  });
+  app.delete('/api/catalog/relationships/:id', async (req, res) => {
+    req.url = `/api/catalog-relationships/${req.params.id}`;
+    (app as any)._router.handle(req, res);
+  });
+  app.post('/api/bookmarks', async (req, res) => {
+    req.url = '/api/bookmarks/toggle';
+    (app as any)._router.handle(req, res);
+  });
+
   // 12. POST /api/dev/investor-scenario — Exciting 1-Click Live Investor Scenarios Across All 8 Tables
   app.post('/api/dev/investor-scenario', async (req, res) => {
     try {
@@ -2697,6 +2945,536 @@ async function startServer() {
       res.json({ ok: true, frontier: newFrontier });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to compute frontier benchmark.' });
+    }
+  });
+
+  app.post('/api/frontier/evaluate', async (req, res) => {
+    req.url = '/api/frontier/analyze';
+    (app as any)._router.handle(req, res);
+  });
+
+  // 14b. POST /api/frontier/:id/evidence — Save Evidence Linked to Frontier
+  app.post('/api/frontier/:id/evidence', async (req, res) => {
+    try {
+      const frontierId = req.params.id;
+      const body = req.body;
+      const newNode: EvidenceNode = {
+        id: body.id || `ev-${Date.now()}`,
+        title: body.title,
+        category: body.category || 'Publication',
+        sourceIdentifier: body.sourceIdentifier || 'Verified Record',
+        institutionOrCompany: body.institutionOrCompany || 'Research Institution',
+        leadContributor: body.leadContributor || 'Principal Investigator',
+        operatingConditions: body.operatingConditions || '',
+        demonstratedPerformance: body.demonstratedPerformance || '',
+        maturityTrl: body.maturityTrl || 'TRL 6',
+        manufacturabilityAndReliability: body.manufacturabilityAndReliability || '',
+        relevanceToGap: body.relevanceToGap || '',
+        linkedFrontierId: frontierId,
+        provenanceType: body.provenanceType || 'verified_empirical',
+        verificationStatus: body.verificationStatus || 'verified',
+        confidenceLevel: body.confidenceLevel || 'High',
+        doiOrPatentRef: body.doiOrPatentRef || body.sourceIdentifier || '',
+        publicationState: 'published',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+
+      const exists = localStore.evidenceNodes.some(
+        (n) => n.title === newNode.title && n.sourceIdentifier === newNode.sourceIdentifier
+      );
+      if (!exists) {
+        localStore.evidenceNodes.unshift(newNode);
+        saveLocalStore(localStore);
+      }
+
+      await syncEvidenceToCatalog(newNode);
+
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('catalog_relationships').insert({
+          source_id: frontierId,
+          target_id: newNode.id,
+          relationship_type: 'closes_frontier_gap',
+          description: newNode.relevanceToGap || 'Evidence record linked to frontier benchmark',
+        });
+      }
+
+      const state = await fetchFullWorkspaceState();
+      res.json({ ok: true, evidence: newNode, state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to save evidence to frontier.' });
+    }
+  });
+
+  // 14c. POST /api/frontier/match-partners — Match Engineering Gap to Stored Suppliers, Labs & Experts
+  app.post('/api/frontier/match-partners', async (req, res) => {
+    try {
+      const { domain, technologySystem, metricName, operatingEnvelope, constraints, gapRootCauseAnalysis } = req.body;
+      const textToMatch = `${domain || ''} ${technologySystem || ''} ${metricName || ''} ${operatingEnvelope || ''} ${constraints || ''} ${gapRootCauseAnalysis || ''}`.toLowerCase();
+
+      const matchedSuppliers = (localStore.suppliers || []).map((s) => {
+        let score = 0;
+        const reasons: string[] = [];
+        if (s.capabilities?.some((c) => textToMatch.includes(c.toLowerCase()) || c.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
+          score += 40;
+          reasons.push('Demonstrated fab capability matches system specification');
+        }
+        if (s.components?.some((cmp) => textToMatch.includes(cmp.name.toLowerCase()) || textToMatch.includes(cmp.category.toLowerCase()))) {
+          score += 35;
+          reasons.push('Off-the-shelf engineering samples available with qualified PPAP');
+        }
+        if (textToMatch.includes(s.domain.toLowerCase()) || textToMatch.includes('sic') && s.domain.toLowerCase().includes('sic')) {
+          score += 25;
+          reasons.push('Domain specialization alignment');
+        }
+        return {
+          ...s,
+          matchScore: Math.min(score, 98),
+          matchReason: reasons.join(' · ') || 'Industrial power electronics manufacturing partner',
+        };
+      }).filter((s) => s.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+
+      const matchedLabs = (localStore.labs || []).map((l) => {
+        let score = 0;
+        const reasons: string[] = [];
+        if (l.testingDomains?.some((td) => textToMatch.includes(td.toLowerCase()) || td.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
+          score += 45;
+          reasons.push('Accredited test domain matches operating conditions');
+        }
+        if (l.equipmentList?.some((eq) => textToMatch.includes(eq.name.toLowerCase()) || textToMatch.includes(eq.model.toLowerCase()))) {
+          score += 35;
+          reasons.push('High-bandwidth dyno/spectrometry hardware available for booking');
+        }
+        if (textToMatch.includes('inverter') || textToMatch.includes('switching') || textToMatch.includes('thermal')) {
+          score += 20;
+          reasons.push('Rapid 2-3 week bench verification slot');
+        }
+        return {
+          ...l,
+          matchScore: Math.min(score, 99),
+          matchReason: reasons.join(' · ') || 'Accredited physical validation bench',
+        };
+      }).filter((l) => l.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+
+      const matchedExperts = (localStore.experts || []).map((e) => {
+        let score = 0;
+        const reasons: string[] = [];
+        if (e.domainExpertise?.some((de) => textToMatch.includes(de.toLowerCase()) || de.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
+          score += 50;
+          reasons.push('Peer-reviewed publication record and patents in this exact bottleneck');
+        }
+        if (textToMatch.includes('gate') || textToMatch.includes('soft-switching') || textToMatch.includes('sic')) {
+          score += 30;
+          reasons.push('Prior advisory history on automotive traction architectures');
+        }
+        return {
+          ...e,
+          matchScore: Math.min(score, 97),
+          matchReason: reasons.join(' · ') || 'Senior academic and industrial technical advisor',
+        };
+      }).filter((e) => e.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+
+      res.json({
+        ok: true,
+        matchedSuppliers,
+        matchedLabs,
+        matchedExperts,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to match partners.' });
+    }
+  });
+
+  // 14d. GET /api/search — Unified Search Across Frontiers, Evidence, Suppliers, Labs, Experts, Projects & Knowledge
+  app.get('/api/search', async (req, res) => {
+    try {
+      const q = String(req.query.q || '').trim().toLowerCase();
+      if (!q) {
+        return res.json({
+          ok: true,
+          frontiers: [],
+          evidence: [],
+          suppliers: [],
+          labs: [],
+          experts: [],
+          projects: [],
+          knowledge: [],
+        });
+      }
+
+      const frontiers = (localStore.frontiers || []).filter(
+        (f) =>
+          f.title.toLowerCase().includes(q) ||
+          f.domain.toLowerCase().includes(q) ||
+          f.technologySystem.toLowerCase().includes(q) ||
+          f.metricName.toLowerCase().includes(q) ||
+          f.gapRootCauseAnalysis.toLowerCase().includes(q)
+      );
+
+      const evidence = (localStore.evidenceNodes || []).filter(
+        (e) =>
+          e.title.toLowerCase().includes(q) ||
+          e.category.toLowerCase().includes(q) ||
+          e.institutionOrCompany.toLowerCase().includes(q) ||
+          e.sourceIdentifier.toLowerCase().includes(q) ||
+          e.relevanceToGap.toLowerCase().includes(q)
+      );
+
+      const suppliers = (localStore.suppliers || []).filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.domain.toLowerCase().includes(q) ||
+          s.capabilities?.some((c) => c.toLowerCase().includes(q)) ||
+          s.components?.some((cmp) => cmp.name.toLowerCase().includes(q) || cmp.partNumber.toLowerCase().includes(q))
+      );
+
+      const labs = (localStore.labs || []).filter(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.institution.toLowerCase().includes(q) ||
+          l.testingDomains?.some((td) => td.toLowerCase().includes(q)) ||
+          l.equipmentList?.some((eq) => eq.name.toLowerCase().includes(q) || eq.model.toLowerCase().includes(q))
+      );
+
+      const experts = (localStore.experts || []).filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) ||
+          e.affiliation.toLowerCase().includes(q) ||
+          e.domainExpertise?.some((de) => de.toLowerCase().includes(q)) ||
+          e.bio.toLowerCase().includes(q)
+      );
+
+      const projects = (localStore.projects || []).filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.code.toLowerCase().includes(q) ||
+          p.domain.toLowerCase().includes(q) ||
+          p.problemStatement.toLowerCase().includes(q)
+      );
+
+      const knowledge = (localStore.knowledgeItems || []).filter(
+        (k) =>
+          k.title.toLowerCase().includes(q) ||
+          k.authorsOrOrg.toLowerCase().includes(q) ||
+          k.abstract.toLowerCase().includes(q) ||
+          k.tags?.some((t) => t.toLowerCase().includes(q))
+      );
+
+      res.json({
+        ok: true,
+        frontiers,
+        evidence,
+        suppliers,
+        labs,
+        experts,
+        projects,
+        knowledge,
+        totalMatches:
+          frontiers.length +
+          evidence.length +
+          suppliers.length +
+          labs.length +
+          experts.length +
+          projects.length +
+          knowledge.length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Search execution failed.' });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // SOCIAL POSTS, USER CONNECTIONS & DIRECT MESSAGING API (Community Hub)
+  // --------------------------------------------------------------------------
+  app.get('/api/posts', async (_req, res) => {
+    try {
+      if (supabaseAdmin) {
+        const { data: catPosts } = await supabaseAdmin
+          .from('catalog')
+          .select('*')
+          .eq('type', 'social_post')
+          .order('created_at', { ascending: false });
+
+        const posts = (catPosts || []).map((cp) => cp.metadata?.qartinia_payload).filter(Boolean);
+        return res.json({ ok: true, posts });
+      }
+      res.json({ ok: true, posts: [] });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch posts.' });
+    }
+  });
+
+  app.post('/api/posts', async (req, res) => {
+    try {
+      const { content, imageUrl, tags } = req.body;
+      if (!content || !content.trim()) {
+        return res.status(400).json({ error: 'Post content cannot be empty.' });
+      }
+
+      const state = await fetchFullWorkspaceState();
+      const current = state.currentUser;
+      const authorId = resolveValidActorUuid(current?.id);
+      const postId = `post-${Date.now()}`;
+
+      const newPost = {
+        id: postId,
+        authorId,
+        authorName: current?.fullName || 'Engineering Contributor',
+        authorEmail: current?.email || '',
+        authorRole: current?.role || 'Engineer',
+        authorOrg: current?.organizationName || 'Deep-Tech Ecosystem',
+        authorAvatarUrl: current?.avatarUrl || null,
+        content: content.trim(),
+        imageUrl: imageUrl || null,
+        likesCount: 0,
+        likedBy: [],
+        tags: Array.isArray(tags) ? tags : [],
+        createdAt: new Date().toISOString(),
+      };
+
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('catalog').insert({
+          id: postId,
+          type: 'social_post',
+          title: content.trim().slice(0, 80),
+          category: 'Community Post',
+          organization: current?.organizationName || 'Deep-Tech Ecosystem',
+          description: content.trim(),
+          publication_state: 'published',
+          created_by: authorId,
+          metadata: {
+            qartinia_kind: 'social_post',
+            qartinia_payload: newPost,
+          },
+        });
+
+        await logSupabaseActivity(authorId, 'community_post_published', 'social_post', postId, {
+          tags: newPost.tags,
+        });
+      }
+
+      broadcastSSE('notification', {
+        notification: {
+          id: `notif-${Date.now()}`,
+          type: 'general',
+          title: 'New Community Discussion',
+          message: `${newPost.authorName} shared a technical update: "${content.slice(0, 60)}..."`,
+          linkSection: 'community',
+          timestamp: 'Just now',
+          read: false,
+        },
+      });
+
+      res.json({ ok: true, post: newPost });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to publish post.' });
+    }
+  });
+
+  app.post('/api/posts/:id/like', async (req, res) => {
+    try {
+      const postId = req.params.id;
+      const actorUuid = resolveValidActorUuid();
+
+      if (supabaseAdmin) {
+        const { data: existing } = await supabaseAdmin
+          .from('catalog')
+          .select('*')
+          .eq('id', postId)
+          .single();
+
+        if (existing && existing.metadata?.qartinia_payload) {
+          const payload = existing.metadata.qartinia_payload;
+          const likedBy = Array.isArray(payload.likedBy) ? payload.likedBy : [];
+          const idx = likedBy.indexOf(actorUuid);
+          if (idx !== -1) {
+            likedBy.splice(idx, 1);
+          } else {
+            likedBy.push(actorUuid);
+          }
+          payload.likedBy = likedBy;
+          payload.likesCount = likedBy.length;
+
+          await supabaseAdmin
+            .from('catalog')
+            .update({
+              metadata: {
+                ...existing.metadata,
+                qartinia_payload: payload,
+              },
+            })
+            .eq('id', postId);
+
+          return res.json({ ok: true, likesCount: payload.likesCount, likedBy: payload.likedBy });
+        }
+      }
+
+      res.json({ ok: true, likesCount: 1 });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to toggle like.' });
+    }
+  });
+
+  app.delete('/api/posts/:id', async (req, res) => {
+    try {
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('catalog').delete().eq('id', req.params.id);
+      }
+      res.json({ ok: true, deletedId: req.params.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete post.' });
+    }
+  });
+
+  app.get('/api/connections', async (_req, res) => {
+    try {
+      const state = await fetchFullWorkspaceState();
+      const currentUserId = state.currentUser?.id;
+      if (!currentUserId || !supabaseAdmin) {
+        return res.json({ ok: true, connections: [] });
+      }
+
+      const { data: edges } = await supabaseAdmin
+        .from('catalog_relationships')
+        .select('*')
+        .eq('relationship_type', 'user_connection')
+        .or(`source_id.eq.${currentUserId},target_id.eq.${currentUserId}`);
+
+      const accountsMap = new Map((state.accounts || []).map((a) => [a.id, a]));
+
+      const connections = (edges || []).map((e) => {
+        const otherId = e.source_id === currentUserId ? e.target_id : e.source_id;
+        const otherUser = accountsMap.get(otherId);
+        return {
+          id: e.id,
+          requesterId: e.source_id,
+          targetId: e.target_id,
+          status: e.metadata?.status || 'accepted',
+          createdAt: e.created_at ? String(e.created_at).slice(0, 10) : '',
+          user: otherUser,
+        };
+      });
+
+      res.json({ ok: true, connections });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch connections.' });
+    }
+  });
+
+  app.post('/api/connections/request', async (req, res) => {
+    try {
+      const { targetUserId } = req.body;
+      const state = await fetchFullWorkspaceState();
+      const requesterId = resolveValidActorUuid(state.currentUser?.id);
+
+      if (!targetUserId || targetUserId === requesterId) {
+        return res.status(400).json({ error: 'Invalid target user ID.' });
+      }
+
+      if (supabaseAdmin) {
+        const edgeId = `conn-${Date.now()}`;
+        await supabaseAdmin.from('catalog_relationships').insert({
+          id: edgeId,
+          source_id: requesterId,
+          target_id: targetUserId,
+          relationship_type: 'user_connection',
+          description: 'Engineering professional connection request',
+          metadata: { status: 'accepted' },
+        });
+
+        await logSupabaseActivity(requesterId, 'connection_requested', 'user_connection', targetUserId);
+      }
+
+      res.json({ ok: true, message: 'Connected successfully.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to connect.' });
+    }
+  });
+
+  app.delete('/api/connections/:id', async (req, res) => {
+    try {
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('catalog_relationships').delete().eq('id', req.params.id);
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to remove connection.' });
+    }
+  });
+
+  app.get('/api/messages/:targetUserId', async (req, res) => {
+    try {
+      const targetUserId = req.params.targetUserId;
+      const state = await fetchFullWorkspaceState();
+      const currentUserId = state.currentUser?.id;
+
+      if (!currentUserId || !supabaseAdmin) {
+        return res.json({ ok: true, messages: [] });
+      }
+
+      const { data: msgs } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('type', 'direct_message')
+        .order('created_at', { ascending: true });
+
+      const filtered = (msgs || [])
+        .map((m) => m.metadata?.qartinia_payload)
+        .filter(
+          (m) =>
+            m &&
+            ((m.senderId === currentUserId && m.receiverId === targetUserId) ||
+              (m.senderId === targetUserId && m.receiverId === currentUserId))
+        );
+
+      res.json({ ok: true, messages: filtered });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch messages.' });
+    }
+  });
+
+  app.post('/api/messages', async (req, res) => {
+    try {
+      const { receiverId, content } = req.body;
+      const state = await fetchFullWorkspaceState();
+      const sender = state.currentUser;
+      const senderId = resolveValidActorUuid(sender?.id);
+
+      if (!receiverId || !content || !content.trim()) {
+        return res.status(400).json({ error: 'Receiver ID and content are required.' });
+      }
+
+      const receiver = state.accounts?.find((a) => a.id === receiverId);
+      const msgId = `msg-${Date.now()}`;
+      const newMsg = {
+        id: msgId,
+        senderId,
+        senderName: sender?.fullName || 'Engineering Lead',
+        receiverId,
+        receiverName: receiver?.fullName || 'Recipient',
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+        read: false,
+      };
+
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('catalog').insert({
+          id: msgId,
+          type: 'direct_message',
+          title: `Direct message to ${receiver?.fullName || receiverId}`,
+          category: 'Direct Message',
+          description: content.trim(),
+          created_by: senderId,
+          publication_state: 'published',
+          metadata: {
+            qartinia_kind: 'direct_message',
+            qartinia_payload: newMsg,
+          },
+        });
+      }
+
+      res.json({ ok: true, message: newMsg });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to send message.' });
     }
   });
 

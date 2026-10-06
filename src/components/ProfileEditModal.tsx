@@ -18,6 +18,13 @@ interface ProfileEditModalProps {
     focusArea?: string;
     role?: UserRole | string;
     bio?: string;
+    techStack?: string[];
+    domainExpertise?: string[];
+    credentials?: string;
+    advisoryHistory?: string;
+    linkedinUrl?: string;
+    timezone?: string;
+    avatarUrl?: string;
   }) => Promise<void>;
 }
 
@@ -37,6 +44,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const [focusArea, setFocusArea] = useState('');
   const [role, setRole] = useState<string>('employee');
   const [bio, setBio] = useState('');
+  const [techStackStr, setTechStackStr] = useState('');
+  const [domainExpertiseStr, setDomainExpertiseStr] = useState('');
+  const [credentials, setCredentials] = useState('');
+  const [advisoryHistory, setAdvisoryHistory] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -54,6 +68,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
       setFocusArea(currentUser.focusArea || '');
       setRole(currentUser.role || 'employee');
       setBio(currentUser.bio || '');
+      setTechStackStr(Array.isArray(currentUser.techStack) ? currentUser.techStack.join(', ') : '');
+      setDomainExpertiseStr(Array.isArray(currentUser.domainExpertise) ? currentUser.domainExpertise.join(', ') : '');
+      setCredentials(currentUser.credentials || '');
+      setAdvisoryHistory(currentUser.advisoryHistory || '');
+      setLinkedinUrl(currentUser.linkedinUrl || '');
+      setTimezone(currentUser.timezone || '');
+      setAvatarUrl(currentUser.avatarUrl || '');
     }
   }, [currentUser, isOpen]);
 
@@ -68,6 +89,15 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     setSaving(true);
     setError(null);
     try {
+      const parsedTech = techStackStr
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const parsedDomain = domainExpertiseStr
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       await onUpdateProfile({
         id: currentUser?.id,
         fullName: fullName.trim(),
@@ -77,6 +107,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         focusArea: focusArea.trim() || undefined,
         role,
         bio: bio.trim() || undefined,
+        techStack: parsedTech.length > 0 ? parsedTech : undefined,
+        domainExpertise: parsedDomain.length > 0 ? parsedDomain : undefined,
+        credentials: credentials.trim() || undefined,
+        advisoryHistory: advisoryHistory.trim() || undefined,
+        linkedinUrl: linkedinUrl.trim() || undefined,
+        timezone: timezone.trim() || undefined,
+        avatarUrl: avatarUrl.trim() || undefined,
       });
       setSaveSuccess(true);
       setTimeout(() => {
@@ -272,7 +309,104 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 rows={3}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                placeholder="Summary of deep-tech engineering domain, publications, test rig experience, or project areas..."
+                placeholder="Extensive summary of deep-tech engineering domain, publications, test rig experience, or project areas..."
+                className="w-full p-3 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Core Technologies &amp; Tools (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={techStackStr}
+                  onChange={(e) => setTechStackStr(e.target.value)}
+                  placeholder="e.g. SiC MOSFETs, Ansys Maxwell, SPICE, PLECS, CAN bus"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Domain Expertise Areas (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={domainExpertiseStr}
+                  onChange={(e) => setDomainExpertiseStr(e.target.value)}
+                  placeholder="e.g. Power Electronics, Thermal Runaway, Gate Driver Design"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Credentials &amp; Certifications
+                </label>
+                <input
+                  type="text"
+                  value={credentials}
+                  onChange={(e) => setCredentials(e.target.value)}
+                  placeholder="e.g. Ph.D. Power Electronics, IEEE Senior Member"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Avatar / Photo URL
+                </label>
+                <input
+                  type="url"
+                  value={avatarUrl}
+                  onChange={(e) => setAvatarUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/... or direct image link"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  LinkedIn / Professional Profile URL
+                </label>
+                <input
+                  type="url"
+                  value={linkedinUrl}
+                  onChange={(e) => setLinkedinUrl(e.target.value)}
+                  placeholder="https://linkedin.com/in/username"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Timezone / Location
+                </label>
+                <input
+                  type="text"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  placeholder="e.g. UTC+1 (Berlin / Paris) or UTC-5 (EST)"
+                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                Advisory &amp; Consulting History
+              </label>
+              <textarea
+                rows={2}
+                value={advisoryHistory}
+                onChange={(e) => setAdvisoryHistory(e.target.value)}
+                placeholder="Past technical advisory board seats, ISO/SAE committee standards work, enterprise consulting..."
                 className="w-full p-3 bg-[#FAF9F6] border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#0F2537]"
               />
             </div>
