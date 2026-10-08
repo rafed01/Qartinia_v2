@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { EnterpriseMember, UserAccount } from '../types/qartinia';
+import { apiFetch } from '../api/client';
 import {
   Building,
   CheckCircle2,
@@ -38,7 +39,7 @@ export const InvitationsTable: React.FC<InvitationsTableProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/enterprise/members');
+      const res = await apiFetch('/api/enterprise/members');
       if (res.ok) {
         const data = await res.json();
         if (data.members) {
@@ -67,7 +68,7 @@ export const InvitationsTable: React.FC<InvitationsTableProps> = ({
     setActioningId(id);
     setError(null);
     try {
-      const res = await fetch(`/api/enterprise/members/${id}`, {
+      const res = await apiFetch(`/api/enterprise/members/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),

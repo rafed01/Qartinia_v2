@@ -9,6 +9,7 @@ import {
   FrontierBenchmark,
   EvidenceNode,
   ProtectedProjectRoom,
+  ProjectParticipant,
   FrontierPositionRow,
   UserAccount,
   SupabaseOrganization,
@@ -49,9 +50,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORE_PATH = path.resolve(__dirname, '.qartinia-store.json');
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  '';
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  '';
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  '';
 
 let dynamicAdminUuid: string | null = null;
 
@@ -68,6 +80,219 @@ const supabaseAnon: SupabaseClient | null =
         auth: { autoRefreshToken: false, persistSession: false },
       })
     : null;
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  status: string;
+  approvalStatus: string;
+  organizationName: string;
+  organizationId: string | null;
+  department?: string;
+  title?: string;
+  profile?: any;
+  orgMemberships?: any[];
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser | null;
+      authUser?: any | null;
+    }
+  }
+}
+
+interface CachedUserSession {
+  user: AuthenticatedUser;
+  authUser: any;
+  cachedAt: number;
+}
+const tokenValidationCache = new Map<string, CachedUserSession>();
+
+export async function validateBearerToken(token: string): Promise<{ authUser: any; user: AuthenticatedUser } | null> {
+  if (!supabaseAdmin) return null;
+  const cached = tokenValidationCache.get(token);
+  if (cached && Date.now() - cached.cachedAt < 30000) {
+    return { authUser: cached.authUser, user: cached.user };
+  }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !authData?.user) {
+    tokenValidationCache.delete(token);
+    return null;
+  }
+
+  const authUser = authData.user;
+  let { data: prof } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('id', authUser.id)
+    .single();
+
+  if (!prof) {
+    const initialRole = authUser.user_metadata?.role || 'company';
+    const initialApproval = authUser.user_metadata?.approval_status || 'approved';
+    const { data: upsertedProf } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: authUser.id,
+        email: authUser.email,
+        full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+        role: initialRole,
+        approval_status: initialApproval,
+        status: initialApproval,
+        organization: authUser.user_metadata?.organization || authUser.email?.split('@')[1] || 'Independent',
+        onboarding_completed: true,
+      })
+      .select()
+      .single();
+    if (upsertedProf) {
+      prof = upsertedProf;
+    }
+  }
+
+  const { data: memberRows } = await supabaseAdmin
+    .from('organization_members')
+    .select('*')
+    .eq('user_id', authUser.id);
+
+  const cleanRole = prof?.role || authUser.user_metadata?.role || 'company';
+  const cleanApproval = prof?.approval_status || prof?.status || authUser.user_metadata?.approval_status || 'approved';
+
+  const user: AuthenticatedUser = {
+    id: authUser.id,
+    email: authUser.email || prof?.email || '',
+    fullName: prof?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+    role: cleanRole,
+    status: cleanApproval,
+    approvalStatus: cleanApproval,
+    organizationName: prof?.organization || prof?.company_name || 'Independent',
+    organizationId: prof?.organization_id || (memberRows && memberRows[0]?.organization_id) || null,
+    department: prof?.focus_area || 'Engineering',
+    title: prof?.metadata?.title || 'Member',
+    profile: prof,
+    orgMemberships: memberRows || [],
+  };
+
+  tokenValidationCache.set(token, { user, authUser, cachedAt: Date.now() });
+  return { authUser, user };
+}
+
+export const authenticateToken: express.RequestHandler = async (req, _res, next) => {
+  const authHeader = req.headers.authorization;
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  if (!token && typeof req.query?.token === 'string') {
+    token = req.query.token.trim();
+  }
+
+  if (!token) {
+    req.user = null;
+    req.authUser = null;
+    return next();
+  }
+
+  try {
+    const validated = await validateBearerToken(token);
+    if (validated) {
+      req.user = validated.user;
+      req.authUser = validated.authUser;
+    } else {
+      req.user = null;
+      req.authUser = null;
+    }
+  } catch {
+    req.user = null;
+    req.authUser = null;
+  }
+  next();
+};
+
+export const requireAuth: express.RequestHandler = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Authentication required. Please provide a valid Bearer token.',
+    });
+  }
+  if (req.user.approvalStatus === 'rejected') {
+    return res.status(403).json({
+      error: 'Access denied: Your account registration has been rejected.',
+    });
+  }
+  next();
+};
+
+export const requireAdmin: express.RequestHandler = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Authentication required. Please provide a valid Bearer token.',
+    });
+  }
+  const role = req.user.role;
+  const isAdmin =
+    role === 'admin' ||
+    role === 'platform_admin' ||
+    role === 'enterprise_admin' ||
+    role === 'founder';
+  if (!isAdmin) {
+    return res.status(403).json({
+      error: 'Forbidden: Administrator permissions are required to perform this action.',
+    });
+  }
+  next();
+};
+
+/**
+ * Creates or retrieves a real Supabase Auth session token for a given user email.
+ * This guarantees the frontend receives a valid Supabase access-token.
+ */
+async function createSessionForEmail(email: string): Promise<{ token: string; userId: string } | null> {
+  if (!supabaseAdmin || !supabaseAnon) return null;
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    let { data: users } = await supabaseAdmin.auth.admin.listUsers();
+    let user = users?.users?.find((u) => u.email?.toLowerCase() === cleanEmail);
+    if (!user) {
+      const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+        email: cleanEmail,
+        email_confirm: true,
+      });
+      if (error || !created?.user) {
+        console.error('[createSessionForEmail error]', error);
+        return null;
+      }
+      user = created.user;
+    }
+
+    const linkRes = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: user.email!,
+    });
+    if (linkRes.error || !linkRes.data?.properties?.hashed_token) {
+      console.error('[generateLink error]', linkRes.error);
+      return null;
+    }
+
+    const verifyRes = await supabaseAnon.auth.verifyOtp({
+      token_hash: linkRes.data.properties.hashed_token,
+      type: 'magiclink',
+    });
+    if (verifyRes.error || !verifyRes.data?.session?.access_token) {
+      console.error('[verifyOtp error]', verifyRes.error);
+      return null;
+    }
+
+    return {
+      token: verifyRes.data.session.access_token,
+      userId: user.id,
+    };
+  } catch (err) {
+    console.error('[createSessionForEmail exception]', err);
+    return null;
+  }
+}
 
 interface LocalStore {
   frontiers: FrontierBenchmark[];
@@ -256,13 +481,6 @@ function toPostgresRequestStatus(input?: string): SupabaseRequestStatus {
 function resolveValidActorUuid(userId?: string | null): string | null {
   if (userId && userId !== 'LOGGED_OUT' && /^[0-9a-f-]{36}$/i.test(userId)) {
     return userId;
-  }
-  if (
-    localStore.currentUserId &&
-    localStore.currentUserId !== 'LOGGED_OUT' &&
-    /^[0-9a-f-]{36}$/i.test(localStore.currentUserId)
-  ) {
-    return localStore.currentUserId;
   }
   return null;
 }
@@ -673,7 +891,7 @@ function mapProfileRow(row: any): UserAccount {
   };
 }
 
-async function fetchFullWorkspaceState() {
+async function fetchFullWorkspaceState(userId?: string | null) {
   let accounts: UserAccount[] = [];
   let organizations: SupabaseOrganization[] = [];
   let enterpriseMembers: EnterpriseMember[] = [];
@@ -931,14 +1149,7 @@ async function fetchFullWorkspaceState() {
     if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
   }
 
-  let currentUser = accounts.find((a) => a.id === localStore.currentUserId) || null;
-  if (!currentUser && localStore.currentUserId === null && accounts.length > 0) {
-    const founderAdmin = accounts.find((a) => a.role === 'admin') || accounts[0];
-    if (founderAdmin) {
-      currentUser = founderAdmin;
-      localStore.currentUserId = founderAdmin.id;
-    }
-  }
+  const currentUser = userId ? accounts.find((a) => a.id === userId) || null : null;
 
   if (enterpriseMembers.length === 0) {
     enterpriseMembers = localStore.enterpriseMembers || [];
@@ -1292,14 +1503,15 @@ Instructions:
 async function startServer() {
   const app = express();
   app.use(express.json());
+  app.use(authenticateToken);
 
   // Bootstrap & verify authoritative Supabase catalog persistence
   await ensureDatabaseCatalogSeeded();
 
   // 1. GET /api/state — Live Supabase + Local Workspace State
-  app.get('/api/state', async (_req, res) => {
+  app.get('/api/state', async (req, res) => {
     try {
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(req.user?.id || null);
       res.json(state);
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to load workspace state.' });
@@ -1434,14 +1646,18 @@ async function startServer() {
         if (!prof) {
           return res.status(404).json({ error: 'Profile not found in Supabase.' });
         }
-        localStore.currentUserId = prof.id;
-        saveLocalStore(localStore);
+        const session = await createSessionForEmail(prof.email);
         await logSupabaseActivity(prof.id, 'auth_session_switch', 'profile', prof.email, {
           role: prof.role,
           status: prof.approval_status,
         });
-        const state = await fetchFullWorkspaceState();
-        return res.json({ ok: true, currentUser: state.currentUser, state });
+        const state = await fetchFullWorkspaceState(prof.id);
+        return res.json({
+          ok: true,
+          token: session?.token || null,
+          currentUser: state.currentUser,
+          state,
+        });
       }
 
       const cleanEmail = String(email || '').trim().toLowerCase();
@@ -1457,6 +1673,8 @@ async function startServer() {
       let profile = existingProfiles && existingProfiles[0] ? existingProfiles[0] : null;
 
       let authUserId: string | null = profile?.id || null;
+      let sessionToken: string | null = null;
+
       if (password && supabaseAnon) {
         const { data: signInData } = await supabaseAnon.auth.signInWithPassword({
           email: cleanEmail,
@@ -1464,6 +1682,7 @@ async function startServer() {
         });
         if (signInData?.user) {
           authUserId = signInData.user.id;
+          sessionToken = signInData.session?.access_token || null;
         }
       }
 
@@ -1508,16 +1727,25 @@ async function startServer() {
         profile = upsertedProfile;
       }
 
-      localStore.currentUserId = profile.id;
-      saveLocalStore(localStore);
+      if (!sessionToken) {
+        const session = await createSessionForEmail(cleanEmail);
+        if (session) {
+          sessionToken = session.token;
+        }
+      }
 
       await logSupabaseActivity(profile.id, 'auth_login', 'profile', profile.email, {
         role: profile.role,
         approval_status: profile.approval_status,
       });
 
-      const state = await fetchFullWorkspaceState();
-      return res.json({ ok: true, currentUser: state.currentUser, state });
+      const state = await fetchFullWorkspaceState(profile.id);
+      return res.json({
+        ok: true,
+        token: sessionToken || null,
+        currentUser: state.currentUser,
+        state,
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Login failed.' });
     }
@@ -1663,8 +1891,7 @@ async function startServer() {
         });
       }
 
-      localStore.currentUserId = userId;
-      saveLocalStore(localStore);
+      const session = await createSessionForEmail(cleanEmail);
 
       await logSupabaseActivity(userId, 'auth_register', 'profile', cleanEmail, {
         role: dbRole,
@@ -1672,8 +1899,13 @@ async function startServer() {
         organization: organizationName,
       });
 
-      const state = await fetchFullWorkspaceState();
-      res.json({ ok: true, currentUser: state.currentUser, state });
+      const state = await fetchFullWorkspaceState(userId);
+      res.json({
+        ok: true,
+        token: session?.token || null,
+        currentUser: state.currentUser,
+        state,
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Registration failed.' });
     }
@@ -1681,19 +1913,20 @@ async function startServer() {
 
   // 5. POST /api/auth/logout
   app.post('/api/auth/logout', async (_req, res) => {
-    localStore.currentUserId = 'LOGGED_OUT';
-    saveLocalStore(localStore);
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(null);
     res.json({ ok: true, currentUser: null, state });
   });
 
-  // 6. PATCH /api/profile — Update Live Supabase Profile (Aligned with PostgreSQL Enums)
-  app.patch('/api/profile', async (req, res) => {
+  // 6. PATCH /api/profile — Update Live Supabase Profile (Protected via Token)
+  app.patch('/api/profile', requireAuth, async (req, res) => {
     try {
-      const targetId = req.body.id || localStore.currentUserId;
-      if (!supabaseAdmin || !targetId || targetId === 'LOGGED_OUT') {
-        return res.status(400).json({ error: 'No active profile selected to update.' });
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not configured.' });
       }
+
+      const actor = req.user!;
+      // Only administrators can edit other profiles; regular users can only edit their own
+      const targetId = actor.role === 'admin' && req.body.id ? req.body.id : actor.id;
 
       const { data: existingProf } = await supabaseAdmin
         .from('profiles')
@@ -1714,12 +1947,14 @@ async function startServer() {
       if (req.body.title !== undefined) {
         currentMetadata.title = req.body.title;
       }
-      if (req.body.role !== undefined) {
+
+      // Role and approval status escalation protection: ONLY administrators can alter them
+      if (req.body.role !== undefined && actor.role === 'admin') {
         updates.role = toPostgresUserRole(req.body.role);
         currentMetadata.qartinia_track = req.body.role;
       }
-      if (req.body.status !== undefined) {
-        const rawStatus = String(req.body.status).toLowerCase();
+      if ((req.body.status !== undefined || req.body.approvalStatus !== undefined) && actor.role === 'admin') {
+        const rawStatus = String(req.body.status || req.body.approvalStatus).toLowerCase();
         if (rawStatus === 'onboarding') {
           updates.status = 'approved';
           updates.approval_status = 'approved';
@@ -1761,9 +1996,6 @@ async function startServer() {
         return res.status(400).json({ error: updateErr.message });
       }
 
-      localStore.currentUserId = targetId;
-      saveLocalStore(localStore);
-
       await logSupabaseActivity(
         targetId,
         'profile_update',
@@ -1777,20 +2009,20 @@ async function startServer() {
         }
       );
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       res.json({ ok: true, currentUser: state.currentUser, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to update profile.' });
     }
   });
 
-  app.patch('/api/auth/profile', async (req, res) => {
+  app.patch('/api/auth/profile', requireAuth, async (req, res) => {
     req.url = '/api/profile';
     (app as any)._router.handle(req, res);
   });
 
   // 7. POST /api/admin/approvals — Execute Real Supabase Atomic Approval RPCs (`004` & `005`)
-  app.post('/api/admin/approvals', async (req, res) => {
+  app.post('/api/admin/approvals', requireAdmin, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
@@ -1811,7 +2043,7 @@ async function startServer() {
         notes,
       } = req.body;
 
-      const actingAdminId = resolveValidActorUuid(req.body.adminId || req.body.actingAdminId);
+      const actingAdminId = req.user!.id;
 
       if (action === 'create') {
         const cleanEmail = String(
@@ -2024,7 +2256,7 @@ async function startServer() {
   });
 
   // 8. POST /api/organizations/manage — Manage Real Supabase Organization Seats (`public.organization_members`)
-  app.post('/api/organizations/manage', async (req, res) => {
+  app.post('/api/organizations/manage', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
@@ -2043,6 +2275,8 @@ async function startServer() {
         requireApproval,
       } = req.body;
 
+      const actor = req.user!;
+
       let targetUserId = rawUserId;
       let targetOrgId = rawOrgId;
       if (memberId && !targetUserId) {
@@ -2055,6 +2289,18 @@ async function startServer() {
           targetUserId = memRow.user_id;
           targetOrgId = memRow.organization_id;
         }
+      }
+
+      // Enforce organization membership / administrator permissions
+      const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOrgLeader =
+        (targetOrgId && targetOrgId === actor.organizationId) ||
+        (organizationName && organizationName.trim().toLowerCase() === actor.organizationName.trim().toLowerCase());
+
+      if (!isPlatformAdmin && !isOrgLeader) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not have permission to manage seats for this organization.',
+        });
       }
 
       if (action === 'invite') {
@@ -2139,7 +2385,7 @@ async function startServer() {
           });
 
           await logSupabaseActivity(
-            localStore.currentUserId,
+            actor.id,
             'enterprise_seat_invited',
             'organization_member',
             cleanEmail,
@@ -2164,7 +2410,7 @@ async function startServer() {
           .eq('id', targetUserId);
 
         await logSupabaseActivity(
-          localStore.currentUserId,
+          actor.id,
           `org_seat_${nextStatus}`,
           'organization_member',
           targetUserId,
@@ -2173,14 +2419,14 @@ async function startServer() {
       } else if (action === 'remove_member' && memberId) {
         await supabaseAdmin.from('organization_members').delete().eq('id', memberId);
         await logSupabaseActivity(
-          localStore.currentUserId,
+          actor.id,
           'org_seat_removed',
           'organization_member',
           memberId
         );
       }
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       res.json({ ok: true, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Organization seat update failed.' });
@@ -2188,26 +2434,27 @@ async function startServer() {
   });
 
   // 9. POST & PATCH /api/requests — Manage Real `public.requests` (NDA, Collaboration Proposal, Due Diligence, etc.)
-  app.post('/api/requests', async (req, res) => {
+  app.post('/api/requests', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
       }
-      const { name, email, organization, requestType, catalogId, proposalBrief } = req.body;
-      const actorUuid = resolveValidActorUuid(req.body.userId || req.body.requesterId);
+      const { requestType, catalogId, proposalBrief } = req.body;
+      const actor = req.user!;
+      const actorUuid = actor.id;
       const reqId = `req-${Date.now()}`;
       const pgType = toPostgresRequestType(requestType);
 
       const { error } = await supabaseAdmin.from('requests').insert({
         id: reqId,
-        name: name || 'Engineering Lead',
-        email: email || 'rafedriahi.rr@gmail.com',
-        organization: organization || 'Qartinia Partner',
+        name: actor.fullName,
+        email: actor.email,
+        organization: actor.organizationName || 'Qartinia Partner',
         proposalBrief: proposalBrief || '',
         proposal_brief: proposalBrief || '',
         createdAt: new Date().toISOString(),
-        requester_id: actorUuid || null,
-        user_id: actorUuid || null,
+        requester_id: actorUuid,
+        user_id: actorUuid,
         catalog_id: catalogId || null,
         request_type: pgType,
         status: 'pending',
@@ -2218,25 +2465,40 @@ async function startServer() {
         return res.status(400).json({ error: error.message });
       }
 
-      if (actorUuid) {
-        await logSupabaseActivity(actorUuid, `request_created_${pgType}`, 'request', reqId, {
-          requestType: pgType,
-          organization,
-        });
-      }
+      await logSupabaseActivity(actorUuid, `request_created_${pgType}`, 'request', reqId, {
+        requestType: pgType,
+        organization: actor.organizationName,
+      });
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       res.json({ ok: true, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to create request.' });
     }
   });
 
-  app.patch('/api/requests/:id', async (req, res) => {
+  app.patch('/api/requests/:id', requireAuth, async (req, res) => {
     try {
       const { status, decisionNotes } = req.body;
       const pgStatus = toPostgresRequestStatus(status);
-      const actorUuid = resolveValidActorUuid(req.body.decidedBy || req.body.actorId);
+      const actor = req.user!;
+      const actorUuid = actor.id;
+
+      const { data: dbReq } = await (supabaseAdmin?.from('requests').select('*').eq('id', req.params.id).single() || { data: null });
+      const localReq = localStore.customRequests?.find((r) => r.id === req.params.id);
+      const reqOwnerId = dbReq?.requester_id || dbReq?.user_id;
+      const reqOwnerEmail = dbReq?.email || localReq?.email;
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = (reqOwnerId && reqOwnerId === actor.id) || (reqOwnerEmail && reqOwnerEmail.toLowerCase() === actor.email.toLowerCase());
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this request.' });
+      }
+
+      if (isOwner && !isAdmin && pgStatus !== 'cancelled' && pgStatus !== 'pending') {
+        return res.status(403).json({ error: 'Forbidden: Requester cannot self-approve requests.' });
+      }
 
       // Update in localStore
       if (!Array.isArray(localStore.customRequests)) {
@@ -2251,12 +2513,12 @@ async function startServer() {
       } else {
         localStore.customRequests.push({
           id: req.params.id,
-          name: 'Partner',
-          email: '',
-          organization: '',
-          requestType: 'collaboration_proposal',
+          name: dbReq?.name || 'Partner',
+          email: dbReq?.email || '',
+          organization: dbReq?.organization || '',
+          requestType: (dbReq?.request_type as any) || 'collaboration_proposal',
           status: pgStatus,
-          proposalBrief: '',
+          proposalBrief: dbReq?.proposal_brief || '',
           decisionNotes: decisionNotes || `Status updated to ${pgStatus}.`,
           createdAt: new Date().toISOString().split('T')[0],
         });
@@ -2269,7 +2531,7 @@ async function startServer() {
             .from('requests')
             .update({
               status: pgStatus,
-              decided_by: actorUuid || null,
+              decided_by: actorUuid,
               decided_at: new Date().toISOString(),
               decision_notes:
                 decisionNotes || `Transitioned to ${pgStatus} by verified technical reviewer`,
@@ -2277,21 +2539,19 @@ async function startServer() {
             })
             .eq('id', req.params.id);
 
-          if (actorUuid) {
-            await logSupabaseActivity(
-              actorUuid,
-              `request_status_${pgStatus}`,
-              'request',
-              req.params.id,
-              { status: pgStatus }
-            );
-          }
+          await logSupabaseActivity(
+            actorUuid,
+            `request_status_${pgStatus}`,
+            'request',
+            req.params.id,
+            { status: pgStatus }
+          );
         } catch (dbErr) {
           console.warn('[Supabase Request Status Update Warning]', dbErr);
         }
       }
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       const updatedReq = state.requests.find((r) => r.id === req.params.id);
 
       // Trigger real-time notification for the requester
@@ -2314,7 +2574,7 @@ async function startServer() {
             requestType: updatedReq.requestType,
             newStatus: pgStatus,
             decisionNotes: decisionNotes || undefined,
-            actorName: 'Technical Authority',
+            actorName: actor.fullName,
           },
         });
       }
@@ -2325,9 +2585,23 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/requests/:id', async (req, res) => {
+  app.delete('/api/requests/:id', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const actor = req.user!;
+
+      const { data: dbReq } = await (supabaseAdmin?.from('requests').select('*').eq('id', id).single() || { data: null });
+      const localReq = localStore.customRequests?.find((r) => r.id === id);
+      const reqOwnerId = dbReq?.requester_id || dbReq?.user_id;
+      const reqOwnerEmail = dbReq?.email || localReq?.email;
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = (reqOwnerId && reqOwnerId === actor.id) || (reqOwnerEmail && reqOwnerEmail.toLowerCase() === actor.email.toLowerCase());
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this request.' });
+      }
+
       if (Array.isArray(localStore.customRequests)) {
         localStore.customRequests = localStore.customRequests.filter((r) => r.id !== id);
         saveLocalStore(localStore);
@@ -2341,7 +2615,7 @@ async function startServer() {
         }
       }
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       res.json({ ok: true, requests: state.requests, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to delete request.' });
@@ -2349,7 +2623,7 @@ async function startServer() {
   });
 
   // 10. POST & DELETE /api/catalog-relationships — Real `public.catalog_relationships` Knowledge Graph Edges
-  app.post('/api/catalog-relationships', async (req, res) => {
+  app.post('/api/catalog-relationships', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
@@ -2359,7 +2633,7 @@ async function startServer() {
         return res.status(400).json({ error: 'sourceId and targetId are required.' });
       }
 
-      const actorUuid = resolveValidActorUuid();
+      const actorUuid = req.user!.id;
 
       const { error } = await supabaseAdmin.from('catalog_relationships').insert({
         source_id: sourceId,
@@ -2367,37 +2641,36 @@ async function startServer() {
         relationship_type: relationshipType || 'closes_frontier_gap',
         description:
           description || 'Verified condition-aware technical provenance link in Knowledge Graph',
-        metadata: actorUuid ? { createdBy: actorUuid } : {},
+        metadata: { createdBy: actorUuid },
       });
 
       if (error) {
         return res.status(400).json({ error: error.message });
       }
 
-      if (actorUuid) {
-        await logSupabaseActivity(
-          actorUuid,
-          'knowledge_graph_edge_linked',
-          'catalog_relationships',
-          `${sourceId} → ${targetId}`,
-          { relationshipType }
-        );
-      }
+      await logSupabaseActivity(
+        actorUuid,
+        'knowledge_graph_edge_linked',
+        'catalog_relationships',
+        `${sourceId} → ${targetId}`,
+        { relationshipType }
+      );
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actorUuid);
       res.json({ ok: true, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to create catalog relationship.' });
     }
   });
 
-  app.delete('/api/catalog-relationships/:id', async (req, res) => {
+  app.delete('/api/catalog-relationships/:id', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
       }
+      const actorUuid = req.user!.id;
       await supabaseAdmin.from('catalog_relationships').delete().eq('id', req.params.id);
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actorUuid);
       res.json({ ok: true, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to delete catalog relationship.' });
@@ -2405,17 +2678,13 @@ async function startServer() {
   });
 
   // 11. POST /api/bookmarks/toggle — Real `public.bookmarks`
-  app.post('/api/bookmarks/toggle', async (req, res) => {
+  app.post('/api/bookmarks/toggle', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ error: 'Supabase not connected.' });
       }
       const { catalogId, folder, notes } = req.body;
-      const actorUuid = resolveValidActorUuid(req.body.userId);
-
-      if (!actorUuid) {
-        return res.status(401).json({ error: 'Authentication required to manage bookmarks.' });
-      }
+      const actorUuid = req.user!.id;
 
       const { data: existing } = await supabaseAdmin
         .from('bookmarks')
@@ -2434,7 +2703,7 @@ async function startServer() {
         });
       }
 
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actorUuid);
       res.json({ ok: true, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to toggle bookmark.' });
@@ -2442,27 +2711,27 @@ async function startServer() {
   });
 
   // Alias routes for frontend consistency
-  app.post('/api/catalog/relationships', async (req, res) => {
+  app.post('/api/catalog/relationships', requireAuth, async (req, res) => {
     req.url = '/api/catalog-relationships';
     (app as any)._router.handle(req, res);
   });
-  app.delete('/api/catalog/relationships/:id', async (req, res) => {
+  app.delete('/api/catalog/relationships/:id', requireAuth, async (req, res) => {
     req.url = `/api/catalog-relationships/${req.params.id}`;
     (app as any)._router.handle(req, res);
   });
-  app.post('/api/bookmarks', async (req, res) => {
+  app.post('/api/bookmarks', requireAuth, async (req, res) => {
     req.url = '/api/bookmarks/toggle';
     (app as any)._router.handle(req, res);
   });
 
   // 12. POST /api/dev/investor-scenario — Exciting 1-Click Live Investor Scenarios Across All 8 Tables
-  app.post('/api/dev/investor-scenario', async (req, res) => {
+  app.post('/api/dev/investor-scenario', requireAdmin, async (req, res) => {
     try {
       const { scenario } = req.body as {
         scenario: 'seed_bp_wedge' | 'simulate_pending_approval' | 'run_trust_isolation_audit';
       };
 
-      const actorId = resolveValidActorUuid();
+      const actorId = req.user!.id;
 
       if (scenario === 'seed_bp_wedge') {
         const today = new Date().toISOString().split('T')[0];
@@ -2958,7 +3227,7 @@ async function startServer() {
   });
 
   // 13. POST /api/dev/reset — Foreign-Key Safe Reset of Demo Catalog Artifacts
-  app.post('/api/dev/reset', async (_req, res) => {
+  app.post('/api/dev/reset', requireAdmin, async (req, res) => {
     try {
       const idsToDelete = [
         ...localStore.frontiers.map((f) => f.id),
@@ -2987,7 +3256,7 @@ async function startServer() {
   });
 
   // 14. POST /api/frontier/analyze — Compute Live Qartinia Frontier Benchmark + Sync to `public.catalog` & `public.catalog_relationships`
-  app.post('/api/frontier/analyze', async (req, res) => {
+  app.post('/api/frontier/analyze', requireAuth, async (req, res) => {
     try {
       const {
         title,
@@ -3006,6 +3275,8 @@ async function startServer() {
           error: 'technologySystem, customerValue, and targetValue are required.',
         });
       }
+
+      const actor = req.user!;
 
       const generated = await generateFrontierWithGemini({
         title: title || `${technologySystem} Frontier Benchmark`,
@@ -3034,7 +3305,7 @@ async function startServer() {
       await Promise.all([
         syncFrontierToCatalog(newFrontier),
         logSupabaseActivity(
-          localStore.currentUserId,
+          actor.id,
           'frontier_benchmark_computed',
           'frontier',
           newFrontier.title,
@@ -3053,13 +3324,13 @@ async function startServer() {
     }
   });
 
-  app.post('/api/frontier/evaluate', async (req, res) => {
+  app.post('/api/frontier/evaluate', requireAuth, async (req, res) => {
     req.url = '/api/frontier/analyze';
     (app as any)._router.handle(req, res);
   });
 
   // 14b. POST /api/frontier/:id/evidence — Save Evidence Linked to Frontier
-  app.post('/api/frontier/:id/evidence', async (req, res) => {
+  app.post('/api/frontier/:id/evidence', requireAuth, async (req, res) => {
     try {
       const frontierId = req.params.id;
       const body = req.body;
@@ -3308,30 +3579,25 @@ async function startServer() {
     }
   });
 
-  app.post('/api/posts', async (req, res) => {
+  app.post('/api/posts', requireAuth, async (req, res) => {
     try {
       const { content, imageUrl, tags } = req.body;
       if (!content || !content.trim()) {
         return res.status(400).json({ error: 'Post content cannot be empty.' });
       }
 
-      const state = await fetchFullWorkspaceState();
-      const current = state.currentUser;
-      const authorId = resolveValidActorUuid(current?.id);
-      if (!authorId) {
-        return res.status(401).json({ error: 'Authentication required to publish a post.' });
-      }
-
+      const actor = req.user!;
+      const authorId = actor.id;
       const postId = `post-${Date.now()}`;
 
       const newPost = {
         id: postId,
         authorId,
-        authorName: current?.fullName || 'Engineering Contributor',
-        authorEmail: current?.email || '',
-        authorRole: current?.role || 'Engineer',
-        authorOrg: current?.organizationName || 'Deep-Tech Ecosystem',
-        authorAvatarUrl: current?.avatarUrl || null,
+        authorName: actor.fullName || 'Engineering Contributor',
+        authorEmail: actor.email || '',
+        authorRole: actor.role || 'Engineer',
+        authorOrg: actor.organizationName || 'Deep-Tech Ecosystem',
+        authorAvatarUrl: actor.profile?.avatar_url || null,
         content: content.trim(),
         imageUrl: imageUrl || null,
         likesCount: 0,
@@ -3346,7 +3612,7 @@ async function startServer() {
           type: 'social_post',
           title: content.trim().slice(0, 80),
           category: 'Community Post',
-          organization: current?.organizationName || 'Deep-Tech Ecosystem',
+          organization: actor.organizationName || 'Deep-Tech Ecosystem',
           description: content.trim(),
           publication_state: 'published',
           created_by: authorId,
@@ -3379,13 +3645,10 @@ async function startServer() {
     }
   });
 
-  app.post('/api/posts/:id/like', async (req, res) => {
+  app.post('/api/posts/:id/like', requireAuth, async (req, res) => {
     try {
       const postId = req.params.id;
-      const actorUuid = resolveValidActorUuid();
-      if (!actorUuid) {
-        return res.status(401).json({ error: 'Authentication required to like posts.' });
-      }
+      const actorUuid = req.user!.id;
 
       if (supabaseAdmin) {
         const { data: existing } = await supabaseAdmin
@@ -3426,9 +3689,22 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/posts/:id', async (req, res) => {
+  app.delete('/api/posts/:id', requireAuth, async (req, res) => {
     try {
+      const actor = req.user!;
       if (supabaseAdmin) {
+        const { data: existing } = await supabaseAdmin
+          .from('catalog')
+          .select('*')
+          .eq('id', req.params.id)
+          .single();
+
+        const isAuthor = existing?.created_by === actor.id || existing?.metadata?.qartinia_payload?.authorId === actor.id;
+        const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+        if (!isAuthor && !isAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Only the author or an administrator can delete this post.' });
+        }
+
         await supabaseAdmin.from('catalog').delete().eq('id', req.params.id);
       }
       res.json({ ok: true, deletedId: req.params.id });
@@ -3437,14 +3713,14 @@ async function startServer() {
     }
   });
 
-  app.get('/api/connections', async (_req, res) => {
+  app.get('/api/connections', requireAuth, async (req, res) => {
     try {
-      const state = await fetchFullWorkspaceState();
-      const currentUserId = state.currentUser?.id;
-      if (!currentUserId || !supabaseAdmin) {
+      const currentUserId = req.user!.id;
+      if (!supabaseAdmin) {
         return res.json({ ok: true, connections: [] });
       }
 
+      const state = await fetchFullWorkspaceState(currentUserId);
       const { data: edges } = await supabaseAdmin
         .from('catalog_relationships')
         .select('*')
@@ -3472,15 +3748,10 @@ async function startServer() {
     }
   });
 
-  app.post('/api/connections/request', async (req, res) => {
+  app.post('/api/connections/request', requireAuth, async (req, res) => {
     try {
       const { targetUserId } = req.body;
-      const state = await fetchFullWorkspaceState();
-      const requesterId = resolveValidActorUuid(state.currentUser?.id);
-
-      if (!requesterId) {
-        return res.status(401).json({ error: 'Authentication required to connect.' });
-      }
+      const requesterId = req.user!.id;
 
       if (!targetUserId || targetUserId === requesterId) {
         return res.status(400).json({ error: 'Invalid target user ID.' });
@@ -3506,7 +3777,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/connections/:id', async (req, res) => {
+  app.delete('/api/connections/:id', requireAuth, async (req, res) => {
     try {
       if (supabaseAdmin) {
         await supabaseAdmin.from('catalog_relationships').delete().eq('id', req.params.id);
@@ -3517,13 +3788,12 @@ async function startServer() {
     }
   });
 
-  app.get('/api/messages/:targetUserId', async (req, res) => {
+  app.get('/api/messages/:targetUserId', requireAuth, async (req, res) => {
     try {
       const targetUserId = req.params.targetUserId;
-      const state = await fetchFullWorkspaceState();
-      const currentUserId = state.currentUser?.id;
+      const currentUserId = req.user!.id;
 
-      if (!currentUserId || !supabaseAdmin) {
+      if (!supabaseAdmin) {
         return res.json({ ok: true, messages: [] });
       }
 
@@ -3548,27 +3818,23 @@ async function startServer() {
     }
   });
 
-  app.post('/api/messages', async (req, res) => {
+  app.post('/api/messages', requireAuth, async (req, res) => {
     try {
       const { receiverId, content } = req.body;
-      const state = await fetchFullWorkspaceState();
-      const sender = state.currentUser;
-      const senderId = resolveValidActorUuid(sender?.id);
-
-      if (!senderId) {
-        return res.status(401).json({ error: 'Authentication required to send messages.' });
-      }
+      const actor = req.user!;
+      const senderId = actor.id;
 
       if (!receiverId || !content || !content.trim()) {
         return res.status(400).json({ error: 'Receiver ID and content are required.' });
       }
 
+      const state = await fetchFullWorkspaceState(senderId);
       const receiver = state.accounts?.find((a) => a.id === receiverId);
       const msgId = `msg-${Date.now()}`;
       const newMsg = {
         id: msgId,
         senderId,
-        senderName: sender?.fullName || 'Engineering Lead',
+        senderName: actor.fullName || 'Engineering Lead',
         receiverId,
         receiverName: receiver?.fullName || 'Recipient',
         content: content.trim(),
@@ -3599,13 +3865,14 @@ async function startServer() {
   });
 
   // 15. POST /api/frontier/:id/reevaluate
-  app.post('/api/frontier/:id/reevaluate', async (req, res) => {
+  app.post('/api/frontier/:id/reevaluate', requireAuth, async (req, res) => {
     try {
       const existing = localStore.frontiers.find((f) => f.id === req.params.id);
       if (!existing) {
         return res.status(404).json({ error: 'Frontier benchmark not found.' });
       }
 
+      const actor = req.user!;
       const customerPos =
         existing.positions.find((p) => p.position === 'Customer technology')?.valueDisplay || '';
       const targetPos =
@@ -3635,7 +3902,7 @@ async function startServer() {
       await Promise.all([
         syncFrontierToCatalog(existing),
         logSupabaseActivity(
-          localStore.currentUserId,
+          actor.id,
           'frontier_reevaluated',
           'frontier',
           existing.title
@@ -3647,7 +3914,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/frontier/:id', async (req, res) => {
+  app.delete('/api/frontier/:id', requireAdmin, async (req, res) => {
     localStore.frontiers = localStore.frontiers.filter((f) => f.id !== req.params.id);
     saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
@@ -3655,7 +3922,7 @@ async function startServer() {
   });
 
   // 16. POST & DELETE /api/evidence — Synced with `public.catalog` & `public.catalog_relationships`
-  app.post('/api/evidence', async (req, res) => {
+  app.post('/api/evidence', requireAuth, async (req, res) => {
     const body = req.body;
     const newNode: EvidenceNode = {
       id: body.id || `ev-${Date.now()}`,
@@ -3704,7 +3971,7 @@ async function startServer() {
     res.json({ ok: true, evidenceNode: newNode, evidenceNodes: localStore.evidenceNodes });
   });
 
-  app.delete('/api/evidence/:id', async (req, res) => {
+  app.delete('/api/evidence/:id', requireAdmin, async (req, res) => {
     localStore.evidenceNodes = localStore.evidenceNodes.filter((n) => n.id !== req.params.id);
     saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
@@ -3742,7 +4009,7 @@ async function startServer() {
     });
   });
 
-  app.get('/api/notifications', (_req, res) => {
+  app.get('/api/notifications', requireAuth, (_req, res) => {
     const list = localStore.notifications || [];
     res.json({
       ok: true,
@@ -3751,7 +4018,7 @@ async function startServer() {
     });
   });
 
-  app.patch('/api/notifications/:id/read', (req, res) => {
+  app.patch('/api/notifications/:id/read', requireAuth, (req, res) => {
     if (!Array.isArray(localStore.notifications)) localStore.notifications = [];
     const notif = localStore.notifications.find((n) => n.id === req.params.id);
     if (notif) {
@@ -3765,7 +4032,7 @@ async function startServer() {
     res.json({ ok: true, notifications: localStore.notifications });
   });
 
-  app.post('/api/notifications/mark-all-read', (_req, res) => {
+  app.post('/api/notifications/mark-all-read', requireAuth, (_req, res) => {
     if (Array.isArray(localStore.notifications)) {
       localStore.notifications.forEach((n) => {
         n.read = true;
@@ -3776,7 +4043,7 @@ async function startServer() {
     res.json({ ok: true, notifications: localStore.notifications });
   });
 
-  app.delete('/api/notifications/:id', (req, res) => {
+  app.delete('/api/notifications/:id', requireAuth, (req, res) => {
     if (Array.isArray(localStore.notifications)) {
       localStore.notifications = localStore.notifications.filter((n) => n.id !== req.params.id);
       saveLocalStore(localStore);
@@ -3786,8 +4053,24 @@ async function startServer() {
 
   // 18. POST / PATCH / DELETE /api/projects — Protected Project Rooms Synced with `public.catalog` & `public.catalog_relationships`
   // GET /api/projects
-  app.get('/api/projects', async (_req, res) => {
-    res.json({ ok: true, projects: localStore.projects });
+  app.get('/api/projects', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    if (isAdmin) {
+      return res.json({ ok: true, projects: localStore.projects });
+    }
+    const filtered = (localStore.projects || []).filter((p) => {
+      const isCreator = p.createdById === actor.id || p.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+      const isParticipant = (p.participants || []).some(
+        (part) =>
+          part.id === actor.id ||
+          (part.name && part.name.toLowerCase() === actor.fullName.toLowerCase()) ||
+          (part.organization && part.organization.toLowerCase() === actor.organizationName.toLowerCase())
+      );
+      const isSameOrg = p.createdByOrg && p.createdByOrg.toLowerCase() === actor.organizationName.toLowerCase();
+      return isCreator || isParticipant || isSameOrg;
+    });
+    res.json({ ok: true, projects: filtered });
   });
 
   // GET /api/frontiers
@@ -3800,7 +4083,7 @@ async function startServer() {
     res.json({ ok: true, evidenceNodes: localStore.evidenceNodes });
   });
 
-  app.post('/api/projects', async (req, res) => {
+  app.post('/api/projects', requireAuth, async (req, res) => {
     const {
       title,
       domain,
@@ -3814,13 +4097,23 @@ async function startServer() {
       initialPartnerOrg,
     } = req.body;
 
-    const participants = [];
+    const actor = req.user!;
+    const participants: ProjectParticipant[] = [
+      {
+        id: actor.id,
+        name: actor.fullName,
+        organization: actor.organizationName,
+        role: 'Industry Lead',
+        accessScope: 'Full Control',
+      },
+    ];
+
     if (initialPartnerName || initialPartnerOrg) {
       participants.push({
         id: `part-${Date.now()}`,
         name: initialPartnerName || 'Principal Investigator',
         organization: initialPartnerOrg || 'Partner Research Laboratory',
-        role: 'University / Lab PI' as const,
+        role: 'University / Lab PI',
         accessScope: 'Protected Project Boundary',
       });
     }
@@ -3842,6 +4135,9 @@ async function startServer() {
       milestones: [],
       documents: [],
       messages: [],
+      createdById: actor.id,
+      createdByEmail: actor.email,
+      createdByOrg: actor.organizationName,
       createdAt: new Date().toISOString().split('T')[0],
     };
 
@@ -3867,7 +4163,7 @@ async function startServer() {
     }
 
     await logSupabaseActivity(
-      localStore.currentUserId,
+      actor.id,
       'protected_project_created',
       'project_room',
       `${newRoom.code}: ${newRoom.title}`
@@ -3876,9 +4172,23 @@ async function startServer() {
     res.json({ ok: true, project: newRoom });
   });
 
-  app.patch('/api/projects/:id', async (req, res) => {
+  app.patch('/api/projects/:id', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some(
+      (p) =>
+        p.id === actor.id ||
+        (p.name && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
+        (p.organization && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
+    );
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this project.' });
+    }
 
     const { legalStage, ndaStatus, ipFramework, publicationPolicy } = req.body;
     if (legalStage) project.legalStage = legalStage;
@@ -3891,16 +4201,36 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
-  app.delete('/api/projects/:id', async (req, res) => {
+  app.delete('/api/projects/:id', requireAuth, async (req, res) => {
+    const project = localStore.projects.find((p) => p.id === req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+
+    if (!isAdmin && !isCreator) {
+      return res.status(403).json({ error: 'Forbidden: Only the project creator or an administrator can delete this project.' });
+    }
+
     localStore.projects = localStore.projects.filter((p) => p.id !== req.params.id);
     saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
     res.json({ ok: true, projects: localStore.projects });
   });
 
-  app.post('/api/projects/:id/participants', async (req, res) => {
+  app.post('/api/projects/:id/participants', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to add participants to this project.' });
+    }
 
     const { name, organization, role, accessScope } = req.body;
     const newParticipant = {
@@ -3934,9 +4264,18 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
-  app.post('/api/projects/:id/milestones', async (req, res) => {
+  app.post('/api/projects/:id/milestones', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to add milestones to this project.' });
+    }
 
     const { title, dueDate, deliverable } = req.body;
     const newMilestone = {
@@ -3969,9 +4308,18 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
-  app.patch('/api/projects/:id/milestones/:msId', async (req, res) => {
+  app.patch('/api/projects/:id/milestones/:msId', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to update milestones in this project.' });
+    }
 
     const ms = project.milestones.find((m) => m.id === req.params.msId);
     if (ms && req.body.status) {
@@ -3999,16 +4347,25 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
-  app.post('/api/projects/:id/documents', async (req, res) => {
+  app.post('/api/projects/:id/documents', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const { title, classification, uploadedBy } = req.body;
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to upload documents to this project.' });
+    }
+
+    const { title, classification } = req.body;
     project.documents.push({
       id: `doc-${Date.now()}`,
       title,
       classification: classification || 'Mutual NDA',
-      uploadedBy: uploadedBy || 'Project Lead',
+      uploadedBy: actor.fullName,
       timestamp: new Date().toISOString().split('T')[0],
     });
     saveLocalStore(localStore);
@@ -4016,16 +4373,25 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
-  app.post('/api/projects/:id/messages', async (req, res) => {
+  app.post('/api/projects/:id/messages', requireAuth, async (req, res) => {
     const project = localStore.projects.find((p) => p.id === req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const { senderName, senderOrg, senderRole, content } = req.body;
+    const actor = req.user!;
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
+    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
+
+    if (!isAdmin && !isCreator && !isParticipant) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to post messages in this project.' });
+    }
+
+    const { content } = req.body;
     project.messages.push({
       id: `msg-${Date.now()}`,
-      senderName: senderName || 'Engineering Lead',
-      senderOrg: senderOrg || 'Project Member',
-      senderRole: senderRole || 'Collaborator',
+      senderName: actor.fullName,
+      senderOrg: actor.organizationName,
+      senderRole: actor.role,
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
@@ -4037,7 +4403,7 @@ async function startServer() {
   // --------------------------------------------------------------------------
   // 19. FRONTIER BENCHMARK EDIT / UPDATE API
   // --------------------------------------------------------------------------
-  app.patch('/api/frontiers/:id', async (req, res) => {
+  app.patch('/api/frontiers/:id', requireAdmin, async (req, res) => {
     const frontier = localStore.frontiers.find((f) => f.id === req.params.id);
     if (!frontier) {
       return res.status(404).json({ error: 'Frontier benchmark standard not found.' });
@@ -4089,10 +4455,12 @@ async function startServer() {
   // --------------------------------------------------------------------------
   // 20. ENTERPRISE ORGANIZATION & ROLE MANAGEMENT API
   // --------------------------------------------------------------------------
-  app.get('/api/enterprise/members', async (req, res) => {
+  app.get('/api/enterprise/members', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     let members = localStore.enterpriseMembers || [];
     try {
-      const state = await fetchFullWorkspaceState();
+      const state = await fetchFullWorkspaceState(actor.id);
       if (state.enterpriseMembers && state.enterpriseMembers.length > 0) {
         members = state.enterpriseMembers;
       }
@@ -4106,13 +4474,35 @@ async function startServer() {
       const filtered = members.filter((m) => (m.email || '').toLowerCase() === cleanEmail);
       return res.json({ ok: true, members: filtered });
     }
+
+    if (!isPlatformAdmin) {
+      members = members.filter(
+        (m) =>
+          (actor.organizationId && m.organizationId === actor.organizationId) ||
+          (actor.organizationName && m.organizationName && m.organizationName.toLowerCase() === actor.organizationName.toLowerCase())
+      );
+    }
+
     res.json({ ok: true, members });
   });
 
-  app.post('/api/enterprise/members/invite', async (req, res) => {
+  app.post('/api/enterprise/members/invite', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { organizationId, organizationName, fullName, email, role, title, department, permissions } = req.body;
     if (!email || !fullName) {
       return res.status(400).json({ error: 'Full name and email are required for membership invitation.' });
+    }
+
+    const targetOrgId = organizationId || actor.organizationId;
+    const targetOrgName = organizationName || actor.organizationName || 'Qartinia Deep-Tech';
+
+    const isOrgLeader =
+      (actor.organizationId && targetOrgId === actor.organizationId) ||
+      (actor.organizationName && targetOrgName.toLowerCase() === actor.organizationName.toLowerCase());
+
+    if (!isPlatformAdmin && !isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to invite members to this organization.' });
     }
 
     const memberRole = role || 'employee';
@@ -4123,8 +4513,8 @@ async function startServer() {
 
     const newMember: EnterpriseMember = {
       id: `mem-${Date.now()}`,
-      organizationId: organizationId || 'org-qartinia-tech',
-      organizationName: organizationName || 'Qartinia Deep-Tech',
+      organizationId: targetOrgId || 'org-qartinia-tech',
+      organizationName: targetOrgName,
       userId: `usr-inv-${Date.now()}`,
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
@@ -4135,7 +4525,7 @@ async function startServer() {
       joinedAt: new Date().toISOString().split('T')[0],
       permissions: Array.isArray(permissions) ? permissions : defaultPermissions,
       status: 'invited',
-      invitedBy: 'Administrator',
+      invitedBy: actor.fullName,
       lastActive: 'Pending activation',
     };
 
@@ -4205,11 +4595,13 @@ async function startServer() {
       },
     });
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, member: newMember, members: state.enterpriseMembers || localStore.enterpriseMembers, notification: notif, state });
   });
 
-  app.patch('/api/enterprise/members/:id', async (req, res) => {
+  app.patch('/api/enterprise/members/:id', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { id } = req.params;
     const { role, permissions, title, department, status, approvalStatus, fullName } = req.body;
 
@@ -4220,6 +4612,14 @@ async function startServer() {
     const member = localStore.enterpriseMembers.find((m) => m.id === id || m.userId === id);
     if (!member) {
       return res.status(404).json({ error: 'Organization member not found.' });
+    }
+
+    const isOrgLeader =
+      (actor.organizationId && member.organizationId === actor.organizationId) ||
+      (actor.organizationName && member.organizationName && member.organizationName.toLowerCase() === actor.organizationName.toLowerCase());
+
+    if (!isPlatformAdmin && !isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this organization member.' });
     }
 
     if (role) member.role = role;
@@ -4291,11 +4691,13 @@ async function startServer() {
       },
     });
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, member, members: state.enterpriseMembers || localStore.enterpriseMembers, notification: notif, state });
   });
 
-  app.delete('/api/enterprise/members/:id', async (req, res) => {
+  app.delete('/api/enterprise/members/:id', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { id } = req.params;
     if (!Array.isArray(localStore.enterpriseMembers)) {
       localStore.enterpriseMembers = [];
@@ -4304,6 +4706,15 @@ async function startServer() {
     const index = localStore.enterpriseMembers.findIndex((m) => m.id === id || m.userId === id);
     if (index === -1) {
       return res.status(404).json({ error: 'Organization member not found.' });
+    }
+
+    const member = localStore.enterpriseMembers[index];
+    const isOrgLeader =
+      (actor.organizationId && member.organizationId === actor.organizationId) ||
+      (actor.organizationName && member.organizationName && member.organizationName.toLowerCase() === actor.organizationName.toLowerCase());
+
+    if (!isPlatformAdmin && !isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to remove members from this organization.' });
     }
 
     const removed = localStore.enterpriseMembers.splice(index, 1)[0];
@@ -4316,7 +4727,7 @@ async function startServer() {
       linkSection: 'dashboard',
     });
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, removed, members: localStore.enterpriseMembers, notification: notif, state });
   });
 
@@ -4329,18 +4740,16 @@ async function startServer() {
     res.json({ ok: true, suppliers: localStore.suppliers });
   });
 
-  app.post('/api/requests/sample', async (req, res) => {
+  app.post('/api/requests/sample', requireAuth, async (req, res) => {
     const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
-    const actorUuid = resolveValidActorUuid();
+    const actor = req.user!;
+    const actorUuid = actor.id;
     const reqId = `req-smp-${Date.now()}`;
     const supplier = localStore.suppliers.find((s) => s.id === supplierId);
 
-    const requesterName =
-      req.body.requesterName || req.body.name || 'Lead R&D Engineer';
-    const requesterEmail =
-      req.body.requesterEmail || req.body.email || 'engineer@qartinia-client.internal';
-    const requesterOrg =
-      req.body.requesterOrg || req.body.organization || 'Deep-Tech Engineering Group';
+    const requesterName = actor.fullName;
+    const requesterEmail = actor.email;
+    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
 
     const brief = `Engineering Sample Request: ${quantity || '5'} pcs of ${
       componentName || 'Component'
@@ -4387,7 +4796,7 @@ async function startServer() {
       }
     }
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, message: 'Sample request successfully submitted and logged in requests queue.', state });
   });
 
@@ -4396,17 +4805,15 @@ async function startServer() {
     res.json({ ok: true, labs: localStore.labs });
   });
 
-  app.post('/api/requests/lab', async (req, res) => {
+  app.post('/api/requests/lab', requireAuth, async (req, res) => {
     const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
-    const actorUuid = resolveValidActorUuid();
+    const actor = req.user!;
+    const actorUuid = actor.id;
     const reqId = `req-lab-${Date.now()}`;
 
-    const requesterName =
-      req.body.requesterName || req.body.name || 'Principal Test Engineer';
-    const requesterEmail =
-      req.body.requesterEmail || req.body.email || 'engineer@qartinia-client.internal';
-    const requesterOrg =
-      req.body.requesterOrg || req.body.organization || 'Deep-Tech Engineering Group';
+    const requesterName = actor.fullName;
+    const requesterEmail = actor.email;
+    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
 
     const brief = `Lab Test Bench Booking: ${labName} — Equipment: ${equipmentName} (${testingDomain}). Desired timeframe: ${requestedDates || 'Next 2-3 weeks'}. Protocol requirements: ${testRequirements || 'Full characterization sweep'}`;
 
@@ -4449,7 +4856,7 @@ async function startServer() {
       }
     }
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, message: 'Lab booking request successfully submitted.', state });
   });
 
@@ -4458,17 +4865,15 @@ async function startServer() {
     res.json({ ok: true, experts: localStore.experts });
   });
 
-  app.post('/api/requests/expert', async (req, res) => {
+  app.post('/api/requests/expert', requireAuth, async (req, res) => {
     const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
-    const actorUuid = resolveValidActorUuid();
+    const actor = req.user!;
+    const actorUuid = actor.id;
     const reqId = `req-exp-${Date.now()}`;
 
-    const requesterName =
-      req.body.requesterName || req.body.name || 'Engineering Director';
-    const requesterEmail =
-      req.body.requesterEmail || req.body.email || 'engineer@qartinia-client.internal';
-    const requesterOrg =
-      req.body.requesterOrg || req.body.organization || 'Deep-Tech Engineering Group';
+    const requesterName = actor.fullName;
+    const requesterEmail = actor.email;
+    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
 
     const brief = `Advisory Consultation Request: ${expertName}. Topic: ${topic}. Format: ${preferredFormat || '1-Hour Deep-Dive'}. Project Context: ${projectContext || 'General technical roadmap evaluation'}`;
 
@@ -4511,7 +4916,7 @@ async function startServer() {
       }
     }
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(actor.id);
     res.json({ ok: true, message: 'Consultation request submitted.', state });
   });
 
@@ -4520,9 +4925,10 @@ async function startServer() {
     res.json({ ok: true, simulations: localStore.simulations });
   });
 
-  app.post('/api/simulations/run', async (req, res) => {
+  app.post('/api/simulations/run', requireAuth, async (req, res) => {
     const { title, tool, domain, parameters } = req.body;
-    const actorUuid = resolveValidActorUuid();
+    const actor = req.user!;
+    const actorUuid = actor.id;
     const simId = `sim-${tool?.toLowerCase() || 'spice'}-${Date.now()}`;
 
     // Compute realistic transient waveforms and metrics based on parameters
@@ -4595,29 +5001,51 @@ async function startServer() {
   });
 
   // Brainstorming Rooms API
-  app.get('/api/brainstorm', (_req, res) => {
-    res.json({ ok: true, rooms: localStore.brainstormRooms });
+  app.get('/api/brainstorm', (req, res) => {
+    const actor = req.user;
+    const isPlatformAdmin = actor && (actor.role === 'admin' || actor.role === 'platform_admin');
+    const rooms = (localStore.brainstormRooms || []).filter((r) => {
+      if (!r.isPrivate) return true;
+      if (!actor) return false;
+      if (isPlatformAdmin) return true;
+      const isCreator = r.createdBy === actor.fullName || r.createdBy === actor.email;
+      const isParticipant = (r.participants || []).some(
+        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
+      );
+      return isCreator || isParticipant;
+    });
+    res.json({ ok: true, rooms });
   });
 
-  app.post('/api/brainstorm/create', async (req, res) => {
+  app.post('/api/brainstorm/create', requireAuth, async (req, res) => {
     const { title, topic, domain, isPrivate, tags, participants } = req.body;
-    const actorUuid = resolveValidActorUuid();
+    const actor = req.user!;
+    const actorUuid = actor.id;
+
+    const initialParticipants = Array.isArray(participants) ? [...participants] : [];
+    if (!initialParticipants.includes(actor.fullName)) {
+      initialParticipants.unshift(actor.fullName);
+    }
+    if (!initialParticipants.includes('Qartinia AI Assistant')) {
+      initialParticipants.push('Qartinia AI Assistant');
+    }
+
     const newRoom: BrainstormRoom = {
       id: `br-${Date.now()}`,
       title: title || 'New Technical Investigation',
       topic: topic || 'Collaborative engineering gap analysis',
       domain: domain || 'Deep-Tech Engineering',
       isPrivate: Boolean(isPrivate),
-      createdBy: 'Authenticated Member',
-      membersCount: Array.isArray(participants) ? participants.length + 1 : 2,
-      participants: Array.isArray(participants) ? participants : ['Engineering Lead', 'Qartinia AI Assistant'],
+      createdBy: actor.fullName,
+      membersCount: initialParticipants.length,
+      participants: initialParticipants,
       tags: Array.isArray(tags) ? tags : ['Technical Scoping'],
       summary: 'Session initiated for cross-disciplinary technical evaluation.',
       tasks: [
         {
           id: `tsk-${Date.now()}-1`,
           title: 'Frame initial target specifications and boundary conditions',
-          assignee: 'Engineering Lead',
+          assignee: actor.fullName,
           status: 'In Progress',
           priority: 'High',
         },
@@ -4648,16 +5076,32 @@ async function startServer() {
     res.json({ ok: true, room: newRoom, rooms: localStore.brainstormRooms });
   });
 
-  app.post('/api/brainstorm/:id/messages', async (req, res) => {
+  app.post('/api/brainstorm/:id/messages', requireAuth, async (req, res) => {
     const room = localStore.brainstormRooms.find((r) => r.id === req.params.id);
     if (!room) return res.status(404).json({ error: 'Brainstorm room not found.' });
 
-    const { senderName, senderRole, content } = req.body;
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    if (room.isPrivate && !isPlatformAdmin) {
+      const isCreator = room.createdBy === actor.fullName || room.createdBy === actor.email;
+      const isParticipant = (room.participants || []).some(
+        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
+      );
+      if (!isCreator && !isParticipant) {
+        return res.status(403).json({ error: 'Forbidden: You do not have access to this private brainstorm room.' });
+      }
+    }
+
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content cannot be empty.' });
+    }
+
     const userMsg = {
       id: `bmsg-${Date.now()}`,
-      senderName: senderName || 'Engineering Lead',
-      senderRole: senderRole || 'Collaborator',
-      content,
+      senderName: actor.fullName,
+      senderRole: actor.role,
+      content: content.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     room.messages.push(userMsg);
@@ -4692,9 +5136,21 @@ async function startServer() {
     res.json({ ok: true, room });
   });
 
-  app.post('/api/brainstorm/:id/tasks', async (req, res) => {
+  app.post('/api/brainstorm/:id/tasks', requireAuth, async (req, res) => {
     const room = localStore.brainstormRooms.find((r) => r.id === req.params.id);
     if (!room) return res.status(404).json({ error: 'Brainstorm room not found.' });
+
+    const actor = req.user!;
+    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    if (room.isPrivate && !isPlatformAdmin) {
+      const isCreator = room.createdBy === actor.fullName || room.createdBy === actor.email;
+      const isParticipant = (room.participants || []).some(
+        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
+      );
+      if (!isCreator && !isParticipant) {
+        return res.status(403).json({ error: 'Forbidden: You do not have access to this private brainstorm room.' });
+      }
+    }
 
     const { taskId, status, title, assignee, priority } = req.body;
     if (taskId && status) {
@@ -4704,7 +5160,7 @@ async function startServer() {
       room.tasks.push({
         id: `tsk-${Date.now()}`,
         title,
-        assignee: assignee || 'Collaborator',
+        assignee: assignee || actor.fullName,
         priority: priority || 'Medium',
         status: 'Todo',
       });

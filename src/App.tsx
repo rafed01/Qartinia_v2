@@ -1,3 +1,4 @@
+import { apiFetch, getSessionToken, setSessionToken } from './api/client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { UserDashboardView } from './components/UserDashboardView';
@@ -120,7 +121,7 @@ export default function App() {
 
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/state');
+      const res = await apiFetch('/api/state');
       if (res.ok) {
         const data = await res.json();
         applyServerState(data);
@@ -141,7 +142,9 @@ export default function App() {
 
     const connectSSE = () => {
       try {
-        eventSource = new EventSource('/api/events');
+        const token = getSessionToken();
+        const sseUrl = token ? `/api/events?token=${encodeURIComponent(token)}` : '/api/events';
+        eventSource = new EventSource(sseUrl);
 
         eventSource.addEventListener('notification', (e) => {
           try {
@@ -212,7 +215,7 @@ export default function App() {
       if (eventSource) eventSource.close();
       if (reconnectTimer) clearTimeout(reconnectTimer);
     };
-  }, [fetchState]);
+  }, [fetchState, currentUser?.id]);
 
   const handleLogin = async (payload: {
     email?: string;
@@ -220,13 +223,16 @@ export default function App() {
     fullName?: string;
     profileId?: string;
   }) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
+    if (data.token) {
+      setSessionToken(data.token);
+    }
     applyServerState(data.state);
   };
 
@@ -245,24 +251,28 @@ export default function App() {
     taxId?: string;
     requireApproval?: boolean;
   }) => {
-    const res = await fetch('/api/auth/register', {
+    const res = await apiFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
+    if (data.token) {
+      setSessionToken(data.token);
+    }
     applyServerState(data.state);
   };
 
   const handleLogout = async () => {
-    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    const res = await apiFetch('/api/auth/logout', { method: 'POST' });
     const data = await res.json();
+    setSessionToken(null);
     applyServerState(data.state);
   };
 
   const handleUpdateProfile = async (updates: Partial<UserAccount>) => {
-    const res = await fetch('/api/profile', {
+    const res = await apiFetch('/api/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -278,7 +288,7 @@ export default function App() {
     decisionNotes?: string
   ) => {
     try {
-      const res = await fetch(`/api/requests/${requestId}`, {
+      const res = await apiFetch(`/api/requests/${requestId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, decisionNotes }),
@@ -298,7 +308,7 @@ export default function App() {
 
   const handleDeleteRequest = async (requestId: string) => {
     try {
-      const res = await fetch(`/api/requests/${requestId}`, {
+      const res = await apiFetch(`/api/requests/${requestId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -320,7 +330,7 @@ export default function App() {
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
     try {
-      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
     } catch (err) {
       console.error('Failed to mark notification read:', err);
     }
@@ -329,7 +339,7 @@ export default function App() {
   const handleMarkAllNotificationsAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
-      await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+      await apiFetch('/api/notifications/mark-all-read', { method: 'POST' });
     } catch (err) {
       console.error('Failed to mark all notifications read:', err);
     }
@@ -338,7 +348,7 @@ export default function App() {
   const handleDeleteNotification = async (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     try {
-      await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Failed to delete notification:', err);
     }
@@ -370,7 +380,7 @@ export default function App() {
     operatingEnvelope: string;
     constraints: string;
   }): Promise<FrontierBenchmark> => {
-    const res = await fetch('/api/frontier/evaluate', {
+    const res = await apiFetch('/api/frontier/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -387,7 +397,7 @@ export default function App() {
       frontier.positions.find((p) => p.position === 'Customer technology')?.valueDisplay || '0';
     const targetPos =
       frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || '0';
-    const res = await fetch(`/api/frontier/${frontierId}/reevaluate`, {
+    const res = await apiFetch(`/api/frontier/${frontierId}/reevaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -403,7 +413,7 @@ export default function App() {
   };
 
   const handleDeleteFrontier = async (frontierId: string) => {
-    const res = await fetch(`/api/frontier/${frontierId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/frontier/${frontierId}`, { method: 'DELETE' });
     if (res.ok) {
       await fetchState();
       if (activeFrontierId === frontierId) {
@@ -413,7 +423,7 @@ export default function App() {
   };
 
   const handleUpdateFrontier = async (frontierId: string, updates: Partial<FrontierBenchmark>) => {
-    const res = await fetch(`/api/frontiers/${frontierId}`, {
+    const res = await apiFetch(`/api/frontiers/${frontierId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -438,7 +448,7 @@ export default function App() {
     department?: string;
     permissions?: string[];
   }) => {
-    const res = await fetch('/api/enterprise/members/invite', {
+    const res = await apiFetch('/api/enterprise/members/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -454,7 +464,7 @@ export default function App() {
   };
 
   const handleUpdateMember = async (id: string, updates: Partial<EnterpriseMember>) => {
-    const res = await fetch(`/api/enterprise/members/${id}`, {
+    const res = await apiFetch(`/api/enterprise/members/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -491,7 +501,7 @@ export default function App() {
   };
 
   const handleDeleteMember = async (id: string) => {
-    const res = await fetch(`/api/enterprise/members/${id}`, {
+    const res = await apiFetch(`/api/enterprise/members/${id}`, {
       method: 'DELETE',
     });
     if (res.ok) {
@@ -507,7 +517,7 @@ export default function App() {
   const handleSaveEvidenceNode = async (node: EvidenceNode) => {
     const targetFrontierId = node.linkedFrontierId || activeFrontierId || frontiers[0]?.id;
     if (targetFrontierId) {
-      const res = await fetch(`/api/frontier/${targetFrontierId}/evidence`, {
+      const res = await apiFetch(`/api/frontier/${targetFrontierId}/evidence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(node),
@@ -522,7 +532,7 @@ export default function App() {
   const handleCreateEvidenceNode = async (
     node: Omit<EvidenceNode, 'id' | 'createdAt'>
   ): Promise<void> => {
-    const res = await fetch('/api/evidence', {
+    const res = await apiFetch('/api/evidence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(node),
@@ -533,14 +543,14 @@ export default function App() {
   };
 
   const handleDeleteEvidenceNode = async (nodeId: string) => {
-    const res = await fetch(`/api/evidence/${nodeId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/evidence/${nodeId}`, { method: 'DELETE' });
     if (res.ok) {
       await fetchState();
     }
   };
 
   const handleToggleBookmark = async (catalogId: string, notes?: string) => {
-    const res = await fetch('/api/bookmarks', {
+    const res = await apiFetch('/api/bookmarks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogId, notes }),
@@ -556,7 +566,7 @@ export default function App() {
     relationshipType: string;
     description: string;
   }) => {
-    const res = await fetch('/api/catalog/relationships', {
+    const res = await apiFetch('/api/catalog/relationships', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -567,7 +577,7 @@ export default function App() {
   };
 
   const handleDeleteRelationship = async (relationshipId: string) => {
-    const res = await fetch(`/api/catalog/relationships/${relationshipId}`, {
+    const res = await apiFetch(`/api/catalog/relationships/${relationshipId}`, {
       method: 'DELETE',
     });
     if (res.ok) {
@@ -619,7 +629,7 @@ export default function App() {
     initialPartnerName?: string;
     initialPartnerOrg?: string;
   }): Promise<ProtectedProjectRoom> => {
-    const res = await fetch('/api/projects', {
+    const res = await apiFetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -638,7 +648,7 @@ export default function App() {
       >
     >
   ) => {
-    const res = await fetch(`/api/projects/${projectId}`, {
+    const res = await apiFetch(`/api/projects/${projectId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -652,7 +662,7 @@ export default function App() {
     projectId: string,
     participant: Omit<ProjectParticipant, 'id'>
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/participants`, {
+    const res = await apiFetch(`/api/projects/${projectId}/participants`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(participant),
@@ -666,7 +676,7 @@ export default function App() {
     projectId: string,
     milestone: { title: string; dueDate: string; deliverable: string }
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/milestones`, {
+    const res = await apiFetch(`/api/projects/${projectId}/milestones`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(milestone),
@@ -681,7 +691,7 @@ export default function App() {
     milestoneId: string,
     nextStatus: 'Pending' | 'In Progress' | 'Verified'
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/milestones/${milestoneId}`, {
+    const res = await apiFetch(`/api/projects/${projectId}/milestones/${milestoneId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: nextStatus }),
@@ -695,7 +705,7 @@ export default function App() {
     projectId: string,
     doc: Omit<ProjectDocument, 'id' | 'timestamp'>
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/documents`, {
+    const res = await apiFetch(`/api/projects/${projectId}/documents`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(doc),
@@ -709,7 +719,7 @@ export default function App() {
     projectId: string,
     message: { senderName: string; senderOrg: string; senderRole: string; content: string }
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/messages`, {
+    const res = await apiFetch(`/api/projects/${projectId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(message),
@@ -720,7 +730,7 @@ export default function App() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
     if (res.ok) {
       await fetchState();
       if (activeProjectId === projectId) {
@@ -738,7 +748,7 @@ export default function App() {
     targetApplication: string;
     notes: string;
   }) => {
-    const res = await fetch('/api/requests/sample', {
+    const res = await apiFetch('/api/requests/sample', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -765,7 +775,7 @@ export default function App() {
     testRequirements: string;
     requestedDates: string;
   }) => {
-    const res = await fetch('/api/requests/lab', {
+    const res = await apiFetch('/api/requests/lab', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -791,7 +801,7 @@ export default function App() {
     preferredFormat: string;
     hours: number;
   }) => {
-    const res = await fetch('/api/requests/expert', {
+    const res = await apiFetch('/api/requests/expert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -815,7 +825,7 @@ export default function App() {
     domain: string;
     parameters: Record<string, string | number>;
   }) => {
-    const res = await fetch('/api/simulations/run', {
+    const res = await apiFetch('/api/simulations/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -833,7 +843,7 @@ export default function App() {
     tags: string[];
     participants: string[];
   }) => {
-    const res = await fetch('/api/brainstorm/create', {
+    const res = await apiFetch('/api/brainstorm/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -844,7 +854,7 @@ export default function App() {
   };
 
   const handleSendBrainstormMessage = async (roomId: string, content: string) => {
-    const res = await fetch(`/api/brainstorm/${roomId}/messages`, {
+    const res = await apiFetch(`/api/brainstorm/${roomId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -863,7 +873,7 @@ export default function App() {
     taskId: string,
     nextStatus: BrainstormTask['status']
   ) => {
-    const res = await fetch(`/api/brainstorm/${roomId}/tasks`, {
+    const res = await apiFetch(`/api/brainstorm/${roomId}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taskId, status: nextStatus }),
@@ -877,7 +887,7 @@ export default function App() {
     roomId: string,
     task: { title: string; assignee: string; priority: BrainstormTask['priority'] }
   ) => {
-    const res = await fetch(`/api/brainstorm/${roomId}/tasks`, {
+    const res = await apiFetch(`/api/brainstorm/${roomId}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(task),
