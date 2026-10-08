@@ -253,7 +253,7 @@ function toPostgresRequestStatus(input?: string): SupabaseRequestStatus {
   return 'pending';
 }
 
-function resolveValidActorUuid(userId?: string | null): string {
+function resolveValidActorUuid(userId?: string | null): string | null {
   if (userId && userId !== 'LOGGED_OUT' && /^[0-9a-f-]{36}$/i.test(userId)) {
     return userId;
   }
@@ -264,7 +264,72 @@ function resolveValidActorUuid(userId?: string | null): string {
   ) {
     return localStore.currentUserId;
   }
-  return dynamicAdminUuid || '091e8ba5-4ed0-4aa4-b8dd-c6f29088e170';
+  return null;
+}
+
+/**
+ * Helper to securely create or invite users through Supabase Auth without hardcoded default passwords.
+ */
+async function securelyInviteOrRegisterUser({
+  email,
+  password,
+  metadata,
+}: {
+  email: string;
+  password?: string;
+  metadata: {
+    full_name?: string;
+    organization?: string;
+    role?: string;
+    approval_status?: string;
+    status?: string;
+    [key: string]: any;
+  };
+}): Promise<{ userId: string | null; error?: string }> {
+  if (!supabaseAdmin) return { userId: null, error: 'Supabase not connected' };
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // If password was explicitly provided by the user (self-registration), create user with their password
+  // Do NOT automatically confirm email unless explicitly required
+  if (password && String(password).trim().length > 0) {
+    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: cleanEmail,
+      password: String(password).trim(),
+      email_confirm: false,
+      user_metadata: metadata,
+    });
+    if (createErr && !created?.user) {
+      return { userId: null, error: createErr.message };
+    }
+    return { userId: created?.user?.id || null };
+  }
+
+  // Otherwise, use Supabase Auth secure invitation flow (never hardcoded passwords)
+  const { data: invited, error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+    cleanEmail,
+    { data: metadata }
+  );
+
+  if (invited?.user?.id) {
+    return { userId: invited.user.id };
+  }
+
+  // Fallback to generateLink if email sending/SMTP is unconfigured
+  const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'invite',
+    email: cleanEmail,
+    options: { data: metadata },
+  });
+
+  if (linkData?.user?.id) {
+    return { userId: linkData.user.id };
+  }
+
+  return {
+    userId: null,
+    error: linkErr?.message || inviteErr?.message || 'Failed to securely invite user via Supabase Auth',
+  };
 }
 
 /**
@@ -280,6 +345,7 @@ async function logSupabaseActivity(
   if (!supabaseAdmin) return;
   try {
     const validUuid = resolveValidActorUuid(userId);
+    if (!validUuid) return;
     await supabaseAdmin.from('user_activity').insert({
       user_id: validUuid,
       action,
@@ -335,7 +401,7 @@ async function syncFrontierToCatalog(frontier: FrontierBenchmark) {
       verifiedBy: 'Qartinia Frontier Engine',
       verified_by: 'Qartinia Frontier Engine',
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'frontier',
         qartinia_payload: frontier,
@@ -363,7 +429,7 @@ async function syncProjectToCatalog(project: ProtectedProjectRoom) {
       verifiedBy: 'Protected Project Room',
       verified_by: 'Protected Project Room',
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'project_room',
         qartinia_payload: project,
@@ -391,7 +457,7 @@ async function syncEvidenceToCatalog(node: EvidenceNode) {
       verifiedBy: node.leadContributor,
       verified_by: node.leadContributor,
       publication_state: node.publicationState || 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'evidence',
         sourceIdentifier: node.sourceIdentifier,
@@ -427,7 +493,7 @@ async function syncSupplierToCatalog(sup: SupplierItem) {
       verifiedBy: 'Qartinia Fabricator Audit',
       verified_by: 'Qartinia Fabricator Audit',
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'supplier',
         qartinia_payload: sup,
@@ -455,7 +521,7 @@ async function syncLabToCatalog(lab: LabItem) {
       verifiedBy: lab.leadScientist,
       verified_by: lab.leadScientist,
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'lab',
         qartinia_payload: lab,
@@ -483,7 +549,7 @@ async function syncExpertToCatalog(exp: ExpertItem) {
       verifiedBy: exp.title,
       verified_by: exp.title,
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'expert',
         qartinia_payload: exp,
@@ -511,7 +577,7 @@ async function syncKnowledgeToCatalog(ki: KnowledgeItem) {
       verifiedBy: 'Qartinia Scientific Index',
       verified_by: 'Qartinia Scientific Index',
       publication_state: 'published',
-      created_by: resolveValidActorUuid(),
+      created_by: resolveValidActorUuid() || null,
       metadata: {
         qartinia_kind: 'knowledge',
         qartinia_payload: ki,
@@ -1410,38 +1476,28 @@ async function startServer() {
           if (existingAuthUser) {
             authUserId = existingAuthUser.id;
           } else {
-            const { data: createdAuth, error: createAuthErr } =
-              await supabaseAdmin.auth.admin.createUser({
-                email: cleanEmail,
-                password: password || 'Qartinia2026!',
-                email_confirm: true,
-                user_metadata: {
-                  full_name: fullName || cleanEmail.split('@')[0],
-                  role: 'company',
-                  organization: cleanEmail.split('@')[1] || 'Qartinia Partner',
-                },
-              });
-
-            if (createAuthErr && !createdAuth?.user) {
-              return res.status(400).json({
-                error: createAuthErr.message || 'Could not authenticate or create Supabase user.',
-              });
-            }
-            authUserId = createdAuth.user!.id;
+            return res.status(401).json({
+              error: 'Account not found. Please register or verify your credentials.',
+            });
           }
         }
+
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuthUser = listData?.users?.find((u) => u.id === authUserId);
+        const initialRole = existingAuthUser?.user_metadata?.role || 'company';
+        const initialApproval = existingAuthUser?.user_metadata?.approval_status || 'pending';
 
         const { data: upsertedProfile, error: upsertErr } = await supabaseAdmin
           .from('profiles')
           .upsert({
             id: authUserId,
             email: cleanEmail,
-            full_name: fullName || cleanEmail.split('@')[0],
-            role: 'company',
-            approval_status: 'approved',
-            status: 'approved',
-            organization: cleanEmail.split('@')[1] || 'Qartinia Partner',
-            onboarding_completed: true,
+            full_name: fullName || existingAuthUser?.user_metadata?.full_name || cleanEmail.split('@')[0],
+            role: initialRole,
+            approval_status: initialApproval,
+            status: initialApproval,
+            organization: existingAuthUser?.user_metadata?.organization || cleanEmail.split('@')[1] || 'Qartinia Partner',
+            onboarding_completed: initialApproval === 'approved',
           })
           .select()
           .single();
@@ -1464,6 +1520,34 @@ async function startServer() {
       return res.json({ ok: true, currentUser: state.currentUser, state });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Login failed.' });
+    }
+  });
+
+  // POST /api/auth/reset-password — Secure Password Reset Flow via Supabase Auth
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not configured.' });
+      }
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail) {
+        return res.status(400).json({ error: 'Email address is required.' });
+      }
+      const { error } = await supabaseAdmin.auth.resetPasswordForEmail(cleanEmail);
+      if (error) {
+        const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'recovery',
+          email: cleanEmail,
+        });
+        if (linkErr) {
+          return res.status(400).json({ error: linkErr.message });
+        }
+        return res.json({ ok: true, message: 'Password reset link generated securely via Supabase Auth.' });
+      }
+      return res.json({ ok: true, message: 'Password reset email sent securely via Supabase Auth.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to trigger password reset flow.' });
     }
   });
 
@@ -1500,22 +1584,24 @@ async function startServer() {
         existingList?.users?.find((u) => u.email?.toLowerCase() === cleanEmail)?.id || null;
 
       if (!userId) {
-        const { data: created, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+        const metadata = {
+          full_name: fullName,
+          organization: organizationName || 'Qartinia Partner',
+          role: dbRole,
+          approval_status: approvalStatus,
+          status: approvalStatus,
+        };
+
+        const resCreate = await securelyInviteOrRegisterUser({
           email: cleanEmail,
-          password: password || 'Qartinia2026!',
-          email_confirm: true,
-          user_metadata: {
-            full_name: fullName,
-            organization: organizationName || 'Qartinia Partner',
-            role: dbRole,
-            approval_status: approvalStatus,
-            status: approvalStatus,
-          },
+          password: password ? String(password).trim() : undefined,
+          metadata,
         });
-        if (authErr && !created?.user) {
-          return res.status(400).json({ error: authErr.message });
+
+        if (resCreate.error || !resCreate.userId) {
+          return res.status(400).json({ error: resCreate.error || 'Registration failed' });
         }
-        userId = created.user!.id;
+        userId = resCreate.userId;
       }
 
       let orgId: string | null = null;
@@ -1725,7 +1811,7 @@ async function startServer() {
         notes,
       } = req.body;
 
-      const actingAdminId = resolveValidActorUuid();
+      const actingAdminId = resolveValidActorUuid(req.body.adminId || req.body.actingAdminId);
 
       if (action === 'create') {
         const cleanEmail = String(
@@ -1741,19 +1827,18 @@ async function startServer() {
           listData?.users?.find((u) => u.email?.toLowerCase() === cleanEmail)?.id || null;
 
         if (!userId) {
-          const { data: created } = await supabaseAdmin.auth.admin.createUser({
+          const metadata = {
+            full_name: subjectName || 'Enterprise Candidate',
+            organization: organizationName || 'Partner Organization',
+            role: dbRole,
+            approval_status: 'pending',
+            status: 'pending',
+          };
+          const resCreate = await securelyInviteOrRegisterUser({
             email: cleanEmail,
-            password: 'Qartinia2026!',
-            email_confirm: true,
-            user_metadata: {
-              full_name: subjectName || 'Enterprise Candidate',
-              organization: organizationName || 'Partner Organization',
-              role: dbRole,
-              approval_status: 'pending',
-              status: 'pending',
-            },
+            metadata,
           });
-          userId = created?.user?.id || null;
+          userId = resCreate.userId;
         }
 
         if (userId) {
@@ -1806,17 +1891,25 @@ async function startServer() {
             });
           }
 
-          await logSupabaseActivity(
-            actingAdminId,
-            'atomic_approval_queued',
-            'profile',
-            cleanEmail,
-            { workflowType, organizationName: orgTitle }
-          );
+          if (actingAdminId) {
+            await logSupabaseActivity(
+              actingAdminId,
+              'atomic_approval_queued',
+              'profile',
+              cleanEmail,
+              { workflowType, organizationName: orgTitle }
+            );
+          }
         }
 
         const state = await fetchFullWorkspaceState();
         return res.json({ ok: true, state });
+      }
+
+      if (!actingAdminId) {
+        return res.status(401).json({
+          error: 'Administrative approval requires an authenticated administrator.',
+        });
       }
 
       const targetProfileId =
@@ -2003,19 +2096,18 @@ async function startServer() {
         const initialStatus: 'pending' | 'approved' = requireApproval ? 'pending' : 'approved';
 
         if (!invUserId) {
-          const { data: createdAuth } = await supabaseAdmin.auth.admin.createUser({
+          const metadata = {
+            full_name: fullName,
+            organization: orgTitle,
+            role: 'employee',
+            approval_status: initialStatus,
+            status: initialStatus,
+          };
+          const resCreate = await securelyInviteOrRegisterUser({
             email: cleanEmail,
-            password: 'Qartinia2026!',
-            email_confirm: true,
-            user_metadata: {
-              full_name: fullName,
-              organization: orgTitle,
-              role: 'employee',
-              approval_status: initialStatus,
-              status: initialStatus,
-            },
+            metadata,
           });
-          invUserId = createdAuth?.user?.id || null;
+          invUserId = resCreate.userId;
         }
 
         if (invUserId && orgId) {
@@ -2102,7 +2194,7 @@ async function startServer() {
         return res.status(500).json({ error: 'Supabase not connected.' });
       }
       const { name, email, organization, requestType, catalogId, proposalBrief } = req.body;
-      const actorUuid = resolveValidActorUuid();
+      const actorUuid = resolveValidActorUuid(req.body.userId || req.body.requesterId);
       const reqId = `req-${Date.now()}`;
       const pgType = toPostgresRequestType(requestType);
 
@@ -2114,8 +2206,8 @@ async function startServer() {
         proposalBrief: proposalBrief || '',
         proposal_brief: proposalBrief || '',
         createdAt: new Date().toISOString(),
-        requester_id: actorUuid,
-        user_id: actorUuid,
+        requester_id: actorUuid || null,
+        user_id: actorUuid || null,
         catalog_id: catalogId || null,
         request_type: pgType,
         status: 'pending',
@@ -2126,10 +2218,12 @@ async function startServer() {
         return res.status(400).json({ error: error.message });
       }
 
-      await logSupabaseActivity(actorUuid, `request_created_${pgType}`, 'request', reqId, {
-        requestType: pgType,
-        organization,
-      });
+      if (actorUuid) {
+        await logSupabaseActivity(actorUuid, `request_created_${pgType}`, 'request', reqId, {
+          requestType: pgType,
+          organization,
+        });
+      }
 
       const state = await fetchFullWorkspaceState();
       res.json({ ok: true, state });
@@ -2142,7 +2236,7 @@ async function startServer() {
     try {
       const { status, decisionNotes } = req.body;
       const pgStatus = toPostgresRequestStatus(status);
-      const actorUuid = resolveValidActorUuid();
+      const actorUuid = resolveValidActorUuid(req.body.decidedBy || req.body.actorId);
 
       // Update in localStore
       if (!Array.isArray(localStore.customRequests)) {
@@ -2175,7 +2269,7 @@ async function startServer() {
             .from('requests')
             .update({
               status: pgStatus,
-              decided_by: actorUuid,
+              decided_by: actorUuid || null,
               decided_at: new Date().toISOString(),
               decision_notes:
                 decisionNotes || `Transitioned to ${pgStatus} by verified technical reviewer`,
@@ -2183,13 +2277,15 @@ async function startServer() {
             })
             .eq('id', req.params.id);
 
-          await logSupabaseActivity(
-            actorUuid,
-            `request_status_${pgStatus}`,
-            'request',
-            req.params.id,
-            { status: pgStatus }
-          );
+          if (actorUuid) {
+            await logSupabaseActivity(
+              actorUuid,
+              `request_status_${pgStatus}`,
+              'request',
+              req.params.id,
+              { status: pgStatus }
+            );
+          }
         } catch (dbErr) {
           console.warn('[Supabase Request Status Update Warning]', dbErr);
         }
@@ -2263,26 +2359,30 @@ async function startServer() {
         return res.status(400).json({ error: 'sourceId and targetId are required.' });
       }
 
+      const actorUuid = resolveValidActorUuid();
+
       const { error } = await supabaseAdmin.from('catalog_relationships').insert({
         source_id: sourceId,
         target_id: targetId,
         relationship_type: relationshipType || 'closes_frontier_gap',
         description:
           description || 'Verified condition-aware technical provenance link in Knowledge Graph',
-        metadata: { createdBy: resolveValidActorUuid() },
+        metadata: actorUuid ? { createdBy: actorUuid } : {},
       });
 
       if (error) {
         return res.status(400).json({ error: error.message });
       }
 
-      await logSupabaseActivity(
-        resolveValidActorUuid(),
-        'knowledge_graph_edge_linked',
-        'catalog_relationships',
-        `${sourceId} → ${targetId}`,
-        { relationshipType }
-      );
+      if (actorUuid) {
+        await logSupabaseActivity(
+          actorUuid,
+          'knowledge_graph_edge_linked',
+          'catalog_relationships',
+          `${sourceId} → ${targetId}`,
+          { relationshipType }
+        );
+      }
 
       const state = await fetchFullWorkspaceState();
       res.json({ ok: true, state });
@@ -2311,7 +2411,11 @@ async function startServer() {
         return res.status(500).json({ error: 'Supabase not connected.' });
       }
       const { catalogId, folder, notes } = req.body;
-      const actorUuid = resolveValidActorUuid();
+      const actorUuid = resolveValidActorUuid(req.body.userId);
+
+      if (!actorUuid) {
+        return res.status(401).json({ error: 'Authentication required to manage bookmarks.' });
+      }
 
       const { data: existing } = await supabaseAdmin
         .from('bookmarks')
@@ -2749,18 +2853,20 @@ async function startServer() {
           }
         }
 
-        await logSupabaseActivity(
-          actorId,
-          'investor_scenario_bp_wedge_provisioned',
-          'catalog',
-          'QRT-RM-800V (800V SiC Traction Inverter Wedge)',
-          {
-            frontierId: bpFrontier.id,
-            projectCode: bpProjectRoom.code,
-            evidenceNodesSynced: bpEvidence.length,
-            relationshipsLinked: 4,
-          }
-        );
+        if (actorId) {
+          await logSupabaseActivity(
+            actorId,
+            'investor_scenario_bp_wedge_provisioned',
+            'catalog',
+            'QRT-RM-800V (800V SiC Traction Inverter Wedge)',
+            {
+              frontierId: bpFrontier.id,
+              projectCode: bpProjectRoom.code,
+              evidenceNodesSynced: bpEvidence.length,
+              relationshipsLinked: 4,
+            }
+          );
+        }
       } else if (scenario === 'simulate_pending_approval') {
         if (supabaseAdmin) {
           const demoEmail = 'dr.lukas.weber@siemens-energy-rd.de';
@@ -2769,19 +2875,18 @@ async function startServer() {
             listData?.users?.find((u) => u.email?.toLowerCase() === demoEmail)?.id || null;
 
           if (!demoUserId) {
-            const { data: created } = await supabaseAdmin.auth.admin.createUser({
+            const metadata = {
+              full_name: 'Dr. Lukas Weber (VP Power Electronics)',
+              organization: 'rana org',
+              role: 'employee',
+              approval_status: 'pending',
+              status: 'pending',
+            };
+            const resCreate = await securelyInviteOrRegisterUser({
               email: demoEmail,
-              password: 'Qartinia2026!',
-              email_confirm: true,
-              user_metadata: {
-                full_name: 'Dr. Lukas Weber (VP Power Electronics)',
-                organization: 'rana org',
-                role: 'employee',
-                approval_status: 'pending',
-                status: 'pending',
-              },
+              metadata,
             });
-            demoUserId = created?.user?.id || null;
+            demoUserId = resCreate.userId;
           }
 
           if (demoUserId) {
@@ -3213,6 +3318,10 @@ async function startServer() {
       const state = await fetchFullWorkspaceState();
       const current = state.currentUser;
       const authorId = resolveValidActorUuid(current?.id);
+      if (!authorId) {
+        return res.status(401).json({ error: 'Authentication required to publish a post.' });
+      }
+
       const postId = `post-${Date.now()}`;
 
       const newPost = {
@@ -3274,6 +3383,9 @@ async function startServer() {
     try {
       const postId = req.params.id;
       const actorUuid = resolveValidActorUuid();
+      if (!actorUuid) {
+        return res.status(401).json({ error: 'Authentication required to like posts.' });
+      }
 
       if (supabaseAdmin) {
         const { data: existing } = await supabaseAdmin
@@ -3366,6 +3478,10 @@ async function startServer() {
       const state = await fetchFullWorkspaceState();
       const requesterId = resolveValidActorUuid(state.currentUser?.id);
 
+      if (!requesterId) {
+        return res.status(401).json({ error: 'Authentication required to connect.' });
+      }
+
       if (!targetUserId || targetUserId === requesterId) {
         return res.status(400).json({ error: 'Invalid target user ID.' });
       }
@@ -3438,6 +3554,10 @@ async function startServer() {
       const state = await fetchFullWorkspaceState();
       const sender = state.currentUser;
       const senderId = resolveValidActorUuid(sender?.id);
+
+      if (!senderId) {
+        return res.status(401).json({ error: 'Authentication required to send messages.' });
+      }
 
       if (!receiverId || !content || !content.trim()) {
         return res.status(400).json({ error: 'Receiver ID and content are required.' });
@@ -4031,13 +4151,18 @@ async function startServer() {
         const { data: profs } = await supabaseAdmin.from('profiles').select('id').ilike('email', cleanEmail);
         let targetUserId = profs && profs[0] ? profs[0].id : null;
         if (!targetUserId) {
-          const { data: createdUser } = await supabaseAdmin.auth.admin.createUser({
+          const metadata = {
+            full_name: newMember.fullName,
+            organization: newMember.organizationName,
+            role: newMember.role,
+            approval_status: 'pending',
+            status: 'invited',
+          };
+          const resCreate = await securelyInviteOrRegisterUser({
             email: cleanEmail,
-            password: 'Qartinia2026!',
-            email_confirm: true,
-            user_metadata: { full_name: newMember.fullName, organization: newMember.organizationName },
+            metadata,
           });
-          targetUserId = createdUser?.user?.id || newMember.userId;
+          targetUserId = resCreate.userId || newMember.userId;
         }
 
         await supabaseAdmin.from('profiles').upsert({
