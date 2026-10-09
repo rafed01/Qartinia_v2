@@ -6679,7 +6679,7 @@ async function startServer() {
   });
 
   // Engineering Sample Requests (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/sample', async (req, res) => {
+  app.post('/api/requests/sample', requireAuth, async (req, res) => {
     try {
       const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
       let actor = req.user;
@@ -6919,7 +6919,7 @@ async function startServer() {
   });
 
   // Laboratory Bench Bookings (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/lab', async (req, res) => {
+  app.post('/api/requests/lab', requireAuth, async (req, res) => {
     try {
       const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
       let actor = req.user;
@@ -7169,7 +7169,7 @@ async function startServer() {
   });
 
   // Expert Advisory Consultations (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/expert', async (req, res) => {
+  app.post('/api/requests/expert', requireAuth, async (req, res) => {
     try {
       const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
       let actor = req.user;
