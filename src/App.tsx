@@ -756,9 +756,9 @@ export default function App() {
         requesterId: currentUser?.id,
         requesterName:
           currentUser?.fullName ||
-          (currentUser?.email ? currentUser.email.split('@')[0] : 'Lead R&D Engineer'),
-        requesterEmail: currentUser?.email || 'engineer@qartinia-client.internal',
-        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+          (currentUser?.email ? currentUser.email.split('@')[0] : ''),
+        requesterEmail: currentUser?.email || '',
+        requesterOrg: currentUser?.organizationName || '',
       }),
     });
     if (res.ok) {
@@ -783,9 +783,9 @@ export default function App() {
         requesterId: currentUser?.id,
         requesterName:
           currentUser?.fullName ||
-          (currentUser?.email ? currentUser.email.split('@')[0] : 'Principal Test Engineer'),
-        requesterEmail: currentUser?.email || 'lab-ops@qartinia-client.internal',
-        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+          (currentUser?.email ? currentUser.email.split('@')[0] : ''),
+        requesterEmail: currentUser?.email || '',
+        requesterOrg: currentUser?.organizationName || '',
       }),
     });
     if (res.ok) {
@@ -809,9 +809,9 @@ export default function App() {
         requesterId: currentUser?.id,
         requesterName:
           currentUser?.fullName ||
-          (currentUser?.email ? currentUser.email.split('@')[0] : 'Engineering Director'),
-        requesterEmail: currentUser?.email || 'rd-advisory@qartinia-client.internal',
-        requesterOrg: currentUser?.organizationName || 'Deep-Tech Engineering Group',
+          (currentUser?.email ? currentUser.email.split('@')[0] : ''),
+        requesterEmail: currentUser?.email || '',
+        requesterOrg: currentUser?.organizationName || '',
       }),
     });
     if (res.ok) {

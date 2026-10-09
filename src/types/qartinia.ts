@@ -189,6 +189,8 @@ export interface SupplierItem {
   contactEmail: string;
   minOrderQuantity: string;
   verified: boolean;
+  isDemo?: boolean;
+  organizationId?: string | null;
 }
 
 export interface LabEquipment {
@@ -214,6 +216,8 @@ export interface LabItem {
   availabilityStatus: 'Available' | 'Booking 2-3 Weeks Out' | 'Restricted Access';
   description: string;
   verified: boolean;
+  isDemo?: boolean;
+  organizationId?: string | null;
 }
 
 export interface ExpertItem {
@@ -231,6 +235,9 @@ export interface ExpertItem {
   bio: string;
   rating: number;
   verified: boolean;
+  isDemo?: boolean;
+  organizationId?: string | null;
+  profileId?: string | null;
 }
 
 export interface BrainstormTask {

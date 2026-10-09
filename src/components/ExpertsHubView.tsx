@@ -139,6 +139,11 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
                   <h3 className="text-base font-bold text-[#0F2537] flex items-center gap-1.5">
                     <span>{exp.name}</span>
                     {exp.verified && <ShieldCheck className="w-4 h-4 text-[#108548]" />}
+                    {exp.isDemo && (
+                      <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                        Demo Record
+                      </span>
+                    )}
                   </h3>
                   <p className="text-xs text-slate-600 font-medium mt-0.5">{exp.title}</p>
                   <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">

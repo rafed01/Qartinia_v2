@@ -176,6 +176,11 @@ export const SuppliersHubView: React.FC<SuppliersHubViewProps> = ({
                       <span>Verified Fabricator</span>
                     </span>
                   )}
+                  {supplier.isDemo && (
+                    <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                      Demo Record
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">

@@ -754,6 +754,118 @@ function mapCatalogRowToProject(row: any): ProtectedProjectRoom {
   };
 }
 
+function mapCatalogRowToSupplier(row: any): SupplierItem {
+  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('sup-') || !row.organization_id);
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as SupplierItem;
+    return {
+      ...payload,
+      id: row.id,
+      name: row.title || payload.name,
+      domain: row.category || payload.domain,
+      headquarters: row.organization || payload.headquarters,
+      tier: (row.trl_stage as any) || payload.tier || 'Specialist Fabricator',
+      description: row.description || payload.description,
+      country: row.location || payload.country,
+      verified: Boolean(row.status === 'Verified' || payload.verified),
+      isDemo,
+      organizationId: row.organization_id || payload.organizationId || null,
+    };
+  }
+  return {
+    id: row.id,
+    name: row.title,
+    country: row.location || 'Global',
+    headquarters: row.organization || 'Global',
+    domain: row.category || 'Power Electronics & Wide-Bandgap',
+    tier: (row.trl_stage as any) || 'Tier 2 Qualified',
+    description: row.description || '',
+    certifications: Array.isArray(row.tags) ? row.tags : [],
+    capabilities: [],
+    components: [],
+    contactEmail: '',
+    minOrderQuantity: '100 pcs',
+    verified: row.status === 'Verified',
+    isDemo,
+    organizationId: row.organization_id || null,
+  };
+}
+
+function mapCatalogRowToLab(row: any): LabItem {
+  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('lab-') || !row.organization_id);
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as LabItem;
+    return {
+      ...payload,
+      id: row.id,
+      name: row.title || payload.name,
+      institution: row.organization || payload.institution,
+      location: row.location || payload.location,
+      leadScientist: row.verified_by || row.verifiedBy || payload.leadScientist,
+      availabilityStatus: (row.trl_stage as any) || payload.availabilityStatus || 'Available',
+      description: row.description || payload.description,
+      verified: Boolean(row.status === 'Accredited' || row.status === 'Verified' || payload.verified),
+      isDemo,
+      organizationId: row.organization_id || payload.organizationId || null,
+    };
+  }
+  return {
+    id: row.id,
+    name: row.title,
+    institution: row.organization || 'Research Center',
+    location: row.location || 'Global',
+    accreditations: Array.isArray(row.tags) ? row.tags : [],
+    testingDomains: row.category ? [row.category] : ['Testing & Characterization'],
+    equipmentList: [],
+    leadScientist: row.verified_by || row.verifiedBy || 'Principal Investigator',
+    availabilityStatus: (row.trl_stage as any) || 'Available',
+    description: row.description || '',
+    verified: row.status === 'Accredited' || row.status === 'Verified',
+    isDemo,
+    organizationId: row.organization_id || null,
+  };
+}
+
+function mapCatalogRowToExpert(row: any): ExpertItem {
+  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('exp-') || !row.created_by || row.created_by === dynamicAdminUuid);
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as ExpertItem;
+    return {
+      ...payload,
+      id: row.id,
+      name: row.title || payload.name,
+      affiliation: row.organization || payload.affiliation,
+      location: row.location || payload.location,
+      title: row.verified_by || row.verifiedBy || payload.title,
+      availability: (row.trl_stage as any) || payload.availability || 'Open for Consultations',
+      bio: row.description || payload.bio,
+      verified: Boolean(row.status === 'Verified Fellow' || row.status === 'Verified' || payload.verified),
+      isDemo,
+      organizationId: row.organization_id || payload.organizationId || null,
+      profileId: row.created_by || null,
+    };
+  }
+  return {
+    id: row.id,
+    name: row.title,
+    title: row.verified_by || row.verifiedBy || 'Technical Specialist',
+    affiliation: row.organization || 'Independent Advisory',
+    location: row.location || 'Global',
+    domainExpertise: row.category ? [row.category] : ['Power Electronics'],
+    yearsExperience: 10,
+    publicationsCount: 0,
+    patentsCount: 0,
+    advisoryFee: '€250 / hour',
+    availability: (row.trl_stage as any) || 'Open for Consultations',
+    bio: row.description || '',
+    rating: 4.9,
+    verified: row.status === 'Verified Fellow' || row.status === 'Verified',
+    isDemo,
+    organizationId: row.organization_id || null,
+    profileId: row.created_by || null,
+  };
+}
+
 async function fetchSupabaseFrontiers(): Promise<FrontierBenchmark[]> {
   if (!supabaseAdmin) return localStore.frontiers || [];
   try {
@@ -871,6 +983,123 @@ async function getSupabaseProjectById(id: string): Promise<ProtectedProjectRoom 
   return (localStore.projects || []).find((p) => p.id === id) || null;
 }
 
+async function fetchSupabaseSuppliers(): Promise<SupplierItem[]> {
+  if (!supabaseAdmin) return localStore.suppliers || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'supplier')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.suppliers || [];
+    }
+    const mapped = data.map(mapCatalogRowToSupplier);
+    localStore.suppliers = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseSuppliers]', err);
+    return localStore.suppliers || [];
+  }
+}
+
+async function fetchSupabaseLabs(): Promise<LabItem[]> {
+  if (!supabaseAdmin) return localStore.labs || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'lab')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.labs || [];
+    }
+    const mapped = data.map(mapCatalogRowToLab);
+    localStore.labs = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseLabs]', err);
+    return localStore.labs || [];
+  }
+}
+
+async function fetchSupabaseExperts(): Promise<ExpertItem[]> {
+  if (!supabaseAdmin) return localStore.experts || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'expert')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.experts || [];
+    }
+    const mapped = data.map(mapCatalogRowToExpert);
+    localStore.experts = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseExperts]', err);
+    return localStore.experts || [];
+  }
+}
+
+async function getSupabaseSupplierById(id: string): Promise<SupplierItem | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'supplier')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToSupplier(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseSupplierById]', err);
+    }
+  }
+  return (localStore.suppliers || []).find((s) => s.id === id) || null;
+}
+
+async function getSupabaseLabById(id: string): Promise<LabItem | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'lab')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToLab(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseLabById]', err);
+    }
+  }
+  return (localStore.labs || []).find((l) => l.id === id) || null;
+}
+
+async function getSupabaseExpertById(id: string): Promise<ExpertItem | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'expert')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToExpert(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseExpertById]', err);
+    }
+  }
+  return (localStore.experts || []).find((e) => e.id === id) || null;
+}
+
 function userHasProjectAccess(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   if (isAdmin) return true;
@@ -957,9 +1186,10 @@ async function syncEvidenceToCatalog(node: EvidenceNode) {
   }
 }
 
-async function syncSupplierToCatalog(sup: SupplierItem) {
+async function syncSupplierToCatalog(sup: SupplierItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
+    const isDemo = Boolean(sup.isDemo ?? (sup.id.startsWith('sup-') && !sup.organizationId));
     await supabaseAdmin.from('catalog').upsert({
       id: sup.id,
       type: 'supplier',
@@ -971,23 +1201,30 @@ async function syncSupplierToCatalog(sup: SupplierItem) {
       status: sup.verified ? 'Verified' : 'Qualified',
       description: sup.description,
       location: sup.country,
-      verifiedBy: 'Qartinia Fabricator Audit',
-      verified_by: 'Qartinia Fabricator Audit',
+      verifiedBy: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
+      verified_by: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
       publication_state: 'published',
-      created_by: resolveValidActorUuid() || null,
+      organization_id: sup.organizationId || null,
+      created_by: resolveValidActorUuid(actorId) || null,
       metadata: {
         qartinia_kind: 'supplier',
-        qartinia_payload: sup,
+        is_demo: isDemo,
+        qartinia_payload: {
+          ...sup,
+          isDemo,
+        },
       },
+      updated_at: new Date().toISOString(),
     });
   } catch (err) {
     console.warn('[Supabase Catalog Supplier Sync]', err);
   }
 }
 
-async function syncLabToCatalog(lab: LabItem) {
+async function syncLabToCatalog(lab: LabItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
+    const isDemo = Boolean(lab.isDemo ?? (lab.id.startsWith('lab-') && !lab.organizationId));
     await supabaseAdmin.from('catalog').upsert({
       id: lab.id,
       type: 'lab',
@@ -999,23 +1236,30 @@ async function syncLabToCatalog(lab: LabItem) {
       status: lab.verified ? 'Accredited' : 'Verified',
       description: lab.description,
       location: lab.location,
-      verifiedBy: lab.leadScientist,
-      verified_by: lab.leadScientist,
+      verifiedBy: lab.verified ? lab.leadScientist : null,
+      verified_by: lab.verified ? lab.leadScientist : null,
       publication_state: 'published',
-      created_by: resolveValidActorUuid() || null,
+      organization_id: lab.organizationId || null,
+      created_by: resolveValidActorUuid(actorId) || null,
       metadata: {
         qartinia_kind: 'lab',
-        qartinia_payload: lab,
+        is_demo: isDemo,
+        qartinia_payload: {
+          ...lab,
+          isDemo,
+        },
       },
+      updated_at: new Date().toISOString(),
     });
   } catch (err) {
     console.warn('[Supabase Catalog Lab Sync]', err);
   }
 }
 
-async function syncExpertToCatalog(exp: ExpertItem) {
+async function syncExpertToCatalog(exp: ExpertItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
+    const isDemo = Boolean(exp.isDemo ?? (exp.id.startsWith('exp-') && !exp.profileId));
     await supabaseAdmin.from('catalog').upsert({
       id: exp.id,
       type: 'expert',
@@ -1027,14 +1271,20 @@ async function syncExpertToCatalog(exp: ExpertItem) {
       status: exp.verified ? 'Verified Fellow' : 'Verified',
       description: exp.bio,
       location: exp.location,
-      verifiedBy: exp.title,
-      verified_by: exp.title,
+      verifiedBy: exp.verified ? exp.title : null,
+      verified_by: exp.verified ? exp.title : null,
       publication_state: 'published',
-      created_by: resolveValidActorUuid() || null,
+      organization_id: exp.organizationId || null,
+      created_by: resolveValidActorUuid(exp.profileId || actorId) || null,
       metadata: {
         qartinia_kind: 'expert',
-        qartinia_payload: exp,
+        is_demo: isDemo,
+        qartinia_payload: {
+          ...exp,
+          isDemo,
+        },
       },
+      updated_at: new Date().toISOString(),
     });
   } catch (err) {
     console.warn('[Supabase Catalog Expert Sync]', err);
@@ -1197,6 +1447,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   let dbFrontiers: FrontierBenchmark[] = [];
   let dbProjects: ProtectedProjectRoom[] = [];
   let dbEvidence: EvidenceNode[] = [];
+  let dbSuppliers: SupplierItem[] = [];
+  let dbLabs: LabItem[] = [];
+  let dbExperts: ExpertItem[] = [];
 
   if (supabaseAdmin) {
     const [profRes, orgRes, memRes, reqRes, actRes, catRes, relRes, bmRes] = await Promise.all([
@@ -1389,9 +1642,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     dbFrontiers = [];
     dbProjects = [];
     dbEvidence = [];
-    const dbSuppliers: SupplierItem[] = [];
-    const dbLabs: LabItem[] = [];
-    const dbExperts: ExpertItem[] = [];
+    dbSuppliers = [];
+    dbLabs = [];
+    dbExperts = [];
     const dbKnowledge: KnowledgeItem[] = [];
     const dbPosts: SocialPost[] = [];
 
@@ -1424,12 +1677,12 @@ async function fetchFullWorkspaceState(userId?: string | null) {
             createdAt: c.updated_at ? String(c.updated_at).slice(0, 10) : '',
           });
         }
-      } else if (kind === 'supplier' && c.metadata?.qartinia_payload) {
-        dbSuppliers.push(c.metadata.qartinia_payload as SupplierItem);
-      } else if (kind === 'lab' && c.metadata?.qartinia_payload) {
-        dbLabs.push(c.metadata.qartinia_payload as LabItem);
-      } else if (kind === 'expert' && c.metadata?.qartinia_payload) {
-        dbExperts.push(c.metadata.qartinia_payload as ExpertItem);
+      } else if (kind === 'supplier') {
+        dbSuppliers.push(mapCatalogRowToSupplier(c));
+      } else if (kind === 'lab') {
+        dbLabs.push(mapCatalogRowToLab(c));
+      } else if (kind === 'expert') {
+        dbExperts.push(mapCatalogRowToExpert(c));
       } else if (kind === 'knowledge' && c.metadata?.qartinia_payload) {
         dbKnowledge.push(c.metadata.qartinia_payload as KnowledgeItem);
       } else if (kind === 'social_post' && c.metadata?.qartinia_payload) {
@@ -1462,9 +1715,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         if (!currentUser) return false;
         return userHasProjectAccess(p, currentUser as any);
       });
-  const suppliers = localStore.suppliers && localStore.suppliers.length > 0 ? localStore.suppliers : INITIAL_SUPPLIERS;
-  const labs = localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS;
-  const experts = localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS;
+  const suppliers = dbSuppliers.length > 0 ? dbSuppliers : (localStore.suppliers && localStore.suppliers.length > 0 ? localStore.suppliers : INITIAL_SUPPLIERS);
+  const labs = dbLabs.length > 0 ? dbLabs : (localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS);
+  const experts = dbExperts.length > 0 ? dbExperts : (localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS);
   const knowledgeItems = localStore.knowledgeItems && localStore.knowledgeItems.length > 0 ? localStore.knowledgeItems : INITIAL_KNOWLEDGE_ITEMS;
   const brainstormRooms = localStore.brainstormRooms && localStore.brainstormRooms.length > 0 ? localStore.brainstormRooms : INITIAL_BRAINSTORM_ROOMS;
   const simulations = localStore.simulations && localStore.simulations.length > 0 ? localStore.simulations : INITIAL_SIMULATIONS;
@@ -2737,7 +2990,25 @@ async function startServer() {
     }
   });
 
-  // 9. POST & PATCH /api/requests — Manage Real `public.requests` (NDA, Collaboration Proposal, Due Diligence, etc.)
+  // 9. GET, POST & PATCH /api/requests — Manage Real `public.requests` (NDA, Collaboration Proposal, Due Diligence, etc.)
+  app.get('/api/requests', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      let query = supabaseAdmin?.from('requests').select('*').order('created_at', { ascending: false });
+      if (!isAdmin) {
+        query = query?.or(`requester_id.eq.${actor.id},user_id.eq.${actor.id},email.eq.${actor.email}`);
+      }
+      const { data, error } = await (query || { data: null, error: null });
+      if (error) {
+        return res.status(400).json({ error: error.message });
+      }
+      res.json({ ok: true, requests: data || [] });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to list requests.' });
+    }
+  });
+
   app.post('/api/requests', requireAuth, async (req, res) => {
     try {
       if (!supabaseAdmin) {
@@ -3691,7 +3962,13 @@ async function startServer() {
       const { domain, technologySystem, metricName, operatingEnvelope, constraints, gapRootCauseAnalysis } = req.body;
       const textToMatch = `${domain || ''} ${technologySystem || ''} ${metricName || ''} ${operatingEnvelope || ''} ${constraints || ''} ${gapRootCauseAnalysis || ''}`.toLowerCase();
 
-      const matchedSuppliers = (localStore.suppliers || []).map((s) => {
+      const [allSuppliers, allLabs, allExperts] = await Promise.all([
+        fetchSupabaseSuppliers(),
+        fetchSupabaseLabs(),
+        fetchSupabaseExperts(),
+      ]);
+
+      const matchedSuppliers = allSuppliers.map((s) => {
         let score = 0;
         const reasons: string[] = [];
         if (s.capabilities?.some((c) => textToMatch.includes(c.toLowerCase()) || c.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
@@ -3713,7 +3990,7 @@ async function startServer() {
         };
       }).filter((s) => s.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
 
-      const matchedLabs = (localStore.labs || []).map((l) => {
+      const matchedLabs = allLabs.map((l) => {
         let score = 0;
         const reasons: string[] = [];
         if (l.testingDomains?.some((td) => textToMatch.includes(td.toLowerCase()) || td.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
@@ -3735,7 +4012,7 @@ async function startServer() {
         };
       }).filter((l) => l.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
 
-      const matchedExperts = (localStore.experts || []).map((e) => {
+      const matchedExperts = allExperts.map((e) => {
         let score = 0;
         const reasons: string[] = [];
         if (e.domainExpertise?.some((de) => textToMatch.includes(de.toLowerCase()) || de.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
@@ -3781,9 +4058,14 @@ async function startServer() {
         });
       }
 
-      const allFrontiers = await fetchSupabaseFrontiers();
-      const allEvidence = await fetchSupabaseEvidence();
-      const allProjects = await fetchSupabaseProjects();
+      const [allFrontiers, allEvidence, allProjects, allSuppliers, allLabs, allExperts] = await Promise.all([
+        fetchSupabaseFrontiers(),
+        fetchSupabaseEvidence(),
+        fetchSupabaseProjects(),
+        fetchSupabaseSuppliers(),
+        fetchSupabaseLabs(),
+        fetchSupabaseExperts(),
+      ]);
 
       const actor = req.user;
       const isSearchAdmin = actor?.role === 'admin' || actor?.role === 'platform_admin';
@@ -3811,7 +4093,7 @@ async function startServer() {
           e.relevanceToGap.toLowerCase().includes(q)
       );
 
-      const suppliers = (localStore.suppliers || []).filter(
+      const suppliers = allSuppliers.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.domain.toLowerCase().includes(q) ||
@@ -3819,7 +4101,7 @@ async function startServer() {
           s.components?.some((cmp) => cmp.name.toLowerCase().includes(q) || cmp.partNumber.toLowerCase().includes(q))
       );
 
-      const labs = (localStore.labs || []).filter(
+      const labs = allLabs.filter(
         (l) =>
           l.name.toLowerCase().includes(q) ||
           l.institution.toLowerCase().includes(q) ||
@@ -3827,7 +4109,7 @@ async function startServer() {
           l.equipmentList?.some((eq) => eq.name.toLowerCase().includes(q) || eq.model.toLowerCase().includes(q))
       );
 
-      const experts = (localStore.experts || []).filter(
+      const experts = allExperts.filter(
         (e) =>
           e.name.toLowerCase().includes(q) ||
           e.affiliation.toLowerCase().includes(q) ||
@@ -5064,189 +5346,676 @@ async function startServer() {
   // PLATFORM ARCHITECTURE HUBS API (Suppliers, Labs, Experts, Simulations, Brainstorm)
   // --------------------------------------------------------------------------
 
-  // Suppliers & Sample Requests
-  app.get('/api/suppliers', (_req, res) => {
-    res.json({ ok: true, suppliers: localStore.suppliers });
+  // --------------------------------------------------------------------------
+  // PLATFORM ARCHITECTURE HUBS API (Suppliers, Labs, Experts, Simulations, Brainstorm)
+  // --------------------------------------------------------------------------
+
+  // Suppliers & Fabricators API (Supabase-backed)
+  app.get('/api/suppliers', async (_req, res) => {
+    try {
+      const suppliers = await fetchSupabaseSuppliers();
+      res.json({ ok: true, suppliers });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message || 'Failed to list suppliers.' });
+    }
   });
 
+  app.get('/api/suppliers/:id', async (req, res) => {
+    try {
+      const supplier = await getSupabaseSupplierById(req.params.id);
+      if (!supplier) {
+        return res.status(404).json({ error: 'Supplier not found.' });
+      }
+      res.json({ ok: true, supplier });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch supplier.' });
+    }
+  });
+
+  app.post('/api/suppliers', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const supplierData = req.body;
+      const id = supplierData.id || `sup-org-${Date.now()}`;
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+
+      // Enforce: do not invent verification
+      const verified = isAdmin ? Boolean(supplierData.verified) : false;
+      const isDemo = false; // Real organization entry
+
+      const newSupplier: SupplierItem = {
+        id,
+        name: supplierData.name || 'Enterprise Fabricator',
+        country: supplierData.country || 'Global',
+        headquarters: supplierData.headquarters || actor.organizationName || 'Global',
+        domain: supplierData.domain || 'Power Electronics & Wide-Bandgap',
+        tier: supplierData.tier || 'Tier 2 Qualified',
+        description: supplierData.description || '',
+        certifications: Array.isArray(supplierData.certifications) ? supplierData.certifications : [],
+        capabilities: Array.isArray(supplierData.capabilities) ? supplierData.capabilities : [],
+        components: Array.isArray(supplierData.components) ? supplierData.components : [],
+        contactEmail: supplierData.contactEmail || actor.email,
+        minOrderQuantity: supplierData.minOrderQuantity || '100 pcs',
+        verified,
+        isDemo,
+        organizationId: actor.organizationId || supplierData.organizationId || null,
+      };
+
+      await syncSupplierToCatalog(newSupplier, actor.id);
+      localStore.suppliers = [newSupplier, ...(localStore.suppliers || []).filter((s) => s.id !== id)];
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'supplier_created', 'supplier', id, {
+        name: newSupplier.name,
+        organizationId: newSupplier.organizationId,
+      });
+
+      res.status(201).json({ ok: true, supplier: newSupplier });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to create supplier.' });
+    }
+  });
+
+  const handleUpdateSupplier = async (req: express.Request, res: express.Response) => {
+    try {
+      const actor = req.user!;
+      const supplier = await getSupabaseSupplierById(req.params.id);
+      if (!supplier) {
+        return res.status(404).json({ error: 'Supplier not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (supplier.organizationId && actor.organizationId && supplier.organizationId === actor.organizationId) ||
+        (supplier.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this supplier.' });
+      }
+
+      const updates = req.body;
+      // Protected: do not invent verification
+      const verified = isAdmin ? (updates.verified !== undefined ? Boolean(updates.verified) : supplier.verified) : supplier.verified;
+
+      const updatedSupplier: SupplierItem = {
+        ...supplier,
+        ...updates,
+        id: supplier.id,
+        verified,
+        isDemo: supplier.isDemo,
+        organizationId: supplier.organizationId,
+      };
+
+      await syncSupplierToCatalog(updatedSupplier, actor.id);
+      localStore.suppliers = (localStore.suppliers || []).map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s));
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'supplier_updated', 'supplier', supplier.id, {
+        name: updatedSupplier.name,
+      });
+
+      res.json({ ok: true, supplier: updatedSupplier });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to update supplier.' });
+    }
+  };
+
+  app.patch('/api/suppliers/:id', requireAuth, handleUpdateSupplier);
+  app.put('/api/suppliers/:id', requireAuth, handleUpdateSupplier);
+
+  app.delete('/api/suppliers/:id', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const supplier = await getSupabaseSupplierById(req.params.id);
+      if (!supplier) {
+        return res.status(404).json({ error: 'Supplier not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (supplier.organizationId && actor.organizationId && supplier.organizationId === actor.organizationId) ||
+        (supplier.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this supplier.' });
+      }
+
+      await deleteCatalogItemsSafe([req.params.id]);
+      localStore.suppliers = (localStore.suppliers || []).filter((s) => s.id !== req.params.id);
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'supplier_deleted', 'supplier', req.params.id, {});
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete supplier.' });
+    }
+  });
+
+  // Engineering Sample Requests (Supabase-backed persistence in `public.requests`)
   app.post('/api/requests/sample', requireAuth, async (req, res) => {
-    const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
-    const actor = req.user!;
-    const actorUuid = actor.id;
-    const reqId = `req-smp-${Date.now()}`;
-    const supplier = localStore.suppliers.find((s) => s.id === supplierId);
+    try {
+      const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
+      const actor = req.user!;
+      const actorUuid = actor.id;
+      const reqId = `req-smp-${Date.now()}`;
+      const supplier = await getSupabaseSupplierById(supplierId);
 
-    const requesterName = actor.fullName;
-    const requesterEmail = actor.email;
-    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
+      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Engineer');
+      const requesterEmail = actor.email;
+      const requesterOrg = actor.organizationName || ''; // No fake defaults
 
-    const brief = `Engineering Sample Request: ${quantity || '5'} pcs of ${
-      componentName || 'Component'
-    } (${supplier?.name || supplierId}) for application: ${
-      targetApplication || 'R&D Verification'
-    }. Notes: ${notes || 'Standard evaluation'}`;
+      const brief = `Engineering Sample Request: ${quantity || '5'} pcs of ${
+        componentName || 'Component'
+      } (${supplier?.name || supplierId}) for application: ${
+        targetApplication || 'R&D Verification'
+      }. Notes: ${notes || 'Standard evaluation'}`;
 
-    if (!Array.isArray(localStore.customRequests)) {
-      localStore.customRequests = [];
-    }
-    const newReq: SupabaseAccessRequest = {
-      id: reqId,
-      name: requesterName,
-      email: requesterEmail,
-      organization: requesterOrg,
-      proposalBrief: brief,
-      requestType: 'collaboration_proposal',
-      status: 'pending',
-      decisionNotes: null,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    localStore.customRequests.unshift(newReq);
-    saveLocalStore(localStore);
-
-    if (supabaseAdmin) {
-      try {
-        await supabaseAdmin.from('requests').insert({
-          id: reqId,
-          name: requesterName,
-          email: requesterEmail,
-          organization: requesterOrg,
-          proposal_brief: brief,
-          request_type: 'collaboration_proposal',
-          status: 'pending',
-          payload: { supplierId, supplierName: supplier?.name, componentId, componentName, quantity, targetApplication, notes },
-        });
-        await logSupabaseActivity(actorUuid, 'supplier_sample_requested', 'supplier_sample', componentId || supplierId, {
-          supplierId,
-          componentName,
-          quantity,
-        });
-      } catch (err) {
-        console.warn('[Supabase Sample Request Insert]', err);
+      if (!Array.isArray(localStore.customRequests)) {
+        localStore.customRequests = [];
       }
+      const newReq: SupabaseAccessRequest = {
+        id: reqId,
+        userId: actorUuid,
+        name: requesterName,
+        email: requesterEmail,
+        organization: requesterOrg,
+        proposalBrief: brief,
+        requestType: 'collaboration_proposal',
+        status: 'pending',
+        catalogId: supplierId || null,
+        decisionNotes: null,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      localStore.customRequests.unshift(newReq);
+      saveLocalStore(localStore);
+
+      if (supabaseAdmin) {
+        try {
+          const insertPayload = {
+            id: reqId,
+            name: requesterName,
+            email: requesterEmail,
+            organization: requesterOrg,
+            proposal_brief: brief,
+            proposalBrief: brief,
+            request_type: 'collaboration_proposal',
+            status: 'pending',
+            requester_id: actorUuid,
+            user_id: actorUuid,
+            catalog_id: supplierId || null,
+            recipient_organization_id: supplier?.organizationId || null,
+            payload: { supplierId, supplierName: supplier?.name, componentId, componentName, quantity, targetApplication, notes },
+            createdAt: new Date().toISOString(),
+          };
+          const { error: insErr } = await supabaseAdmin.from('requests').insert(insertPayload);
+          if (insErr) {
+            console.warn('[Supabase Sample Request Insert Error]', insErr);
+          }
+          await logSupabaseActivity(actorUuid, 'supplier_sample_requested', 'supplier_sample', componentId || supplierId, {
+            supplierId,
+            componentName,
+            quantity,
+          });
+        } catch (err) {
+          console.warn('[Supabase Sample Request Insert]', err);
+        }
+      }
+
+      const state = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, message: 'Sample request successfully submitted and logged in requests queue.', state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to submit sample request.' });
     }
-
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, message: 'Sample request successfully submitted and logged in requests queue.', state });
   });
 
-  // Laboratories & Test Bench Booking
-  app.get('/api/labs', (_req, res) => {
-    res.json({ ok: true, labs: localStore.labs });
+  // Laboratories & Test Bench Facilities API (Supabase-backed)
+  app.get('/api/labs', async (_req, res) => {
+    try {
+      const labs = await fetchSupabaseLabs();
+      res.json({ ok: true, labs });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message || 'Failed to list laboratories.' });
+    }
   });
 
+  app.get('/api/labs/:id', async (req, res) => {
+    try {
+      const lab = await getSupabaseLabById(req.params.id);
+      if (!lab) {
+        return res.status(404).json({ error: 'Laboratory not found.' });
+      }
+      res.json({ ok: true, lab });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch laboratory.' });
+    }
+  });
+
+  app.post('/api/labs', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const labData = req.body;
+      const id = labData.id || `lab-org-${Date.now()}`;
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+
+      // Enforce: do not invent verification
+      const verified = isAdmin ? Boolean(labData.verified) : false;
+      const isDemo = false;
+
+      const newLab: LabItem = {
+        id,
+        name: labData.name || 'Accredited Test Facility',
+        institution: labData.institution || actor.organizationName || 'Research Institution',
+        location: labData.location || 'Global',
+        accreditations: Array.isArray(labData.accreditations) ? labData.accreditations : [],
+        testingDomains: Array.isArray(labData.testingDomains) && labData.testingDomains.length > 0
+          ? labData.testingDomains
+          : ['Testing & Characterization'],
+        equipmentList: Array.isArray(labData.equipmentList) ? labData.equipmentList : [],
+        leadScientist: labData.leadScientist || actor.fullName || 'Facility Director',
+        availabilityStatus: labData.availabilityStatus || 'Available',
+        description: labData.description || '',
+        verified,
+        isDemo,
+        organizationId: actor.organizationId || labData.organizationId || null,
+      };
+
+      await syncLabToCatalog(newLab, actor.id);
+      localStore.labs = [newLab, ...(localStore.labs || []).filter((l) => l.id !== id)];
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'lab_created', 'lab', id, {
+        name: newLab.name,
+        organizationId: newLab.organizationId,
+      });
+
+      res.status(201).json({ ok: true, lab: newLab });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to create laboratory.' });
+    }
+  });
+
+  const handleUpdateLab = async (req: express.Request, res: express.Response) => {
+    try {
+      const actor = req.user!;
+      const lab = await getSupabaseLabById(req.params.id);
+      if (!lab) {
+        return res.status(404).json({ error: 'Laboratory not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (lab.organizationId && actor.organizationId && lab.organizationId === actor.organizationId) ||
+        (lab.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this laboratory.' });
+      }
+
+      const updates = req.body;
+      const verified = isAdmin ? (updates.verified !== undefined ? Boolean(updates.verified) : lab.verified) : lab.verified;
+
+      const updatedLab: LabItem = {
+        ...lab,
+        ...updates,
+        id: lab.id,
+        verified,
+        isDemo: lab.isDemo,
+        organizationId: lab.organizationId,
+      };
+
+      await syncLabToCatalog(updatedLab, actor.id);
+      localStore.labs = (localStore.labs || []).map((l) => (l.id === updatedLab.id ? updatedLab : l));
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'lab_updated', 'lab', lab.id, {
+        name: updatedLab.name,
+      });
+
+      res.json({ ok: true, lab: updatedLab });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to update laboratory.' });
+    }
+  };
+
+  app.patch('/api/labs/:id', requireAuth, handleUpdateLab);
+  app.put('/api/labs/:id', requireAuth, handleUpdateLab);
+
+  app.delete('/api/labs/:id', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const lab = await getSupabaseLabById(req.params.id);
+      if (!lab) {
+        return res.status(404).json({ error: 'Laboratory not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (lab.organizationId && actor.organizationId && lab.organizationId === actor.organizationId) ||
+        (lab.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this laboratory.' });
+      }
+
+      await deleteCatalogItemsSafe([req.params.id]);
+      localStore.labs = (localStore.labs || []).filter((l) => l.id !== req.params.id);
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'lab_deleted', 'lab', req.params.id, {});
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete laboratory.' });
+    }
+  });
+
+  // Laboratory Bench Bookings (Supabase-backed persistence in `public.requests`)
   app.post('/api/requests/lab', requireAuth, async (req, res) => {
-    const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
-    const actor = req.user!;
-    const actorUuid = actor.id;
-    const reqId = `req-lab-${Date.now()}`;
+    try {
+      const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
+      const actor = req.user!;
+      const actorUuid = actor.id;
+      const reqId = `req-lab-${Date.now()}`;
+      const lab = await getSupabaseLabById(labId);
 
-    const requesterName = actor.fullName;
-    const requesterEmail = actor.email;
-    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
+      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Test Engineer');
+      const requesterEmail = actor.email;
+      const requesterOrg = actor.organizationName || ''; // No fake defaults
 
-    const brief = `Lab Test Bench Booking: ${labName} — Equipment: ${equipmentName} (${testingDomain}). Desired timeframe: ${requestedDates || 'Next 2-3 weeks'}. Protocol requirements: ${testRequirements || 'Full characterization sweep'}`;
+      const brief = `Lab Test Bench Booking: ${labName || lab?.name || labId} — Equipment: ${
+        equipmentName || equipmentId
+      } (${testingDomain || 'Characterization'}). Desired timeframe: ${
+        requestedDates || 'Next 2-3 weeks'
+      }. Protocol requirements: ${testRequirements || 'Full characterization sweep'}`;
 
-    if (!Array.isArray(localStore.customRequests)) {
-      localStore.customRequests = [];
-    }
-    const newReq: SupabaseAccessRequest = {
-      id: reqId,
-      name: requesterName,
-      email: requesterEmail,
-      organization: requesterOrg,
-      proposalBrief: brief,
-      requestType: 'access_briefing',
-      status: 'pending',
-      decisionNotes: null,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    localStore.customRequests.unshift(newReq);
-    saveLocalStore(localStore);
-
-    if (supabaseAdmin) {
-      try {
-        await supabaseAdmin.from('requests').insert({
-          id: reqId,
-          name: requesterName,
-          email: requesterEmail,
-          organization: requesterOrg,
-          proposal_brief: brief,
-          request_type: 'access_briefing',
-          status: 'pending',
-          payload: { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates },
-        });
-        await logSupabaseActivity(actorUuid, 'lab_bench_booked', 'lab_facility', equipmentId || labId, {
-          labName,
-          equipmentName,
-          testingDomain,
-        });
-      } catch (err) {
-        console.warn('[Supabase Lab Booking Insert]', err);
+      if (!Array.isArray(localStore.customRequests)) {
+        localStore.customRequests = [];
       }
+      const newReq: SupabaseAccessRequest = {
+        id: reqId,
+        userId: actorUuid,
+        name: requesterName,
+        email: requesterEmail,
+        organization: requesterOrg,
+        proposalBrief: brief,
+        requestType: 'access_briefing',
+        status: 'pending',
+        catalogId: labId || null,
+        decisionNotes: null,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      localStore.customRequests.unshift(newReq);
+      saveLocalStore(localStore);
+
+      if (supabaseAdmin) {
+        try {
+          const insertPayload = {
+            id: reqId,
+            name: requesterName,
+            email: requesterEmail,
+            organization: requesterOrg,
+            proposal_brief: brief,
+            proposalBrief: brief,
+            request_type: 'access_briefing',
+            status: 'pending',
+            requester_id: actorUuid,
+            user_id: actorUuid,
+            catalog_id: labId || null,
+            recipient_organization_id: lab?.organizationId || null,
+            payload: { labId, labName: labName || lab?.name, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates },
+            createdAt: new Date().toISOString(),
+          };
+          const { error: insErr } = await supabaseAdmin.from('requests').insert(insertPayload);
+          if (insErr) {
+            console.warn('[Supabase Lab Booking Insert Error]', insErr);
+          }
+          await logSupabaseActivity(actorUuid, 'lab_bench_booked', 'lab_facility', equipmentId || labId, {
+            labName: labName || lab?.name,
+            equipmentName,
+            testingDomain,
+          });
+        } catch (err) {
+          console.warn('[Supabase Lab Booking Insert]', err);
+        }
+      }
+
+      const state = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, message: 'Lab booking request successfully submitted.', state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to submit lab booking.' });
     }
-
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, message: 'Lab booking request successfully submitted.', state });
   });
 
-  // Experts & Consultation Booking
-  app.get('/api/experts', (_req, res) => {
-    res.json({ ok: true, experts: localStore.experts });
+  // Experts & Technical Advisors API (Supabase-backed)
+  app.get('/api/experts', async (_req, res) => {
+    try {
+      const experts = await fetchSupabaseExperts();
+      res.json({ ok: true, experts });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message || 'Failed to list experts.' });
+    }
   });
 
+  app.get('/api/experts/:id', async (req, res) => {
+    try {
+      const expert = await getSupabaseExpertById(req.params.id);
+      if (!expert) {
+        return res.status(404).json({ error: 'Expert not found.' });
+      }
+      res.json({ ok: true, expert });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch expert.' });
+    }
+  });
+
+  app.post('/api/experts', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const expertData = req.body;
+      const id = expertData.id || `exp-usr-${Date.now()}`;
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+
+      // Enforce: do not invent verification
+      const verified = isAdmin ? Boolean(expertData.verified) : false;
+      const isDemo = false;
+
+      // Do not invent credentials: use actual credentials or user profile credentials
+      const realCredentials = expertData.title || actor.title || actor.profile?.title || 'Technical Specialist';
+      const realDomainExpertise = Array.isArray(expertData.domainExpertise) && expertData.domainExpertise.length > 0
+        ? expertData.domainExpertise
+        : (actor.profile?.domain_expertise || actor.profile?.tech_stack || ['Technical Advisory']);
+
+      const newExpert: ExpertItem = {
+        id,
+        name: expertData.name || actor.fullName || 'Consulting Specialist',
+        title: realCredentials,
+        affiliation: expertData.affiliation || actor.organizationName || 'Independent Advisory',
+        location: expertData.location || 'Global',
+        domainExpertise: realDomainExpertise,
+        yearsExperience: typeof expertData.yearsExperience === 'number' ? expertData.yearsExperience : 5,
+        publicationsCount: typeof expertData.publicationsCount === 'number' ? expertData.publicationsCount : 0,
+        patentsCount: typeof expertData.patentsCount === 'number' ? expertData.patentsCount : 0,
+        advisoryFee: expertData.advisoryFee || '€250 / hour',
+        availability: expertData.availability || 'Open for Consultations',
+        bio: expertData.bio || actor.profile?.bio || '',
+        rating: 5.0,
+        verified,
+        isDemo,
+        organizationId: actor.organizationId || expertData.organizationId || null,
+        profileId: actor.id,
+      };
+
+      await syncExpertToCatalog(newExpert, actor.id);
+      localStore.experts = [newExpert, ...(localStore.experts || []).filter((e) => e.id !== id)];
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'expert_created', 'expert', id, {
+        name: newExpert.name,
+      });
+
+      res.status(201).json({ ok: true, expert: newExpert });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to create expert profile.' });
+    }
+  });
+
+  const handleUpdateExpert = async (req: express.Request, res: express.Response) => {
+    try {
+      const actor = req.user!;
+      const expert = await getSupabaseExpertById(req.params.id);
+      if (!expert) {
+        return res.status(404).json({ error: 'Expert not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (expert.profileId && expert.profileId === actor.id) ||
+        (expert.organizationId && actor.organizationId && expert.organizationId === actor.organizationId) ||
+        (expert.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this expert profile.' });
+      }
+
+      const updates = req.body;
+      const verified = isAdmin ? (updates.verified !== undefined ? Boolean(updates.verified) : expert.verified) : expert.verified;
+
+      const updatedExpert: ExpertItem = {
+        ...expert,
+        ...updates,
+        id: expert.id,
+        verified,
+        isDemo: expert.isDemo,
+        profileId: expert.profileId,
+        organizationId: expert.organizationId,
+      };
+
+      await syncExpertToCatalog(updatedExpert, actor.id);
+      localStore.experts = (localStore.experts || []).map((e) => (e.id === updatedExpert.id ? updatedExpert : e));
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'expert_updated', 'expert', expert.id, {
+        name: updatedExpert.name,
+      });
+
+      res.json({ ok: true, expert: updatedExpert });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to update expert.' });
+    }
+  };
+
+  app.patch('/api/experts/:id', requireAuth, handleUpdateExpert);
+  app.put('/api/experts/:id', requireAuth, handleUpdateExpert);
+
+  app.delete('/api/experts/:id', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const expert = await getSupabaseExpertById(req.params.id);
+      if (!expert) {
+        return res.status(404).json({ error: 'Expert not found.' });
+      }
+
+      const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+      const isOwner = Boolean(
+        (expert.profileId && expert.profileId === actor.id) ||
+        (expert.organizationId && actor.organizationId && expert.organizationId === actor.organizationId) ||
+        (expert.id === actor.id)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this expert profile.' });
+      }
+
+      await deleteCatalogItemsSafe([req.params.id]);
+      localStore.experts = (localStore.experts || []).filter((e) => e.id !== req.params.id);
+      saveLocalStore(localStore);
+
+      await logSupabaseActivity(actor.id, 'expert_deleted', 'expert', req.params.id, {});
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete expert.' });
+    }
+  });
+
+  // Expert Advisory Consultations (Supabase-backed persistence in `public.requests`)
   app.post('/api/requests/expert', requireAuth, async (req, res) => {
-    const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
-    const actor = req.user!;
-    const actorUuid = actor.id;
-    const reqId = `req-exp-${Date.now()}`;
+    try {
+      const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
+      const actor = req.user!;
+      const actorUuid = actor.id;
+      const reqId = `req-exp-${Date.now()}`;
+      const expert = await getSupabaseExpertById(expertId);
 
-    const requesterName = actor.fullName;
-    const requesterEmail = actor.email;
-    const requesterOrg = actor.organizationName || 'Deep-Tech Engineering Group';
+      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Engineering Director');
+      const requesterEmail = actor.email;
+      const requesterOrg = actor.organizationName || ''; // No fake defaults
 
-    const brief = `Advisory Consultation Request: ${expertName}. Topic: ${topic}. Format: ${preferredFormat || '1-Hour Deep-Dive'}. Project Context: ${projectContext || 'General technical roadmap evaluation'}`;
+      const brief = `Advisory Consultation Request: ${expertName || expert?.name || expertId}. Topic: ${
+        topic || 'Technical Architecture Evaluation'
+      }. Format: ${preferredFormat || '1-Hour Deep-Dive'}. Project Context: ${
+        projectContext || 'General technical roadmap evaluation'
+      }`;
 
-    if (!Array.isArray(localStore.customRequests)) {
-      localStore.customRequests = [];
-    }
-    const newReq: SupabaseAccessRequest = {
-      id: reqId,
-      name: requesterName,
-      email: requesterEmail,
-      organization: requesterOrg,
-      proposalBrief: brief,
-      requestType: 'expert_consultation',
-      status: 'pending',
-      decisionNotes: null,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    localStore.customRequests.unshift(newReq);
-    saveLocalStore(localStore);
-
-    if (supabaseAdmin) {
-      try {
-        await supabaseAdmin.from('requests').insert({
-          id: reqId,
-          name: requesterName,
-          email: requesterEmail,
-          organization: requesterOrg,
-          proposal_brief: brief,
-          request_type: 'expert_consultation',
-          status: 'pending',
-          payload: { expertId, expertName, topic, projectContext, preferredFormat, hours },
-        });
-        await logSupabaseActivity(actorUuid, 'expert_consultation_booked', 'expert_advisor', expertId, {
-          expertName,
-          topic,
-          preferredFormat,
-        });
-      } catch (err) {
-        console.warn('[Supabase Expert Consultation Insert]', err);
+      if (!Array.isArray(localStore.customRequests)) {
+        localStore.customRequests = [];
       }
-    }
+      const newReq: SupabaseAccessRequest = {
+        id: reqId,
+        userId: actorUuid,
+        name: requesterName,
+        email: requesterEmail,
+        organization: requesterOrg,
+        proposalBrief: brief,
+        requestType: 'expert_consultation',
+        status: 'pending',
+        catalogId: expertId || null,
+        decisionNotes: null,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      localStore.customRequests.unshift(newReq);
+      saveLocalStore(localStore);
 
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, message: 'Consultation request submitted.', state });
+      if (supabaseAdmin) {
+        try {
+          const insertPayload = {
+            id: reqId,
+            name: requesterName,
+            email: requesterEmail,
+            organization: requesterOrg,
+            proposal_brief: brief,
+            proposalBrief: brief,
+            request_type: 'expert_consultation',
+            status: 'pending',
+            requester_id: actorUuid,
+            user_id: actorUuid,
+            catalog_id: expertId || null,
+            recipient_organization_id: expert?.organizationId || null,
+            payload: { expertId, expertName: expertName || expert?.name, topic, projectContext, preferredFormat, hours },
+            createdAt: new Date().toISOString(),
+          };
+          const { error: insErr } = await supabaseAdmin.from('requests').insert(insertPayload);
+          if (insErr) {
+            console.warn('[Supabase Expert Consultation Insert Error]', insErr);
+          }
+          await logSupabaseActivity(actorUuid, 'expert_consultation_booked', 'expert_advisor', expertId, {
+            expertName: expertName || expert?.name,
+            topic,
+            preferredFormat,
+          });
+        } catch (err) {
+          console.warn('[Supabase Expert Consultation Insert]', err);
+        }
+      }
+
+      const state = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, message: 'Consultation request submitted.', state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to submit expert consultation request.' });
+    }
   });
 
   // Simulation Hub: Physics & Transient Execution
