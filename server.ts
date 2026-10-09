@@ -717,34 +717,38 @@ async function deleteCatalogItemsSafe(catalogIds: string[]) {
 }
 
 async function syncFrontierToCatalog(frontier: FrontierBenchmark) {
-  if (!supabaseAdmin) return;
-  try {
-    const customerPos =
-      frontier.positions.find((p) => p.position === 'Customer technology')?.valueDisplay || '';
-    const targetPos =
-      frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || '';
-    await supabaseAdmin.from('catalog').upsert({
-      id: frontier.id,
-      type: 'frontier',
-      title: frontier.title,
-      category: frontier.domain,
-      organization: frontier.technologySystem,
-      trl: 6,
-      trl_stage: `${customerPos} → ${targetPos}`,
-      status: frontier.monitored ? 'Monitored' : 'Evaluated',
-      description: frontier.gapRootCauseAnalysis,
-      location: frontier.operatingEnvelope,
-      verifiedBy: 'Qartinia Frontier Engine',
-      verified_by: 'Qartinia Frontier Engine',
-      publication_state: 'published',
-      created_by: resolveValidActorUuid() || null,
-      metadata: {
-        qartinia_kind: 'frontier',
-        qartinia_payload: frontier,
-      },
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Frontier Sync]', err);
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const customerPos =
+    frontier.positions.find((p) => p.position === 'Customer technology')?.valueDisplay || '';
+  const targetPos =
+    frontier.positions.find((p) => p.position === 'Target')?.valueDisplay || '';
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: frontier.id,
+    type: 'frontier',
+    title: frontier.title,
+    category: frontier.domain,
+    organization: frontier.technologySystem,
+    trl: 6,
+    trl_stage: `${customerPos} → ${targetPos}`,
+    status: frontier.monitored ? 'Monitored' : 'Evaluated',
+    description: frontier.gapRootCauseAnalysis,
+    location: frontier.operatingEnvelope,
+    verifiedBy: 'Qartinia Frontier Engine',
+    verified_by: 'Qartinia Frontier Engine',
+    publication_state: 'published',
+    created_by: resolveValidActorUuid() || null,
+    metadata: {
+      qartinia_kind: 'frontier',
+      qartinia_payload: frontier,
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Frontier Sync Error]', error);
+    throw new Error(`Failed to persist frontier benchmark to Supabase: ${error.message}`);
   }
 }
 
@@ -1085,43 +1089,39 @@ function extractTechnicalTerms(text: string): { phrases: string[]; words: string
 }
 
 async function fetchSupabaseFrontiers(): Promise<FrontierBenchmark[]> {
-  if (!supabaseAdmin) return localStore.frontiers || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'frontier')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.frontiers || [];
-    }
-    const mapped = data.map(mapCatalogRowToFrontier);
-    localStore.frontiers = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseFrontiers]', err);
-    return localStore.frontiers || [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'frontier')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseFrontiers Error]', error);
+    throw new Error(`Failed to fetch frontiers from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToFrontier);
 }
 
 async function fetchSupabaseEvidence(): Promise<EvidenceNode[]> {
-  if (!supabaseAdmin) return localStore.evidenceNodes || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'evidence')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.evidenceNodes || [];
-    }
-    const mapped = data.map(mapCatalogRowToEvidence);
-    localStore.evidenceNodes = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseEvidence]', err);
-    return localStore.evidenceNodes || [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'evidence')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseEvidence Error]', error);
+    throw new Error(`Failed to fetch evidence from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToEvidence);
 }
 
 async function fetchSupabaseProjects(): Promise<ProtectedProjectRoom[]> {
@@ -1145,41 +1145,43 @@ async function fetchSupabaseProjects(): Promise<ProtectedProjectRoom[]> {
 }
 
 async function getSupabaseFrontierById(id: string): Promise<FrontierBenchmark | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'frontier')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToFrontier(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseFrontierById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.frontiers || []).find((f) => f.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'frontier')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseFrontierById Error]', error);
+    throw new Error(`Database error fetching frontier ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToFrontier(data);
 }
 
 async function getSupabaseEvidenceById(id: string): Promise<EvidenceNode | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'evidence')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToEvidence(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseEvidenceById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.evidenceNodes || []).find((e) => e.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'evidence')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseEvidenceById Error]', error);
+    throw new Error(`Database error fetching evidence ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToEvidence(data);
 }
 
 async function getSupabaseProjectById(id: string): Promise<ProtectedProjectRoom | null> {
@@ -1202,63 +1204,57 @@ async function getSupabaseProjectById(id: string): Promise<ProtectedProjectRoom 
 }
 
 async function fetchSupabaseSuppliers(): Promise<SupplierItem[]> {
-  if (!supabaseAdmin) return localStore.suppliers || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'supplier')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.suppliers || [];
-    }
-    const mapped = data.map(mapCatalogRowToSupplier);
-    localStore.suppliers = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseSuppliers]', err);
-    return localStore.suppliers || [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'supplier')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseSuppliers Error]', error);
+    throw new Error(`Failed to fetch suppliers from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToSupplier);
 }
 
 async function fetchSupabaseLabs(): Promise<LabItem[]> {
-  if (!supabaseAdmin) return localStore.labs || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'lab')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.labs || [];
-    }
-    const mapped = data.map(mapCatalogRowToLab);
-    localStore.labs = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseLabs]', err);
-    return localStore.labs || [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'lab')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseLabs Error]', error);
+    throw new Error(`Failed to fetch laboratories from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToLab);
 }
 
 async function fetchSupabaseExperts(): Promise<ExpertItem[]> {
-  if (!supabaseAdmin) return localStore.experts || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'expert')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.experts || [];
-    }
-    const mapped = data.map(mapCatalogRowToExpert);
-    localStore.experts = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseExperts]', err);
-    return localStore.experts || [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'expert')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseExperts Error]', error);
+    throw new Error(`Failed to fetch experts from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToExpert);
 }
 
 async function fetchSupabaseKnowledge(): Promise<KnowledgeItem[]> {
@@ -1367,60 +1363,63 @@ async function fetchSupabaseSimulations(): Promise<SimulationJob[]> {
 }
 
 async function getSupabaseSupplierById(id: string): Promise<SupplierItem | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'supplier')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToSupplier(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseSupplierById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.suppliers || []).find((s) => s.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'supplier')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseSupplierById Error]', error);
+    throw new Error(`Database error fetching supplier ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToSupplier(data);
 }
 
 async function getSupabaseLabById(id: string): Promise<LabItem | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'lab')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToLab(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseLabById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.labs || []).find((l) => l.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'lab')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseLabById Error]', error);
+    throw new Error(`Database error fetching laboratory ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToLab(data);
 }
 
 async function getSupabaseExpertById(id: string): Promise<ExpertItem | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'expert')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToExpert(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseExpertById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.experts || []).find((e) => e.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'expert')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseExpertById Error]', error);
+    throw new Error(`Database error fetching expert ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToExpert(data);
 }
 
 export function userHasProjectAccess(project: ProtectedProjectRoom, actor?: AuthenticatedUser | null): boolean {
@@ -1464,149 +1463,162 @@ export function userCanDeleteProject(project: ProtectedProjectRoom, actor: Authe
 }
 
 async function syncEvidenceToCatalog(node: EvidenceNode) {
-  if (!supabaseAdmin) return;
-  try {
-    await supabaseAdmin.from('catalog').upsert({
-      id: node.id,
-      type: 'evidence',
-      title: node.title,
-      category: node.category,
-      organization: node.institutionOrCompany,
-      trl: parseInt(node.maturityTrl.replace(/[^0-9]/g, ''), 10) || 6,
-      trl_stage: node.maturityTrl,
-      status: 'Verified',
-      description: node.relevanceToGap,
-      location: node.operatingConditions,
-      verifiedBy: node.leadContributor,
-      verified_by: node.leadContributor,
-      publication_state: node.publicationState || 'published',
-      created_by: resolveValidActorUuid() || null,
-      metadata: {
-        qartinia_kind: 'evidence',
-        sourceIdentifier: node.sourceIdentifier,
-        operatingConditions: node.operatingConditions,
-        demonstratedPerformance: node.demonstratedPerformance,
-        manufacturabilityAndReliability: node.manufacturabilityAndReliability,
-        provenanceType: node.provenanceType || 'verified_empirical',
-        verificationStatus: node.verificationStatus || 'verified',
-        confidenceLevel: node.confidenceLevel || 'High',
-        doiOrPatentRef: node.doiOrPatentRef || node.sourceIdentifier,
-        qartinia_payload: node,
-      },
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Evidence Sync]', err);
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: node.id,
+    type: 'evidence',
+    title: node.title,
+    category: node.category,
+    organization: node.institutionOrCompany,
+    trl: parseInt(node.maturityTrl.replace(/[^0-9]/g, ''), 10) || 6,
+    trl_stage: node.maturityTrl,
+    status: 'Verified',
+    description: node.relevanceToGap,
+    location: node.operatingConditions,
+    verifiedBy: node.leadContributor,
+    verified_by: node.leadContributor,
+    publication_state: node.publicationState || 'published',
+    created_by: resolveValidActorUuid() || null,
+    metadata: {
+      qartinia_kind: 'evidence',
+      sourceIdentifier: node.sourceIdentifier,
+      operatingConditions: node.operatingConditions,
+      demonstratedPerformance: node.demonstratedPerformance,
+      manufacturabilityAndReliability: node.manufacturabilityAndReliability,
+      provenanceType: node.provenanceType || 'verified_empirical',
+      verificationStatus: node.verificationStatus || 'verified',
+      confidenceLevel: node.confidenceLevel || 'High',
+      doiOrPatentRef: node.doiOrPatentRef || node.sourceIdentifier,
+      qartinia_payload: node,
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Evidence Sync Error]', error);
+    throw new Error(`Failed to persist evidence record to Supabase: ${error.message}`);
   }
 }
 
 async function syncSupplierToCatalog(sup: SupplierItem, actorId?: string) {
-  if (!supabaseAdmin) return;
-  try {
-    const isDemo = sup.isDemo !== undefined 
-      ? Boolean(sup.isDemo) 
-      : ['sup-infineon-sic', 'sup-kyocera-amb', 'sup-rohm-sic', 'sup-wolfspeed-sic', 'sup-rogers-curamik'].includes(sup.id);
-    await supabaseAdmin.from('catalog').upsert({
-      id: sup.id,
-      type: 'supplier',
-      title: sup.name,
-      category: sup.domain,
-      organization: sup.headquarters,
-      trl: 9,
-      trl_stage: sup.tier,
-      status: sup.verified ? 'Verified' : 'Qualified',
-      description: sup.description,
-      location: sup.country,
-      verifiedBy: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
-      verified_by: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
-      publication_state: 'published',
-      organization_id: sup.organizationId || null,
-      created_by: resolveValidActorUuid(actorId) || null,
-      metadata: {
-        qartinia_kind: 'supplier',
-        is_demo: isDemo,
-        qartinia_payload: {
-          ...sup,
-          isDemo,
-        },
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const isDemo = sup.isDemo !== undefined 
+    ? Boolean(sup.isDemo) 
+    : ['sup-infineon-sic', 'sup-kyocera-amb', 'sup-rohm-sic', 'sup-wolfspeed-sic', 'sup-rogers-curamik'].includes(sup.id);
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: sup.id,
+    type: 'supplier',
+    title: sup.name,
+    category: sup.domain,
+    organization: sup.headquarters,
+    trl: 9,
+    trl_stage: sup.tier,
+    status: sup.verified ? 'Verified' : 'Qualified',
+    description: sup.description,
+    location: sup.country,
+    verifiedBy: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
+    verified_by: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
+    publication_state: 'published',
+    organization_id: sup.organizationId || null,
+    created_by: resolveValidActorUuid(actorId) || null,
+    metadata: {
+      qartinia_kind: 'supplier',
+      is_demo: isDemo,
+      qartinia_payload: {
+        ...sup,
+        isDemo,
       },
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Supplier Sync]', err);
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Supplier Sync Error]', error);
+    throw new Error(`Failed to persist supplier to Supabase: ${error.message}`);
   }
 }
 
 async function syncLabToCatalog(lab: LabItem, actorId?: string) {
-  if (!supabaseAdmin) return;
-  try {
-    const isDemo = lab.isDemo !== undefined 
-      ? Boolean(lab.isDemo) 
-      : ['lab-fraunhofer-iisb', 'lab-eth-pes', 'lab-imec-ga-sic'].includes(lab.id);
-    await supabaseAdmin.from('catalog').upsert({
-      id: lab.id,
-      type: 'lab',
-      title: lab.name,
-      category: lab.testingDomains[0] || 'Characterization & Testing',
-      organization: lab.institution,
-      trl: 8,
-      trl_stage: lab.availabilityStatus,
-      status: lab.verified ? 'Accredited' : 'Verified',
-      description: lab.description,
-      location: lab.location,
-      verifiedBy: lab.verified ? lab.leadScientist : null,
-      verified_by: lab.verified ? lab.leadScientist : null,
-      publication_state: 'published',
-      organization_id: lab.organizationId || null,
-      created_by: resolveValidActorUuid(actorId) || null,
-      metadata: {
-        qartinia_kind: 'lab',
-        is_demo: isDemo,
-        qartinia_payload: {
-          ...lab,
-          isDemo,
-        },
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const isDemo = lab.isDemo !== undefined 
+    ? Boolean(lab.isDemo) 
+    : ['lab-fraunhofer-iisb', 'lab-eth-pes', 'lab-imec-ga-sic'].includes(lab.id);
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: lab.id,
+    type: 'lab',
+    title: lab.name,
+    category: lab.testingDomains[0] || 'Characterization & Testing',
+    organization: lab.institution,
+    trl: 8,
+    trl_stage: lab.availabilityStatus,
+    status: lab.verified ? 'Accredited' : 'Verified',
+    description: lab.description,
+    location: lab.location,
+    verifiedBy: lab.verified ? lab.leadScientist : null,
+    verified_by: lab.verified ? lab.leadScientist : null,
+    publication_state: 'published',
+    organization_id: lab.organizationId || null,
+    created_by: resolveValidActorUuid(actorId) || null,
+    metadata: {
+      qartinia_kind: 'lab',
+      is_demo: isDemo,
+      qartinia_payload: {
+        ...lab,
+        isDemo,
       },
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Lab Sync]', err);
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Lab Sync Error]', error);
+    throw new Error(`Failed to persist laboratory to Supabase: ${error.message}`);
   }
 }
 
 async function syncExpertToCatalog(exp: ExpertItem, actorId?: string) {
-  if (!supabaseAdmin) return;
-  try {
-    const isDemo = exp.isDemo !== undefined 
-      ? Boolean(exp.isDemo) 
-      : ['exp-kolar', 'exp-marz', 'exp-kaminski'].includes(exp.id);
-    await supabaseAdmin.from('catalog').upsert({
-      id: exp.id,
-      type: 'expert',
-      title: exp.name,
-      category: exp.domainExpertise[0] || 'Domain Specialist',
-      organization: exp.affiliation,
-      trl: 9,
-      trl_stage: exp.availability,
-      status: exp.verified ? 'Verified Fellow' : 'Verified',
-      description: exp.bio,
-      location: exp.location,
-      verifiedBy: exp.verified ? exp.title : null,
-      verified_by: exp.verified ? exp.title : null,
-      publication_state: 'published',
-      organization_id: exp.organizationId || null,
-      created_by: resolveValidActorUuid(exp.profileId || actorId) || null,
-      metadata: {
-        qartinia_kind: 'expert',
-        is_demo: isDemo,
-        qartinia_payload: {
-          ...exp,
-          isDemo,
-        },
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const isDemo = exp.isDemo !== undefined 
+    ? Boolean(exp.isDemo) 
+    : ['exp-kolar', 'exp-marz', 'exp-kaminski'].includes(exp.id);
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: exp.id,
+    type: 'expert',
+    title: exp.name,
+    category: exp.domainExpertise[0] || 'Domain Specialist',
+    organization: exp.affiliation,
+    trl: 9,
+    trl_stage: exp.availability,
+    status: exp.verified ? 'Verified Fellow' : 'Verified',
+    description: exp.bio,
+    location: exp.location,
+    verifiedBy: exp.verified ? exp.title : null,
+    verified_by: exp.verified ? exp.title : null,
+    publication_state: 'published',
+    organization_id: exp.organizationId || null,
+    created_by: resolveValidActorUuid(exp.profileId || actorId) || null,
+    metadata: {
+      qartinia_kind: 'expert',
+      is_demo: isDemo,
+      qartinia_payload: {
+        ...exp,
+        isDemo,
       },
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Expert Sync]', err);
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Expert Sync Error]', error);
+    throw new Error(`Failed to persist expert profile to Supabase: ${error.message}`);
   }
 }
 
@@ -2133,12 +2145,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
       }
     }
 
-    if (dbFrontiers.length > 0) localStore.frontiers = dbFrontiers;
     if (dbProjects.length > 0) localStore.projects = dbProjects;
-    if (dbEvidence.length > 0) localStore.evidenceNodes = dbEvidence;
-    if (dbSuppliers.length > 0) localStore.suppliers = dbSuppliers;
-    if (dbLabs.length > 0) localStore.labs = dbLabs;
-    if (dbExperts.length > 0) localStore.experts = dbExperts;
     if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
     if (dbRooms.length > 0) localStore.brainstormRooms = dbRooms;
     if (dbSims.length > 0) localStore.simulations = dbSims;
@@ -2150,8 +2157,8 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     enterpriseMembers = localStore.enterpriseMembers || [];
   }
 
-  const frontiers = dbFrontiers.length > 0 ? dbFrontiers : (localStore.frontiers || []);
-  const evidenceNodes = dbEvidence.length > 0 ? dbEvidence : (localStore.evidenceNodes || []);
+  const frontiers = dbFrontiers;
+  const evidenceNodes = dbEvidence;
   const allProjects = dbProjects.length > 0 ? dbProjects : (localStore.projects || []);
   const isStateAdmin = currentUser?.role === 'admin' || currentUser?.role === 'platform_admin';
   const projects = isStateAdmin
@@ -2160,9 +2167,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         if (!currentUser) return false;
         return userHasProjectAccess(p, currentUser as any);
       });
-  const suppliers = dbSuppliers.length > 0 ? dbSuppliers : (localStore.suppliers && localStore.suppliers.length > 0 ? localStore.suppliers : INITIAL_SUPPLIERS);
-  const labs = dbLabs.length > 0 ? dbLabs : (localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS);
-  const experts = dbExperts.length > 0 ? dbExperts : (localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS);
+  const suppliers = dbSuppliers;
+  const labs = dbLabs;
+  const experts = dbExperts;
   const knowledgeItems = localStore.knowledgeItems && localStore.knowledgeItems.length > 0 ? localStore.knowledgeItems : INITIAL_KNOWLEDGE_ITEMS;
 
   // Filter brainstorm rooms according to privacy and actor permissions
@@ -4523,24 +4530,19 @@ async function startServer() {
         lastEvaluatedAt: today,
       };
 
-      localStore.frontiers.unshift(newFrontier);
-      saveLocalStore(localStore);
-
-      await Promise.all([
-        syncFrontierToCatalog(newFrontier),
-        logSupabaseActivity(
-          actor.id,
-          'frontier_benchmark_computed',
-          'frontier',
-          newFrontier.title,
-          {
-            domain: newFrontier.domain,
-            technologySystem: newFrontier.technologySystem,
-            customerValue,
-            targetValue,
-          }
-        ),
-      ]);
+      await syncFrontierToCatalog(newFrontier);
+      await logSupabaseActivity(
+        actor.id,
+        'frontier_benchmark_computed',
+        'frontier',
+        newFrontier.title,
+        {
+          domain: newFrontier.domain,
+          technologySystem: newFrontier.technologySystem,
+          customerValue,
+          targetValue,
+        }
+      );
 
       res.json({ ok: true, frontier: newFrontier });
     } catch (err: any) {
@@ -4576,14 +4578,6 @@ async function startServer() {
         publicationState: 'published',
         createdAt: new Date().toISOString().split('T')[0],
       };
-
-      const exists = localStore.evidenceNodes.some(
-        (n) => n.title === newNode.title && n.sourceIdentifier === newNode.sourceIdentifier
-      );
-      if (!exists) {
-        localStore.evidenceNodes.unshift(newNode);
-        saveLocalStore(localStore);
-      }
 
       await syncEvidenceToCatalog(newNode);
 
@@ -5404,11 +5398,6 @@ async function startServer() {
 
       await syncFrontierToCatalog(existing);
 
-      const idx = (localStore.frontiers || []).findIndex((f) => f.id === existing.id);
-      if (idx !== -1) localStore.frontiers[idx] = existing;
-      else localStore.frontiers.push(existing);
-      saveLocalStore(localStore);
-
       await logSupabaseActivity(
         actor.id,
         'frontier_reevaluated',
@@ -5422,70 +5411,70 @@ async function startServer() {
   });
 
   app.delete('/api/frontier/:id', requireAdmin, async (req, res) => {
-    await deleteCatalogItemsSafe([req.params.id]);
-    localStore.frontiers = (localStore.frontiers || []).filter((f) => f.id !== req.params.id);
-    saveLocalStore(localStore);
-    const remaining = await fetchSupabaseFrontiers();
-    res.json({ ok: true, frontiers: remaining });
+    try {
+      await deleteCatalogItemsSafe([req.params.id]);
+      const remaining = await fetchSupabaseFrontiers();
+      res.json({ ok: true, frontiers: remaining });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete frontier.' });
+    }
   });
 
   // 16. POST & DELETE /api/evidence — Synced with `public.catalog` & `public.catalog_relationships`
   app.post('/api/evidence', requireAuth, async (req, res) => {
-    const body = req.body;
-    const newNode: EvidenceNode = {
-      id: body.id || `ev-${Date.now()}`,
-      title: body.title,
-      category: body.category || 'Publication',
-      sourceIdentifier: body.sourceIdentifier || 'Verified Record',
-      institutionOrCompany: body.institutionOrCompany || 'Research Institution',
-      leadContributor: body.leadContributor || 'Principal Investigator',
-      operatingConditions: body.operatingConditions || '',
-      demonstratedPerformance: body.demonstratedPerformance || '',
-      maturityTrl: body.maturityTrl || 'TRL 6',
-      manufacturabilityAndReliability: body.manufacturabilityAndReliability || '',
-      relevanceToGap: body.relevanceToGap || '',
-      linkedFrontierId: body.linkedFrontierId,
-      publicationState: 'published',
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+    try {
+      const body = req.body;
+      const newNode: EvidenceNode = {
+        id: body.id || `ev-${Date.now()}`,
+        title: body.title,
+        category: body.category || 'Publication',
+        sourceIdentifier: body.sourceIdentifier || 'Verified Record',
+        institutionOrCompany: body.institutionOrCompany || 'Research Institution',
+        leadContributor: body.leadContributor || 'Principal Investigator',
+        operatingConditions: body.operatingConditions || '',
+        demonstratedPerformance: body.demonstratedPerformance || '',
+        maturityTrl: body.maturityTrl || 'TRL 6',
+        manufacturabilityAndReliability: body.manufacturabilityAndReliability || '',
+        relevanceToGap: body.relevanceToGap || '',
+        linkedFrontierId: body.linkedFrontierId,
+        publicationState: 'published',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
 
-    await syncEvidenceToCatalog(newNode);
+      await syncEvidenceToCatalog(newNode);
 
-    const exists = (localStore.evidenceNodes || []).some(
-      (n) => n.id === newNode.id || (n.title === newNode.title && n.sourceIdentifier === newNode.sourceIdentifier)
-    );
-    if (!exists) {
-      localStore.evidenceNodes.unshift(newNode);
-      saveLocalStore(localStore);
-    }
-
-    // If linkedFrontierId exists in catalog, also record edge in `public.catalog_relationships`
-    if (supabaseAdmin && newNode.linkedFrontierId) {
-      const { data: srcExists } = await supabaseAdmin
-        .from('catalog')
-        .select('id')
-        .eq('id', newNode.linkedFrontierId)
-        .single();
-      if (srcExists) {
-        await supabaseAdmin.from('catalog_relationships').insert({
-          source_id: newNode.linkedFrontierId,
-          target_id: newNode.id,
-          relationship_type: 'closes_frontier_gap',
-          description: newNode.relevanceToGap || 'Condition-aware evidence record linked to frontier',
-        });
+      // If linkedFrontierId exists in catalog, also record edge in `public.catalog_relationships`
+      if (supabaseAdmin && newNode.linkedFrontierId) {
+        const { data: srcExists } = await supabaseAdmin
+          .from('catalog')
+          .select('id')
+          .eq('id', newNode.linkedFrontierId)
+          .single();
+        if (srcExists) {
+          await supabaseAdmin.from('catalog_relationships').insert({
+            source_id: newNode.linkedFrontierId,
+            target_id: newNode.id,
+            relationship_type: 'closes_frontier_gap',
+            description: newNode.relevanceToGap || 'Condition-aware evidence record linked to frontier',
+          });
+        }
       }
-    }
 
-    const allEvidence = await fetchSupabaseEvidence();
-    res.json({ ok: true, evidenceNode: newNode, evidenceNodes: allEvidence });
+      const allEvidence = await fetchSupabaseEvidence();
+      res.json({ ok: true, evidenceNode: newNode, evidenceNodes: allEvidence });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to create evidence record.' });
+    }
   });
 
   app.delete('/api/evidence/:id', requireAdmin, async (req, res) => {
-    await deleteCatalogItemsSafe([req.params.id]);
-    localStore.evidenceNodes = (localStore.evidenceNodes || []).filter((n) => n.id !== req.params.id);
-    saveLocalStore(localStore);
-    const remaining = await fetchSupabaseEvidence();
-    res.json({ ok: true, evidenceNodes: remaining });
+    try {
+      await deleteCatalogItemsSafe([req.params.id]);
+      const remaining = await fetchSupabaseEvidence();
+      res.json({ ok: true, evidenceNodes: remaining });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete evidence record.' });
+    }
   });
 
   // 17. REAL-TIME SERVER-SENT EVENTS (SSE) & NOTIFICATIONS API
@@ -6578,8 +6567,6 @@ async function startServer() {
       };
 
       await syncSupplierToCatalog(newSupplier, actor.id);
-      localStore.suppliers = [newSupplier, ...(localStore.suppliers || []).filter((s) => s.id !== id)];
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'supplier_created', 'supplier', id, {
         name: newSupplier.name,
@@ -6624,8 +6611,6 @@ async function startServer() {
       };
 
       await syncSupplierToCatalog(updatedSupplier, actor.id);
-      localStore.suppliers = (localStore.suppliers || []).map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s));
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'supplier_updated', 'supplier', supplier.id, {
         name: updatedSupplier.name,
@@ -6659,8 +6644,6 @@ async function startServer() {
       }
 
       await deleteCatalogItemsSafe([req.params.id]);
-      localStore.suppliers = (localStore.suppliers || []).filter((s) => s.id !== req.params.id);
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'supplier_deleted', 'supplier', req.params.id, {});
       res.json({ ok: true });
@@ -6805,8 +6788,6 @@ async function startServer() {
       };
 
       await syncLabToCatalog(newLab, actor.id);
-      localStore.labs = [newLab, ...(localStore.labs || []).filter((l) => l.id !== id)];
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'lab_created', 'lab', id, {
         name: newLab.name,
@@ -6850,8 +6831,6 @@ async function startServer() {
       };
 
       await syncLabToCatalog(updatedLab, actor.id);
-      localStore.labs = (localStore.labs || []).map((l) => (l.id === updatedLab.id ? updatedLab : l));
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'lab_updated', 'lab', lab.id, {
         name: updatedLab.name,
@@ -6885,8 +6864,6 @@ async function startServer() {
       }
 
       await deleteCatalogItemsSafe([req.params.id]);
-      localStore.labs = (localStore.labs || []).filter((l) => l.id !== req.params.id);
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'lab_deleted', 'lab', req.params.id, {});
       res.json({ ok: true });
@@ -7039,8 +7016,6 @@ async function startServer() {
       };
 
       await syncExpertToCatalog(newExpert, actor.id);
-      localStore.experts = [newExpert, ...(localStore.experts || []).filter((e) => e.id !== id)];
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'expert_created', 'expert', id, {
         name: newExpert.name,
@@ -7085,8 +7060,6 @@ async function startServer() {
       };
 
       await syncExpertToCatalog(updatedExpert, actor.id);
-      localStore.experts = (localStore.experts || []).map((e) => (e.id === updatedExpert.id ? updatedExpert : e));
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'expert_updated', 'expert', expert.id, {
         name: updatedExpert.name,
@@ -7121,8 +7094,6 @@ async function startServer() {
       }
 
       await deleteCatalogItemsSafe([req.params.id]);
-      localStore.experts = (localStore.experts || []).filter((e) => e.id !== req.params.id);
-      saveLocalStore(localStore);
 
       await logSupabaseActivity(actor.id, 'expert_deleted', 'expert', req.params.id, {});
       res.json({ ok: true });
