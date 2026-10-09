@@ -603,6 +603,13 @@ function resolveValidActorUuid(userId?: string | null): string | null {
   return dynamicAdminUuid || null;
 }
 
+function resolveValidUuid(id?: string | null): string | null {
+  if (id && /^[0-9a-f-]{36}$/i.test(id)) {
+    return id;
+  }
+  return null;
+}
+
 /**
  * Helper to securely create or invite users through Supabase Auth without hardcoded default passwords.
  */
@@ -735,7 +742,6 @@ async function syncFrontierToCatalog(frontier: FrontierBenchmark) {
     status: frontier.monitored ? 'Monitored' : 'Evaluated',
     description: frontier.gapRootCauseAnalysis,
     location: frontier.operatingEnvelope,
-    verifiedBy: 'Qartinia Frontier Engine',
     verified_by: 'Qartinia Frontier Engine',
     publication_state: 'published',
     created_by: resolveValidActorUuid() || null,
@@ -766,7 +772,6 @@ async function syncProjectToCatalog(project: ProtectedProjectRoom) {
       status: project.ndaStatus,
       description: project.problemStatement,
       location: project.ipFramework,
-      verifiedBy: 'Protected Project Room',
       verified_by: 'Protected Project Room',
       publication_state: 'draft', // PROTECTED: Project rooms are private and never published as public catalog entries
       created_by: resolveValidActorUuid(project.createdById) || null,
@@ -1477,7 +1482,6 @@ async function syncEvidenceToCatalog(node: EvidenceNode) {
     status: 'Verified',
     description: node.relevanceToGap,
     location: node.operatingConditions,
-    verifiedBy: node.leadContributor,
     verified_by: node.leadContributor,
     publication_state: node.publicationState || 'published',
     created_by: resolveValidActorUuid() || null,
@@ -1520,10 +1524,9 @@ async function syncSupplierToCatalog(sup: SupplierItem, actorId?: string) {
     status: sup.verified ? 'Verified' : 'Qualified',
     description: sup.description,
     location: sup.country,
-    verifiedBy: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
     verified_by: sup.verified ? (isDemo ? 'Qartinia Fabricator Audit' : 'Audited Enterprise') : null,
     publication_state: 'published',
-    organization_id: sup.organizationId || null,
+    organization_id: resolveValidUuid(sup.organizationId) || null,
     created_by: resolveValidActorUuid(actorId) || null,
     metadata: {
       qartinia_kind: 'supplier',
@@ -1560,10 +1563,9 @@ async function syncLabToCatalog(lab: LabItem, actorId?: string) {
     status: lab.verified ? 'Accredited' : 'Verified',
     description: lab.description,
     location: lab.location,
-    verifiedBy: lab.verified ? lab.leadScientist : null,
     verified_by: lab.verified ? lab.leadScientist : null,
     publication_state: 'published',
-    organization_id: lab.organizationId || null,
+    organization_id: resolveValidUuid(lab.organizationId) || null,
     created_by: resolveValidActorUuid(actorId) || null,
     metadata: {
       qartinia_kind: 'lab',
@@ -1600,10 +1602,9 @@ async function syncExpertToCatalog(exp: ExpertItem, actorId?: string) {
     status: exp.verified ? 'Verified Fellow' : 'Verified',
     description: exp.bio,
     location: exp.location,
-    verifiedBy: exp.verified ? exp.title : null,
     verified_by: exp.verified ? exp.title : null,
     publication_state: 'published',
-    organization_id: exp.organizationId || null,
+    organization_id: resolveValidUuid(exp.organizationId) || null,
     created_by: resolveValidActorUuid(exp.profileId || actorId) || null,
     metadata: {
       qartinia_kind: 'expert',
@@ -1636,7 +1637,6 @@ async function syncKnowledgeToCatalog(ki: KnowledgeItem) {
       status: 'Indexed',
       description: ki.abstract,
       location: ki.doiOrRef,
-      verifiedBy: 'Qartinia Scientific Index',
       verified_by: 'Qartinia Scientific Index',
       publication_state: 'published',
       created_by: resolveValidActorUuid() || null,
@@ -1665,7 +1665,6 @@ async function syncBrainstormRoomToCatalog(room: BrainstormRoom, createdByUuid?:
       status: room.isPrivate ? 'Confidential' : 'Open Collaboration',
       description: room.topic || room.summary || '',
       location: room.tags.join(', '),
-      verifiedBy: 'Qartinia Brainstorm Hub',
       verified_by: 'Qartinia Brainstorm Hub',
       publication_state: room.isPrivate ? 'draft' : 'published',
       created_by: resolveValidActorUuid(createdByUuid) || null,
@@ -1697,7 +1696,6 @@ async function syncSimulationToCatalog(sim: SimulationJob, userUuid?: string | n
       status: sim.status,
       description: sim.resultReport || 'Physics transient calculation and boundary analysis.',
       location: sim.tool,
-      verifiedBy: 'Qartinia Simulation Hub',
       verified_by: 'Qartinia Simulation Hub',
       publication_state: 'draft',
       created_by: resolveValidActorUuid(userUuid) || null,

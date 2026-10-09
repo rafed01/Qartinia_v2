@@ -1,9 +1,9 @@
 -- Migration: 20261009_01_catalog_entities.sql
--- Description: Core Catalog Table Schema for Frontiers, Evidence, Suppliers, Labs, and Experts
+-- Description: Core Catalog Table Schema & Tightened RLS Policies for Catalog Entities (Safely Repeatable)
 
 CREATE TABLE IF NOT EXISTS public.catalog (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL, -- 'frontier', 'evidence', 'supplier', 'lab', 'expert', etc.
+  type TEXT NOT NULL, -- 'frontier', 'evidence', 'supplier', 'lab', 'expert', 'knowledge', 'project_room', etc.
   title TEXT NOT NULL,
   category TEXT,
   organization TEXT,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.catalog (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for performance & quick lookup
+-- Performance Indexes (Safely Repeatable)
 CREATE INDEX IF NOT EXISTS idx_catalog_type ON public.catalog(type);
 CREATE INDEX IF NOT EXISTS idx_catalog_org_id ON public.catalog(organization_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_created_by ON public.catalog(created_by);
@@ -31,53 +31,93 @@ CREATE INDEX IF NOT EXISTS idx_catalog_updated_at ON public.catalog(updated_at D
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.catalog ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy 1: Anyone can read published catalog items
-CREATE POLICY "Public published catalog items are readable by all"
+-- Safely Repeatable Policy Cleanup
+DROP POLICY IF EXISTS "Public published catalog items are readable by all" ON public.catalog;
+DROP POLICY IF EXISTS "Catalog select policy" ON public.catalog;
+DROP POLICY IF EXISTS "Authenticated users can insert catalog items" ON public.catalog;
+DROP POLICY IF EXISTS "Catalog insert policy" ON public.catalog;
+DROP POLICY IF EXISTS "Creators or Admins can update catalog items" ON public.catalog;
+DROP POLICY IF EXISTS "Catalog update policy" ON public.catalog;
+DROP POLICY IF EXISTS "Creators or Admins can delete catalog items" ON public.catalog;
+DROP POLICY IF EXISTS "Catalog delete policy" ON public.catalog;
+
+-- 1. SELECT Policy:
+-- Published entries are readable by all.
+-- Drafts/private entries are readable only by record creator, organization members, or platform admins.
+CREATE POLICY "Catalog select policy"
   ON public.catalog
   FOR SELECT
   USING (
     publication_state = 'published' OR
-    created_by = auth.uid() OR
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
-    )
+    (auth.uid() IS NOT NULL AND (
+      created_by = auth.uid() OR
+      (organization_id IS NOT NULL AND organization_id IN (
+        SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+      )) OR
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+      )
+    ))
   );
 
--- RLS Policy 2: Authenticated users can insert catalog entries
-CREATE POLICY "Authenticated users can insert catalog items"
+-- 2. INSERT Policy:
+-- Authenticated users can insert entries provided they set created_by to themselves (or null/admin)
+-- and belong to the target organization_id (if specified).
+CREATE POLICY "Catalog insert policy"
   ON public.catalog
   FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
+  WITH CHECK (
+    auth.role() = 'authenticated' AND
+    (created_by IS NULL OR created_by = auth.uid() OR EXISTS (
+      SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+    )) AND
+    (organization_id IS NULL OR organization_id IN (
+      SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    ) OR EXISTS (
+      SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+    ))
+  );
 
--- RLS Policy 3: Creators or Admins can update catalog entries
-CREATE POLICY "Creators or Admins can update catalog items"
+-- 3. UPDATE Policy:
+-- Restrict updates to record creator, explicit organization owner/admin, or platform admin.
+CREATE POLICY "Catalog update policy"
   ON public.catalog
   FOR UPDATE
   USING (
-    created_by = auth.uid() OR
-    organization_id IN (
-      SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
-    ) OR
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+    auth.uid() IS NOT NULL AND (
+      created_by = auth.uid() OR
+      (organization_id IS NOT NULL AND organization_id IN (
+        SELECT organization_id FROM public.organization_members
+        WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+      )) OR
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+      )
     )
   );
 
--- RLS Policy 4: Creators or Admins can delete catalog entries
-CREATE POLICY "Creators or Admins can delete catalog items"
+-- 4. DELETE Policy:
+-- Restrict deletions to record creator, explicit organization owner/admin, or platform admin.
+CREATE POLICY "Catalog delete policy"
   ON public.catalog
   FOR DELETE
   USING (
-    created_by = auth.uid() OR
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+    auth.uid() IS NOT NULL AND (
+      created_by = auth.uid() OR
+      (organization_id IS NOT NULL AND organization_id IN (
+        SELECT organization_id FROM public.organization_members
+        WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+      )) OR
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+      )
     )
   );
 
--- Trigger to automatically update updated_at timestamp
+-- Safely Repeatable Timestamp Trigger
 CREATE OR REPLACE FUNCTION update_catalog_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
