@@ -62,21 +62,31 @@ CREATE POLICY "Catalog select policy"
   );
 
 -- 2. INSERT Policy:
--- Authenticated users can insert entries provided they set created_by to themselves (or null/admin)
--- and belong to the target organization_id (if specified).
+-- Ordinary authenticated users must set created_by to themselves (created_by = auth.uid()).
+-- They cannot set created_by to NULL or assign records to other users.
+-- Explicitly authorized administrators (profiles.role in 'admin', 'platform_admin') can set created_by to NULL or assign to other users.
 CREATE POLICY "Catalog insert policy"
   ON public.catalog
   FOR INSERT
   WITH CHECK (
     auth.role() = 'authenticated' AND
-    (created_by IS NULL OR created_by = auth.uid() OR EXISTS (
-      SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
-    )) AND
-    (organization_id IS NULL OR organization_id IN (
-      SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
-    ) OR EXISTS (
-      SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
-    ))
+    (
+      created_by = auth.uid() OR
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+      )
+    ) AND
+    (
+      organization_id IS NULL OR
+      organization_id IN (
+        SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+      ) OR
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'platform_admin')
+      )
+    )
   );
 
 -- 3. UPDATE Policy:

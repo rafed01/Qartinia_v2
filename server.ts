@@ -758,34 +758,37 @@ async function syncFrontierToCatalog(frontier: FrontierBenchmark) {
   }
 }
 
-async function syncProjectToCatalog(project: ProtectedProjectRoom) {
-  if (!supabaseAdmin) return;
-  try {
-    await supabaseAdmin.from('catalog').upsert({
-      id: project.id,
-      type: 'project_room',
-      title: project.title,
-      category: project.domain,
-      organization: project.createdByOrg || project.code,
-      trl: 7,
-      trl_stage: project.legalStage,
-      status: project.ndaStatus,
-      description: project.problemStatement,
-      location: project.ipFramework,
-      verified_by: 'Protected Project Room',
-      publication_state: 'draft', // PROTECTED: Project rooms are private and never published as public catalog entries
-      created_by: resolveValidActorUuid(project.createdById) || null,
-      metadata: {
-        qartinia_kind: 'project_room',
-        qartinia_payload: {
-          ...project,
-          publicationState: 'draft',
-        },
+export async function syncProjectToCatalog(project: ProtectedProjectRoom) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
+  }
+  const { error } = await supabaseAdmin.from('catalog').upsert({
+    id: project.id,
+    type: 'project_room',
+    title: project.title,
+    category: project.domain,
+    organization: project.createdByOrg || project.code,
+    trl: 7,
+    trl_stage: project.legalStage,
+    status: project.ndaStatus,
+    description: project.problemStatement,
+    location: project.ipFramework,
+    verified_by: 'Protected Project Room',
+    publication_state: 'draft', // PROTECTED: Project rooms are private and never published as public catalog entries
+    created_by: resolveValidActorUuid(project.createdById) || null,
+    metadata: {
+      qartinia_kind: 'project_room',
+      qartinia_payload: {
+        ...project,
+        publicationState: 'draft',
       },
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.warn('[Supabase Catalog Project Sync]', err);
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[Supabase Catalog Project Sync Error]', error);
+    throw new Error(`Failed to persist project room to Supabase catalog: ${error.message}`);
   }
 }
 
@@ -1129,24 +1132,22 @@ async function fetchSupabaseEvidence(): Promise<EvidenceNode[]> {
   return (data || []).map(mapCatalogRowToEvidence);
 }
 
-async function fetchSupabaseProjects(): Promise<ProtectedProjectRoom[]> {
-  if (!supabaseAdmin) return localStore.projects || [];
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .eq('type', 'project_room')
-      .order('updated_at', { ascending: false });
-    if (error || !data) {
-      return localStore.projects || [];
-    }
-    const mapped = data.map(mapCatalogRowToProject);
-    localStore.projects = mapped;
-    return mapped;
-  } catch (err) {
-    console.warn('[fetchSupabaseProjects]', err);
-    return localStore.projects || [];
+export async function fetchSupabaseProjects(): Promise<ProtectedProjectRoom[]> {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('type', 'project_room')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('[fetchSupabaseProjects Error]', error);
+    throw new Error(`Failed to fetch projects from database: ${error.message}`);
+  }
+
+  return (data || []).map(mapCatalogRowToProject);
 }
 
 async function getSupabaseFrontierById(id: string): Promise<FrontierBenchmark | null> {
