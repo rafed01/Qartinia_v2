@@ -482,7 +482,7 @@ function resolveValidActorUuid(userId?: string | null): string | null {
   if (userId && userId !== 'LOGGED_OUT' && /^[0-9a-f-]{36}$/i.test(userId)) {
     return userId;
   }
-  return null;
+  return dynamicAdminUuid || null;
 }
 
 /**
@@ -638,7 +638,7 @@ async function syncProjectToCatalog(project: ProtectedProjectRoom) {
       type: 'project_room',
       title: project.title,
       category: project.domain,
-      organization: project.code,
+      organization: project.createdByOrg || project.code,
       trl: 7,
       trl_stage: project.legalStage,
       status: project.ndaStatus,
@@ -646,16 +646,279 @@ async function syncProjectToCatalog(project: ProtectedProjectRoom) {
       location: project.ipFramework,
       verifiedBy: 'Protected Project Room',
       verified_by: 'Protected Project Room',
-      publication_state: 'published',
-      created_by: resolveValidActorUuid() || null,
+      publication_state: 'draft', // PROTECTED: Project rooms are private and never published as public catalog entries
+      created_by: resolveValidActorUuid(project.createdById) || null,
       metadata: {
         qartinia_kind: 'project_room',
-        qartinia_payload: project,
+        qartinia_payload: {
+          ...project,
+          publicationState: 'draft',
+        },
       },
+      updated_at: new Date().toISOString(),
     });
   } catch (err) {
     console.warn('[Supabase Catalog Project Sync]', err);
   }
+}
+
+function mapCatalogRowToFrontier(row: any): FrontierBenchmark {
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as FrontierBenchmark;
+    return {
+      ...payload,
+      id: row.id,
+      title: row.title || payload.title,
+    };
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    domain: row.category || 'Deep-Tech Engineering',
+    technologySystem: row.organization || 'Engineering System',
+    metricName: 'Performance',
+    metricUnit: '',
+    operatingEnvelope: row.location || '',
+    constraints: '',
+    monitored: row.status === 'Monitored',
+    positions: [],
+    gapRootCauseAnalysis: row.description || '',
+    whatChangedRecently: '',
+    evidenceRecords: [],
+    recommendedNextActions: [],
+    createdAt: row.dateAdded || (row.updated_at ? String(row.updated_at).slice(0, 10) : ''),
+    lastEvaluatedAt: row.updated_at ? String(row.updated_at).slice(0, 10) : '',
+  };
+}
+
+function mapCatalogRowToEvidence(row: any): EvidenceNode {
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as EvidenceNode;
+    return {
+      ...payload,
+      id: row.id,
+      title: row.title || payload.title,
+      publicationState: row.publication_state || payload.publicationState || 'published',
+    };
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    category: (row.category as any) || 'Publication',
+    sourceIdentifier: row.metadata?.sourceIdentifier || row.id,
+    institutionOrCompany: row.organization || 'Research Institution',
+    leadContributor: row.verified_by || row.verifiedBy || 'Principal Investigator',
+    operatingConditions: row.metadata?.operatingConditions || row.location || '',
+    demonstratedPerformance: row.metadata?.demonstratedPerformance || `TRL ${row.trl || 6}`,
+    maturityTrl: row.trl_stage || `TRL ${row.trl || 6}`,
+    manufacturabilityAndReliability: row.metadata?.manufacturabilityAndReliability || '',
+    relevanceToGap: row.description || '',
+    publicationState: row.publication_state || 'published',
+    provenanceType: row.metadata?.provenanceType || 'verified_empirical',
+    verificationStatus: row.metadata?.verificationStatus || 'verified',
+    confidenceLevel: row.metadata?.confidenceLevel || 'High',
+    doiOrPatentRef: row.metadata?.doiOrPatentRef || row.metadata?.sourceIdentifier || '',
+    createdAt: row.updated_at ? String(row.updated_at).slice(0, 10) : '',
+  };
+}
+
+function mapCatalogRowToProject(row: any): ProtectedProjectRoom {
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as ProtectedProjectRoom;
+    return {
+      ...payload,
+      id: row.id,
+      title: row.title || payload.title,
+      createdById: row.created_by || payload.createdById,
+      createdByOrg: row.organization || payload.createdByOrg,
+    };
+  }
+  return {
+    id: row.id,
+    code: row.organization || `QRT-RM-${row.id.slice(-4)}`,
+    title: row.title,
+    domain: row.category || 'Deep-Tech Engineering',
+    problemStatement: row.description || '',
+    targetSpec: '',
+    legalStage: (row.trl_stage as any) || 'Scoping & Mutual NDA',
+    ndaStatus: (row.status as any) || 'Pending Signature',
+    ipFramework: (row.location as any) || 'Background IP Segregated',
+    publicationPolicy: '30-Day Pre-Publication Patent Review',
+    trainingIsolationVerified: true,
+    participants: [],
+    milestones: [],
+    documents: [],
+    messages: [],
+    createdById: row.created_by,
+    createdAt: row.updated_at ? String(row.updated_at).slice(0, 10) : '',
+  };
+}
+
+async function fetchSupabaseFrontiers(): Promise<FrontierBenchmark[]> {
+  if (!supabaseAdmin) return localStore.frontiers || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'frontier')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.frontiers || [];
+    }
+    const mapped = data.map(mapCatalogRowToFrontier);
+    localStore.frontiers = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseFrontiers]', err);
+    return localStore.frontiers || [];
+  }
+}
+
+async function fetchSupabaseEvidence(): Promise<EvidenceNode[]> {
+  if (!supabaseAdmin) return localStore.evidenceNodes || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'evidence')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.evidenceNodes || [];
+    }
+    const mapped = data.map(mapCatalogRowToEvidence);
+    localStore.evidenceNodes = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseEvidence]', err);
+    return localStore.evidenceNodes || [];
+  }
+}
+
+async function fetchSupabaseProjects(): Promise<ProtectedProjectRoom[]> {
+  if (!supabaseAdmin) return localStore.projects || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'project_room')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.projects || [];
+    }
+    const mapped = data.map(mapCatalogRowToProject);
+    localStore.projects = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseProjects]', err);
+    return localStore.projects || [];
+  }
+}
+
+async function getSupabaseFrontierById(id: string): Promise<FrontierBenchmark | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'frontier')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToFrontier(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseFrontierById]', err);
+    }
+  }
+  return (localStore.frontiers || []).find((f) => f.id === id) || null;
+}
+
+async function getSupabaseEvidenceById(id: string): Promise<EvidenceNode | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'evidence')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToEvidence(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseEvidenceById]', err);
+    }
+  }
+  return (localStore.evidenceNodes || []).find((e) => e.id === id) || null;
+}
+
+async function getSupabaseProjectById(id: string): Promise<ProtectedProjectRoom | null> {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', id)
+        .eq('type', 'project_room')
+        .single();
+      if (!error && data) {
+        return mapCatalogRowToProject(data);
+      }
+    } catch (err) {
+      console.warn('[getSupabaseProjectById]', err);
+    }
+  }
+  return (localStore.projects || []).find((p) => p.id === id) || null;
+}
+
+function userHasProjectAccess(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+  const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+  if (isAdmin) return true;
+  const isCreator =
+    project.createdById === actor.id ||
+    Boolean(project.createdByEmail && actor.email && project.createdByEmail.toLowerCase() === actor.email.toLowerCase());
+  const isParticipant = (project.participants || []).some(
+    (p: any) =>
+      p.id === actor.id ||
+      p.userId === actor.id ||
+      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase()) ||
+      (p.name && actor.fullName && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
+      (p.name && actor.email && p.name.toLowerCase() === actor.email.split('@')[0].toLowerCase()) ||
+      (p.organization && actor.organizationName && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
+  );
+  const isSameOrg = Boolean(
+    project.createdByOrg &&
+    actor.organizationName &&
+    project.createdByOrg.toLowerCase() === actor.organizationName.toLowerCase()
+  );
+  return Boolean(isCreator || isParticipant || isSameOrg);
+}
+
+function userCanModifyProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+  const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+  if (isAdmin) return true;
+  const isCreator =
+    project.createdById === actor.id ||
+    Boolean(project.createdByEmail && actor.email && project.createdByEmail.toLowerCase() === actor.email.toLowerCase());
+  const isParticipant = (project.participants || []).some(
+    (p: any) =>
+      p.id === actor.id ||
+      p.userId === actor.id ||
+      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase()) ||
+      (p.name && actor.fullName && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
+      (p.name && actor.email && p.name.toLowerCase() === actor.email.split('@')[0].toLowerCase()) ||
+      (p.organization && actor.organizationName && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
+  );
+  return Boolean(isCreator || isParticipant);
+}
+
+function userCanDeleteProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+  const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+  if (isAdmin) return true;
+  const isCreator =
+    project.createdById === actor.id ||
+    Boolean(project.createdByEmail && actor.email && project.createdByEmail.toLowerCase() === actor.email.toLowerCase());
+  return Boolean(isCreator);
 }
 
 async function syncEvidenceToCatalog(node: EvidenceNode) {
@@ -847,6 +1110,37 @@ async function ensureDatabaseCatalogSeeded() {
       }
     }
 
+    // Enforce privacy: Ensure all protected project rooms in Supabase are marked as 'draft'
+    await supabaseAdmin
+      .from('catalog')
+      .update({ publication_state: 'draft' })
+      .eq('type', 'project_room');
+
+    // Authoritative seeding of Frontiers, Evidence, and Protected Projects into Supabase
+    if (Array.isArray(localStore.frontiers)) {
+      for (const f of localStore.frontiers) {
+        if (!existingIds.has(f.id)) {
+          await syncFrontierToCatalog(f);
+        }
+      }
+    }
+
+    if (Array.isArray(localStore.evidenceNodes)) {
+      for (const ev of localStore.evidenceNodes) {
+        if (!existingIds.has(ev.id)) {
+          await syncEvidenceToCatalog(ev);
+        }
+      }
+    }
+
+    if (Array.isArray(localStore.projects)) {
+      for (const prj of localStore.projects) {
+        if (!existingIds.has(prj.id)) {
+          await syncProjectToCatalog(prj);
+        }
+      }
+    }
+
     console.log('[Supabase Catalog] Enterprise knowledge catalog verified & authoritative in Supabase.');
   } catch (err) {
     console.warn('[Supabase Catalog Seed Warning]', err);
@@ -900,6 +1194,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   let bookmarks: CatalogBookmark[] = [];
   let approvals: AtomicApprovalItem[] = [];
   let activityLog: AuditActivityItem[] = [];
+  let dbFrontiers: FrontierBenchmark[] = [];
+  let dbProjects: ProtectedProjectRoom[] = [];
+  let dbEvidence: EvidenceNode[] = [];
 
   if (supabaseAdmin) {
     const [profRes, orgRes, memRes, reqRes, actRes, catRes, relRes, bmRes] = await Promise.all([
@@ -1089,9 +1386,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     });
 
     // Hydrate Frontiers, Protected Projects, Evidence, Suppliers, Labs, Experts, Knowledge & Posts from Supabase `public.catalog`
-    const dbFrontiers: FrontierBenchmark[] = [];
-    const dbProjects: ProtectedProjectRoom[] = [];
-    const dbEvidence: EvidenceNode[] = [];
+    dbFrontiers = [];
+    dbProjects = [];
+    dbEvidence = [];
     const dbSuppliers: SupplierItem[] = [];
     const dbLabs: LabItem[] = [];
     const dbExperts: ExpertItem[] = [];
@@ -1155,9 +1452,16 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     enterpriseMembers = localStore.enterpriseMembers || [];
   }
 
-  const frontiers = localStore.frontiers && localStore.frontiers.length > 0 ? localStore.frontiers : [];
-  const projects = localStore.projects && localStore.projects.length > 0 ? localStore.projects : [];
-  const evidenceNodes = localStore.evidenceNodes && localStore.evidenceNodes.length > 0 ? localStore.evidenceNodes : [];
+  const frontiers = dbFrontiers.length > 0 ? dbFrontiers : (localStore.frontiers || []);
+  const evidenceNodes = dbEvidence.length > 0 ? dbEvidence : (localStore.evidenceNodes || []);
+  const allProjects = dbProjects.length > 0 ? dbProjects : (localStore.projects || []);
+  const isStateAdmin = currentUser?.role === 'admin' || currentUser?.role === 'platform_admin';
+  const projects = isStateAdmin
+    ? allProjects
+    : allProjects.filter((p: ProtectedProjectRoom) => {
+        if (!currentUser) return false;
+        return userHasProjectAccess(p, currentUser as any);
+      });
   const suppliers = localStore.suppliers && localStore.suppliers.length > 0 ? localStore.suppliers : INITIAL_SUPPLIERS;
   const labs = localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS;
   const experts = localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS;
@@ -1236,7 +1540,7 @@ Instructions:
 4. Provide 4 concrete, condition-aware Evidence Records (covering scientific publications, patents, research laboratories, domain experts, or product datasheets) that are closest to closing the gap, specifying their comparable operating conditions, demonstrated performance, maturity (TRL), manufacturability/reliability, and relevance.
 5. Provide 3 concrete recommended next engineering & collaboration actions.`;
 
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.5-pro'];
     let rawText: string | undefined;
 
     for (const modelName of candidateModels) {
@@ -3477,7 +3781,19 @@ async function startServer() {
         });
       }
 
-      const frontiers = (localStore.frontiers || []).filter(
+      const allFrontiers = await fetchSupabaseFrontiers();
+      const allEvidence = await fetchSupabaseEvidence();
+      const allProjects = await fetchSupabaseProjects();
+
+      const actor = req.user;
+      const isSearchAdmin = actor?.role === 'admin' || actor?.role === 'platform_admin';
+      const accessibleProjects = isSearchAdmin
+        ? allProjects
+        : actor
+        ? allProjects.filter((p) => userHasProjectAccess(p, actor))
+        : [];
+
+      const frontiers = allFrontiers.filter(
         (f) =>
           f.title.toLowerCase().includes(q) ||
           f.domain.toLowerCase().includes(q) ||
@@ -3486,7 +3802,7 @@ async function startServer() {
           f.gapRootCauseAnalysis.toLowerCase().includes(q)
       );
 
-      const evidence = (localStore.evidenceNodes || []).filter(
+      const evidence = allEvidence.filter(
         (e) =>
           e.title.toLowerCase().includes(q) ||
           e.category.toLowerCase().includes(q) ||
@@ -3519,7 +3835,7 @@ async function startServer() {
           e.bio.toLowerCase().includes(q)
       );
 
-      const projects = (localStore.projects || []).filter(
+      const projects = accessibleProjects.filter(
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.code.toLowerCase().includes(q) ||
@@ -3867,7 +4183,7 @@ async function startServer() {
   // 15. POST /api/frontier/:id/reevaluate
   app.post('/api/frontier/:id/reevaluate', requireAuth, async (req, res) => {
     try {
-      const existing = localStore.frontiers.find((f) => f.id === req.params.id);
+      const existing = await getSupabaseFrontierById(req.params.id);
       if (!existing) {
         return res.status(404).json({ error: 'Frontier benchmark not found.' });
       }
@@ -3898,16 +4214,19 @@ async function startServer() {
       existing.recommendedNextActions = updatedData.recommendedNextActions;
       existing.lastEvaluatedAt = new Date().toISOString().split('T')[0];
 
+      await syncFrontierToCatalog(existing);
+
+      const idx = (localStore.frontiers || []).findIndex((f) => f.id === existing.id);
+      if (idx !== -1) localStore.frontiers[idx] = existing;
+      else localStore.frontiers.push(existing);
       saveLocalStore(localStore);
-      await Promise.all([
-        syncFrontierToCatalog(existing),
-        logSupabaseActivity(
-          actor.id,
-          'frontier_reevaluated',
-          'frontier',
-          existing.title
-        ),
-      ]);
+
+      await logSupabaseActivity(
+        actor.id,
+        'frontier_reevaluated',
+        'frontier',
+        existing.title
+      );
       res.json({ ok: true, frontier: existing });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to re-evaluate frontier.' });
@@ -3915,10 +4234,11 @@ async function startServer() {
   });
 
   app.delete('/api/frontier/:id', requireAdmin, async (req, res) => {
-    localStore.frontiers = localStore.frontiers.filter((f) => f.id !== req.params.id);
-    saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
-    res.json({ ok: true, frontiers: localStore.frontiers });
+    localStore.frontiers = (localStore.frontiers || []).filter((f) => f.id !== req.params.id);
+    saveLocalStore(localStore);
+    const remaining = await fetchSupabaseFrontiers();
+    res.json({ ok: true, frontiers: remaining });
   });
 
   // 16. POST & DELETE /api/evidence — Synced with `public.catalog` & `public.catalog_relationships`
@@ -3941,15 +4261,15 @@ async function startServer() {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    const exists = localStore.evidenceNodes.some(
-      (n) => n.title === newNode.title && n.sourceIdentifier === newNode.sourceIdentifier
+    await syncEvidenceToCatalog(newNode);
+
+    const exists = (localStore.evidenceNodes || []).some(
+      (n) => n.id === newNode.id || (n.title === newNode.title && n.sourceIdentifier === newNode.sourceIdentifier)
     );
     if (!exists) {
       localStore.evidenceNodes.unshift(newNode);
       saveLocalStore(localStore);
     }
-
-    await syncEvidenceToCatalog(newNode);
 
     // If linkedFrontierId exists in catalog, also record edge in `public.catalog_relationships`
     if (supabaseAdmin && newNode.linkedFrontierId) {
@@ -3968,14 +4288,16 @@ async function startServer() {
       }
     }
 
-    res.json({ ok: true, evidenceNode: newNode, evidenceNodes: localStore.evidenceNodes });
+    const allEvidence = await fetchSupabaseEvidence();
+    res.json({ ok: true, evidenceNode: newNode, evidenceNodes: allEvidence });
   });
 
   app.delete('/api/evidence/:id', requireAdmin, async (req, res) => {
-    localStore.evidenceNodes = localStore.evidenceNodes.filter((n) => n.id !== req.params.id);
-    saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
-    res.json({ ok: true, evidenceNodes: localStore.evidenceNodes });
+    localStore.evidenceNodes = (localStore.evidenceNodes || []).filter((n) => n.id !== req.params.id);
+    saveLocalStore(localStore);
+    const remaining = await fetchSupabaseEvidence();
+    res.json({ ok: true, evidenceNodes: remaining });
   });
 
   // 17. REAL-TIME SERVER-SENT EVENTS (SSE) & NOTIFICATIONS API
@@ -4055,32 +4377,25 @@ async function startServer() {
   // GET /api/projects
   app.get('/api/projects', requireAuth, async (req, res) => {
     const actor = req.user!;
+    const allProjects = await fetchSupabaseProjects();
     const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     if (isAdmin) {
-      return res.json({ ok: true, projects: localStore.projects });
+      return res.json({ ok: true, projects: allProjects });
     }
-    const filtered = (localStore.projects || []).filter((p) => {
-      const isCreator = p.createdById === actor.id || p.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-      const isParticipant = (p.participants || []).some(
-        (part) =>
-          part.id === actor.id ||
-          (part.name && part.name.toLowerCase() === actor.fullName.toLowerCase()) ||
-          (part.organization && part.organization.toLowerCase() === actor.organizationName.toLowerCase())
-      );
-      const isSameOrg = p.createdByOrg && p.createdByOrg.toLowerCase() === actor.organizationName.toLowerCase();
-      return isCreator || isParticipant || isSameOrg;
-    });
+    const filtered = allProjects.filter((p) => userHasProjectAccess(p, actor));
     res.json({ ok: true, projects: filtered });
   });
 
   // GET /api/frontiers
   app.get('/api/frontiers', async (_req, res) => {
-    res.json({ ok: true, frontiers: localStore.frontiers });
+    const frontiers = await fetchSupabaseFrontiers();
+    res.json({ ok: true, frontiers });
   });
 
   // GET /api/evidence
   app.get('/api/evidence', async (_req, res) => {
-    res.json({ ok: true, evidenceNodes: localStore.evidenceNodes });
+    const evidenceNodes = await fetchSupabaseEvidence();
+    res.json({ ok: true, evidenceNodes });
   });
 
   app.post('/api/projects', requireAuth, async (req, res) => {
@@ -4141,10 +4456,10 @@ async function startServer() {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    localStore.projects.unshift(newRoom);
-    saveLocalStore(localStore);
-
     await syncProjectToCatalog(newRoom);
+
+    localStore.projects = [newRoom, ...(localStore.projects || []).filter((p) => p.id !== newRoom.id)];
+    saveLocalStore(localStore);
 
     if (supabaseAdmin && originatingFrontierId) {
       const { data: frtRow } = await supabaseAdmin
@@ -4173,76 +4488,81 @@ async function startServer() {
   });
 
   app.patch('/api/projects/:id', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some(
-      (p) =>
-        p.id === actor.id ||
-        (p.name && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
-        (p.organization && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
-    );
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this project.' });
     }
 
-    const { legalStage, ndaStatus, ipFramework, publicationPolicy } = req.body;
+    const { legalStage, ndaStatus, ipFramework, publicationPolicy, title, problemStatement, targetSpec } = req.body;
     if (legalStage) project.legalStage = legalStage;
     if (ndaStatus) project.ndaStatus = ndaStatus;
     if (ipFramework) project.ipFramework = ipFramework;
     if (publicationPolicy) project.publicationPolicy = publicationPolicy;
+    if (title) project.title = title;
+    if (problemStatement) project.problemStatement = problemStatement;
+    if (targetSpec) project.targetSpec = targetSpec;
 
-    saveLocalStore(localStore);
     await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    else localStore.projects.push(project);
+    saveLocalStore(localStore);
+
     res.json({ ok: true, project });
   });
 
   app.delete('/api/projects/:id', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-
-    if (!isAdmin && !isCreator) {
+    if (!userCanDeleteProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: Only the project creator or an administrator can delete this project.' });
     }
 
-    localStore.projects = localStore.projects.filter((p) => p.id !== req.params.id);
-    saveLocalStore(localStore);
     await deleteCatalogItemsSafe([req.params.id]);
-    res.json({ ok: true, projects: localStore.projects });
+
+    localStore.projects = (localStore.projects || []).filter((p) => p.id !== req.params.id);
+    saveLocalStore(localStore);
+
+    const remaining = await fetchSupabaseProjects();
+    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+    const filtered = isAdmin ? remaining : remaining.filter((p) => userHasProjectAccess(p, actor));
+
+    res.json({ ok: true, projects: filtered });
   });
 
   app.post('/api/projects/:id/participants', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to add participants to this project.' });
     }
 
-    const { name, organization, role, accessScope } = req.body;
+    const { name, organization, role, accessScope, id, userId, email } = req.body;
     const newParticipant = {
-      id: `part-${Date.now()}`,
+      id: id || userId || `part-${Date.now()}`,
+      userId: userId || id,
+      email,
       name,
       organization,
       role: role || 'Domain Specialist',
       accessScope: accessScope || 'Protected Project Boundary',
     };
     project.participants.push(newParticipant);
-    saveLocalStore(localStore);
+
     await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    else localStore.projects.push(project);
+    saveLocalStore(localStore);
 
     // Notify user added to project
     createAndBroadcastNotification({
@@ -4265,15 +4585,11 @@ async function startServer() {
   });
 
   app.post('/api/projects/:id/milestones', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to add milestones to this project.' });
     }
 
@@ -4286,8 +4602,13 @@ async function startServer() {
       status: 'Pending' as const,
     };
     project.milestones.push(newMilestone);
-    saveLocalStore(localStore);
+
     await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    else localStore.projects.push(project);
+    saveLocalStore(localStore);
 
     // Broadcast milestone creation notification to collaborators
     createAndBroadcastNotification({
@@ -4309,23 +4630,22 @@ async function startServer() {
   });
 
   app.patch('/api/projects/:id/milestones/:msId', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to update milestones in this project.' });
     }
 
     const ms = project.milestones.find((m) => m.id === req.params.msId);
     if (ms && req.body.status) {
       ms.status = req.body.status;
-      saveLocalStore(localStore);
       await syncProjectToCatalog(project);
+
+      const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+      if (idx !== -1) localStore.projects[idx] = project;
+      saveLocalStore(localStore);
 
       // Broadcast milestone status update notification
       createAndBroadcastNotification({
@@ -4348,15 +4668,11 @@ async function startServer() {
   });
 
   app.post('/api/projects/:id/documents', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to upload documents to this project.' });
     }
 
@@ -4368,21 +4684,23 @@ async function startServer() {
       uploadedBy: actor.fullName,
       timestamp: new Date().toISOString().split('T')[0],
     });
-    saveLocalStore(localStore);
+
     await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    else localStore.projects.push(project);
+    saveLocalStore(localStore);
+
     res.json({ ok: true, project });
   });
 
   app.post('/api/projects/:id/messages', requireAuth, async (req, res) => {
-    const project = localStore.projects.find((p) => p.id === req.params.id);
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    const actor = req.user!;
-    const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    const isCreator = project.createdById === actor.id || project.createdByEmail?.toLowerCase() === actor.email.toLowerCase();
-    const isParticipant = (project.participants || []).some((p) => p.id === actor.id);
-
-    if (!isAdmin && !isCreator && !isParticipant) {
+    if (!userCanModifyProject(project, actor)) {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to post messages in this project.' });
     }
 
@@ -4395,8 +4713,14 @@ async function startServer() {
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
-    saveLocalStore(localStore);
+
     await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    else localStore.projects.push(project);
+    saveLocalStore(localStore);
+
     res.json({ ok: true, project });
   });
 
@@ -4404,7 +4728,7 @@ async function startServer() {
   // 19. FRONTIER BENCHMARK EDIT / UPDATE API
   // --------------------------------------------------------------------------
   app.patch('/api/frontiers/:id', requireAdmin, async (req, res) => {
-    const frontier = localStore.frontiers.find((f) => f.id === req.params.id);
+    const frontier = await getSupabaseFrontierById(req.params.id);
     if (!frontier) {
       return res.status(404).json({ error: 'Frontier benchmark standard not found.' });
     }
@@ -4433,6 +4757,11 @@ async function startServer() {
     if (constraints) frontier.constraints = constraints;
     if (maturityTrl) frontier.maturityTrl = maturityTrl;
 
+    await syncFrontierToCatalog(frontier);
+
+    const idx = (localStore.frontiers || []).findIndex((f) => f.id === frontier.id);
+    if (idx !== -1) localStore.frontiers[idx] = frontier;
+    else localStore.frontiers.push(frontier);
     saveLocalStore(localStore);
 
     const notif = createAndBroadcastNotification({
@@ -4448,7 +4777,7 @@ async function startServer() {
       },
     });
 
-    const state = await fetchFullWorkspaceState();
+    const state = await fetchFullWorkspaceState(req.user?.id || null);
     res.json({ ok: true, frontier, notification: notif, state });
   });
 

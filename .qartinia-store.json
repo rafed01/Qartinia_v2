@@ -115,6 +115,79 @@
   ],
   "projects": [
     {
+      "id": "prj-1790897371815",
+      "code": "QRT-RM-1652",
+      "title": "800V Silicon Carbide (SiC) 250 kW Traction Inverter × ETH Zurich Transfer / Swiss Deep-Tech Spin-Off",
+      "domain": "Power Electronics & E-Mobility Drivetrain",
+      "messages": [],
+      "createdAt": "2026-10-01",
+      "documents": [],
+      "ndaStatus": "Executed",
+      "legalStage": "Scoping & Mutual NDA",
+      "milestones": [],
+      "targetSpec": "WLTP Combined Drive-Cycle Efficiency: 99.0 % (800V DC bus (650V–920V), 250 kW peak power, 105°C water-glycol coolant, 48 kHz PWM)",
+      "ipFramework": "Background IP Segregated",
+      "participants": [
+        {
+          "id": "part-1790897371815",
+          "name": "Dr. D. Bortis & Prof. J. Kolar",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "ETH Zurich Transfer / Swiss Deep-Tech Spin-Off"
+        }
+      ],
+      "problemStatement": "Closing the frontier gap on 800V Silicon Carbide (SiC) 250 kW Traction Inverter (800V DC bus (650V–920V), 250 kW peak power, 105°C water-glycol coolant, 48 kHz PWM) via Closed-Loop dI/dt and dV/dt Real-Time Gate Trajectory Controller for Wide-Bandgap Half-Bridges. Provides the licensable foreground IP required to push efficiency from 98.1% toward the 99.0% target.",
+      "publicationPolicy": "30-Day Pre-Publication Patent Review",
+      "originatingFrontierId": "frt-bp-800v-sic",
+      "trainingIsolationVerified": true,
+      "createdById": "091e8ba5-4ed0-4aa4-b8dd-c6f29088e170",
+      "createdByOrg": "QRT-RM-1652"
+    },
+    {
+      "id": "prj-1791536029026",
+      "code": "QRT-RM-4502",
+      "title": "Top-Secret 1200V SiC Traction Module Room",
+      "domain": "E-Mobility Traction",
+      "messages": [],
+      "createdAt": "2026-10-09",
+      "documents": [],
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Stage 02 Bilateral NDA Executed",
+      "milestones": [],
+      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
+      "ipFramework": "Background IP Segregated",
+      "createdByOrg": "nexora",
+      "participants": [
+        {
+          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
+          "name": "rana riahi",
+          "role": "Industry Lead",
+          "accessScope": "Full Control",
+          "organization": "nexora"
+        },
+        {
+          "id": "part-1791536029026",
+          "name": "OEM Partner Lead",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Automotive OEM"
+        },
+        {
+          "id": "part-1791536029790",
+          "name": "dr.lukas.weber",
+          "role": "Hardware Reliability Lead",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Siemens Energy R&D"
+        }
+      ],
+      "createdByEmail": "rana.riahi90@yahoo.fr",
+      "problemStatement": "High-density soft-switching inverter for automotive OEM",
+      "publicationState": "draft",
+      "publicationPolicy": "Strict NDA - No Public Disclosure",
+      "trainingIsolationVerified": true
+    },
+    {
       "id": "prj-bp-800v-sic",
       "code": "QRT-RM-800V",
       "title": "800V SiC Soft-Switching Inverter Co-Development (OEM × ETH Zurich PES × Fraunhofer IISB)",
@@ -257,7 +330,9 @@
       "problemStatement": "Close the 1.3% WLTP efficiency gap on the 800V / 250 kW SiC traction inverter under 105°C liquid coolant and CISPR 25 Class 5 EMI constraints by integrating active gate-shaping IP and low-inductance Ag-sintered packaging.",
       "publicationPolicy": "30-Day Pre-Publication Patent Review",
       "originatingFrontierId": "frt-bp-800v-sic",
-      "trainingIsolationVerified": true
+      "trainingIsolationVerified": true,
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
+      "createdByOrg": "QRT-RM-800V"
     },
     {
       "id": "prj-1791130410031",
@@ -284,33 +359,96 @@
       "problemStatement": "Represents the absolute ceiling for theoretical JHG performance (Operating Conditions: Extreme temperature variance within defined ou envelope)",
       "publicationPolicy": "30-Day Pre-Publication Patent Review",
       "originatingFrontierId": "",
+      "trainingIsolationVerified": true,
+      "createdById": "9c2431d2-7c58-4ebc-bf02-35c8d5fd9b41",
+      "createdByOrg": "QRT-RM-6210"
+    },
+    {
+      "id": "prj-1791536003777",
+      "code": "QRT-RM-5128",
+      "title": "Top-Secret 1200V SiC Traction Module Room",
+      "domain": "E-Mobility Traction",
+      "messages": [],
+      "createdAt": "2026-10-09",
+      "documents": [],
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Stage 02 Bilateral NDA Executed",
+      "milestones": [],
+      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
+      "ipFramework": "Background IP Segregated",
+      "createdByOrg": "nexora",
+      "participants": [
+        {
+          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
+          "name": "rana riahi",
+          "role": "Industry Lead",
+          "accessScope": "Full Control",
+          "organization": "nexora"
+        },
+        {
+          "id": "part-1791536003777",
+          "name": "OEM Partner Lead",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Automotive OEM"
+        },
+        {
+          "id": "part-1791536004617",
+          "name": "dr.lukas.weber",
+          "role": "Hardware Reliability Lead",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Siemens Energy R&D"
+        }
+      ],
+      "createdByEmail": "rana.riahi90@yahoo.fr",
+      "problemStatement": "High-density soft-switching inverter for automotive OEM",
+      "publicationState": "draft",
+      "publicationPolicy": "Strict NDA - No Public Disclosure",
       "trainingIsolationVerified": true
     },
     {
-      "id": "prj-1790897371815",
-      "code": "QRT-RM-1652",
-      "title": "800V Silicon Carbide (SiC) 250 kW Traction Inverter × ETH Zurich Transfer / Swiss Deep-Tech Spin-Off",
-      "domain": "Power Electronics & E-Mobility Drivetrain",
+      "id": "prj-1791535924311",
+      "code": "QRT-RM-5578",
+      "title": "Top-Secret 1200V SiC Traction Module Room",
+      "domain": "E-Mobility Traction",
       "messages": [],
-      "createdAt": "2026-10-01",
+      "createdAt": "2026-10-09",
       "documents": [],
-      "ndaStatus": "Executed",
-      "legalStage": "Scoping & Mutual NDA",
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Stage 02 Bilateral NDA Executed",
       "milestones": [],
-      "targetSpec": "WLTP Combined Drive-Cycle Efficiency: 99.0 % (800V DC bus (650V–920V), 250 kW peak power, 105°C water-glycol coolant, 48 kHz PWM)",
+      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
       "ipFramework": "Background IP Segregated",
+      "createdByOrg": "nexora",
       "participants": [
         {
-          "id": "part-1790897371815",
-          "name": "Dr. D. Bortis & Prof. J. Kolar",
+          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
+          "name": "rana riahi",
+          "role": "Industry Lead",
+          "accessScope": "Full Control",
+          "organization": "nexora"
+        },
+        {
+          "id": "part-1791535924311",
+          "name": "OEM Partner Lead",
           "role": "University / Lab PI",
           "accessScope": "Protected Project Boundary",
-          "organization": "ETH Zurich Transfer / Swiss Deep-Tech Spin-Off"
+          "organization": "Automotive OEM"
+        },
+        {
+          "id": "part-1791535925181",
+          "name": "dr.lukas.weber",
+          "role": "Hardware Reliability Lead",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Siemens Energy R&D"
         }
       ],
-      "problemStatement": "Closing the frontier gap on 800V Silicon Carbide (SiC) 250 kW Traction Inverter (800V DC bus (650V–920V), 250 kW peak power, 105°C water-glycol coolant, 48 kHz PWM) via Closed-Loop dI/dt and dV/dt Real-Time Gate Trajectory Controller for Wide-Bandgap Half-Bridges. Provides the licensable foreground IP required to push efficiency from 98.1% toward the 99.0% target.",
-      "publicationPolicy": "30-Day Pre-Publication Patent Review",
-      "originatingFrontierId": "frt-bp-800v-sic",
+      "createdByEmail": "rana.riahi90@yahoo.fr",
+      "problemStatement": "High-density soft-switching inverter for automotive OEM",
+      "publicationState": "draft",
+      "publicationPolicy": "Strict NDA - No Public Disclosure",
       "trainingIsolationVerified": true
     }
   ],
@@ -397,13 +535,212 @@
   ],
   "suppliers": [
     {
+      "id": "sup-rogers-curamik",
+      "name": "Rogers Corporation — Curamik Advanced Electronics Solutions",
+      "tier": "Tier 1 Certified",
+      "domain": "Direct Bonded Copper (DBC) & Active Metal Brazed (AMB) Substrates",
+      "country": "Germany / USA",
+      "verified": true,
+      "components": [
+        {
+          "id": "cmp-rogers-amb-perf",
+          "name": "Curamik Performance Si3N4 AMB Power Substrate",
+          "category": "Substrates & Packaging",
+          "keyMetrics": {
+            "Copper Thickness": "0.50 mm",
+            "Dielectric Strength": ">15 kV/mm",
+            "Thermal Conductivity": "90 W/(m·K)",
+            "Thermal Cycle Endurance": ">200,000 cycles"
+          },
+          "partNumber": "CUR-SN-AMB-050",
+          "specSummary": "Silicon Nitride AMB with 0.5mm / 0.8mm etched copper circuitry, 90 W/mK",
+          "leadTimeWeeks": 6,
+          "sampleAvailable": true
+        }
+      ],
+      "description": "Industry standard in Curamik Ceramic Substrates engineered for extreme power density, thermal shock durability, and high partial-discharge resistance.",
+      "capabilities": [
+        "Si3N4 and AlN AMB substrate brazing with dimpled copper",
+        "Integrated pin-fin direct liquid cooling baseplates",
+        "Automated optical void scanning and partial discharge screening"
+      ],
+      "contactEmail": "curamik-sales@rogerscorp.com",
+      "headquarters": "Eschenbach, Germany / Chandler, AZ",
+      "certifications": [
+        "ISO 9001",
+        "IATF 16949",
+        "ISO 14001",
+        "AQG 324"
+      ],
+      "minOrderQuantity": "100 pcs"
+    },
+    {
+      "id": "sup-wolfspeed-sic",
+      "name": "Wolfspeed Inc. — Silicon Carbide Fabs & Power Modules",
+      "tier": "Tier 1 Certified",
+      "domain": "Silicon Carbide Wafers, Bare Dies & Half-Bridge Modules",
+      "country": "United States",
+      "verified": true,
+      "components": [
+        {
+          "id": "cmp-wolf-xm3",
+          "name": "XM3 1200V / 450A Silicon Carbide Half-Bridge Module",
+          "category": "Power Semiconductor Module",
+          "keyMetrics": {
+            "Rds(on) @ 25°C": "11 mΩ",
+            "Inductance Lloop": "4.9 nH",
+            "Breakdown Voltage": "1200 V",
+            "Continuous Current": "450 A"
+          },
+          "partNumber": "CAB011M12FM3",
+          "specSummary": "1200V / 11 mΩ half-bridge, 175°C junction temp, terminal direct liquid-cooling",
+          "datasheetUrl": "https://wolfspeed.com/xm3-spec",
+          "leadTimeWeeks": 5,
+          "sampleAvailable": true
+        }
+      ],
+      "description": "Pioneer of pure-play Silicon Carbide materials and high-power XM3 half-bridge modules optimized for ultra-dense EV motor drives and solar inverters.",
+      "capabilities": [
+        "200mm SiC Mohawk Valley mega-fab production",
+        "Ultra-low inductance XM3 housing (<4.9 nH)",
+        "Integrated temperature sensing and Kelvin source connections"
+      ],
+      "contactEmail": "automotive@wolfspeed.com",
+      "headquarters": "Durham, NC / Marcy, NY",
+      "certifications": [
+        "IATF 16949",
+        "AEC-Q101",
+        "ISO 9001",
+        "AQG 324"
+      ],
+      "minOrderQuantity": "50 pcs"
+    },
+    {
+      "id": "sup-rohm-sic",
+      "name": "ROHM Semiconductor — SiC Power Devices",
+      "tier": "Tier 2 Qualified",
+      "domain": "Wide-Bandgap Discrete Transistors & Bare Dies",
+      "country": "Japan",
+      "verified": true,
+      "components": [
+        {
+          "id": "cmp-rohm-gen4-die",
+          "name": "Gen-4 Automotive 750V / 1200V SiC MOSFET Bare Die",
+          "category": "Bare Die / Transistor",
+          "keyMetrics": {
+            "Rds(on)": "18 mΩ",
+            "Backside Metal": "Ti-Ni-Ag (Sinterable)",
+            "Die Dimensions": "3.8 × 3.8 mm",
+            "Breakdown Voltage": "1200 V"
+          },
+          "partNumber": "SCT4018DE",
+          "specSummary": "1200V, Rds(on)=18 mΩ bare die with Ag-sinter backside metallization",
+          "leadTimeWeeks": 10,
+          "sampleAvailable": true
+        }
+      ],
+      "description": "Pioneer in 4th Generation Trench Gate SiC MOSFETs delivering 40% reduction in ON resistance without sacrificing gate oxide reliability.",
+      "capabilities": [
+        "4-inch & 6-inch SiC wafer fab",
+        "Bare die supply with Ag-sinter backside metallization",
+        "Automotive qualification screening"
+      ],
+      "contactEmail": "sic-solutions@rohm.com",
+      "headquarters": "Kyoto",
+      "certifications": [
+        "AEC-Q101",
+        "ISO 9001",
+        "ISO 14001"
+      ],
+      "minOrderQuantity": "250 pcs"
+    },
+    {
+      "id": "sup-kyocera-amb",
+      "name": "Kyocera Fineceramics Europe — High-Reliability Substrates",
+      "tier": "Tier 1 Certified",
+      "domain": "Advanced Ceramic Substrates & Active Metal Brazing",
+      "country": "Germany / Japan",
+      "verified": true,
+      "components": [
+        {
+          "id": "cmp-kyo-amb-si3n4",
+          "name": "High-Flexural Si3N4 AMB Double-Sided Copper Substrate",
+          "category": "Substrates & Packaging",
+          "keyMetrics": {
+            "Copper Thickness": "0.50 mm / 0.80 mm",
+            "Flexural Strength": "850 MPa",
+            "Power Cycling Life": ">150,000 cycles",
+            "Thermal Conductivity": "90 W/(m·K)"
+          },
+          "partNumber": "KY-SN-AMB-032",
+          "specSummary": "Bending strength 850 MPa, Thermal conductivity 90 W/(m·K), 0.32mm Si3N4 core",
+          "leadTimeWeeks": 8,
+          "sampleAvailable": true
+        }
+      ],
+      "description": "Premier manufacturer of Silicon Nitride (Si3N4) and Aluminum Nitride (AlN) substrates featuring Active Metal Brazing (AMB) with thick copper foil for thermal cycling longevity.",
+      "capabilities": [
+        "Si3N4 AMB substrate metallization with 0.8mm Cu",
+        "Laser drilling and vacuum brazing",
+        "Thermal shock testing > 300,000 cycles (-40°C to +150°C)"
+      ],
+      "contactEmail": "ceramics-power@kyocera.de",
+      "headquarters": "Mannheim / Kyoto",
+      "certifications": [
+        "ISO 9001",
+        "IATF 16949",
+        "AQG 324 Compliant"
+      ],
+      "minOrderQuantity": "50 pcs"
+    },
+    {
       "id": "sup-infineon-sic",
       "name": "Infineon Technologies AG — Power & Sensor Systems",
-      "country": "Germany",
-      "headquarters": "Neubiberg / Villach",
-      "domain": "Wide-Bandgap Semiconductors & Power Electronics",
       "tier": "Tier 1 Certified",
+      "domain": "Wide-Bandgap Semiconductors & Power Electronics",
+      "country": "Germany",
+      "verified": true,
+      "components": [
+        {
+          "id": "cmp-inf-fs03",
+          "name": "CoolSiC 1200V Gen-2 Automotive Six-Pack Module",
+          "category": "Power Semiconductor Module",
+          "keyMetrics": {
+            "Rds(on) @ 25°C": "2.6 mΩ",
+            "Breakdown Voltage": "1200 V",
+            "Peak Inverter Power": "250 kW",
+            "Parasitic Stray Inductance": "1.75 nH"
+          },
+          "partNumber": "FS03MR12A8MA2B",
+          "specSummary": "1200V / 450A, Rds(on)=2.6 mΩ, Tvj,op=175°C, Low-inductance DBC",
+          "datasheetUrl": "https://infineon.com/coolsic-gen2-spec",
+          "leadTimeWeeks": 6,
+          "sampleAvailable": true
+        },
+        {
+          "id": "cmp-inf-1ed3",
+          "name": "EiceDRIVER Enhanced Isolated Dual-Channel Gate Driver ASIC",
+          "category": "Gate Driver IC",
+          "keyMetrics": {
+            "CMTI": ">150 kV/μs",
+            "Isolation Rating": "5.7 kVrms",
+            "Propagation Delay": "<45 ns",
+            "Peak Output Current": "15.0 A"
+          },
+          "partNumber": "1ED3491MC12M",
+          "specSummary": "5.7 kVrms isolation, Active Miller Clamp, 15A rail-to-rail peak current",
+          "leadTimeWeeks": 4,
+          "sampleAvailable": true
+        }
+      ],
       "description": "Global automotive & industrial market leader in Silicon Carbide (SiC) trench MOSFETs, GaN power stages, and AEC-Q101 qualified traction modules.",
+      "capabilities": [
+        "1200V / 2000V SiC Trench Epitaxy & Wafer Processing",
+        "Copper-clip interconnect packaging (<1.8 nH loop inductance)",
+        "Automotive PPAP Level 3 Qualification & High-Volume Fab"
+      ],
+      "contactEmail": "automotive-sic@infineon.com",
+      "headquarters": "Neubiberg / Villach",
       "certifications": [
         "IATF 16949",
         "ISO 9001",
@@ -411,214 +748,140 @@
         "AQG-324",
         "AEC-Q101"
       ],
-      "capabilities": [
-        "1200V / 2000V SiC Trench Epitaxy & Wafer Processing",
-        "Copper-clip interconnect packaging (<1.8 nH loop inductance)",
-        "Automotive PPAP Level 3 Qualification & High-Volume Fab"
-      ],
-      "contactEmail": "automotive-sic@infineon.com",
-      "minOrderQuantity": "100 pcs (Engineering Samples)",
-      "verified": true,
-      "components": [
-        {
-          "id": "cmp-inf-fs03",
-          "name": "CoolSiC 1200V Gen-2 Automotive Six-Pack Module",
-          "partNumber": "FS03MR12A8MA2B",
-          "category": "Power Semiconductor Module",
-          "specSummary": "1200V / 450A, Rds(on)=2.6 mΩ, Tvj,op=175°C, Low-inductance DBC",
-          "keyMetrics": {
-            "Breakdown Voltage": "1200 V",
-            "Rds(on) @ 25°C": "2.6 mΩ",
-            "Parasitic Stray Inductance": "1.75 nH",
-            "Peak Inverter Power": "250 kW"
-          },
-          "leadTimeWeeks": 6,
-          "sampleAvailable": true,
-          "datasheetUrl": "https://infineon.com/coolsic-gen2-spec"
-        },
-        {
-          "id": "cmp-inf-1ed3",
-          "name": "EiceDRIVER Enhanced Isolated Dual-Channel Gate Driver ASIC",
-          "partNumber": "1ED3491MC12M",
-          "category": "Gate Driver IC",
-          "specSummary": "5.7 kVrms isolation, Active Miller Clamp, 15A rail-to-rail peak current",
-          "keyMetrics": {
-            "Isolation Rating": "5.7 kVrms",
-            "Peak Output Current": "15.0 A",
-            "Propagation Delay": "<45 ns",
-            "CMTI": ">150 kV/μs"
-          },
-          "leadTimeWeeks": 4,
-          "sampleAvailable": true
-        }
-      ]
-    },
-    {
-      "id": "sup-kyocera-amb",
-      "name": "Kyocera Fineceramics Europe — High-Reliability Substrates",
-      "country": "Germany / Japan",
-      "headquarters": "Mannheim / Kyoto",
-      "domain": "Advanced Ceramic Substrates & Active Metal Brazing",
-      "tier": "Tier 1 Certified",
-      "description": "Premier manufacturer of Silicon Nitride (Si3N4) and Aluminum Nitride (AlN) substrates featuring Active Metal Brazing (AMB) with thick copper foil for thermal cycling longevity.",
-      "certifications": [
-        "ISO 9001",
-        "IATF 16949",
-        "AQG 324 Compliant"
-      ],
-      "capabilities": [
-        "Si3N4 AMB substrate metallization with 0.8mm Cu",
-        "Laser drilling and vacuum brazing",
-        "Thermal shock testing > 300,000 cycles (-40°C to +150°C)"
-      ],
-      "contactEmail": "ceramics-power@kyocera.de",
-      "minOrderQuantity": "50 pcs",
-      "verified": true,
-      "components": [
-        {
-          "id": "cmp-kyo-amb-si3n4",
-          "name": "High-Flexural Si3N4 AMB Double-Sided Copper Substrate",
-          "partNumber": "KY-SN-AMB-032",
-          "category": "Substrates & Packaging",
-          "specSummary": "Bending strength 850 MPa, Thermal conductivity 90 W/(m·K), 0.32mm Si3N4 core",
-          "keyMetrics": {
-            "Thermal Conductivity": "90 W/(m·K)",
-            "Flexural Strength": "850 MPa",
-            "Copper Thickness": "0.50 mm / 0.80 mm",
-            "Power Cycling Life": ">150,000 cycles"
-          },
-          "leadTimeWeeks": 8,
-          "sampleAvailable": true
-        }
-      ]
-    },
-    {
-      "id": "sup-rohm-sic",
-      "name": "ROHM Semiconductor — SiC Power Devices",
-      "country": "Japan",
-      "headquarters": "Kyoto",
-      "domain": "Wide-Bandgap Discrete Transistors & Bare Dies",
-      "tier": "Tier 2 Qualified",
-      "description": "Pioneer in 4th Generation Trench Gate SiC MOSFETs delivering 40% reduction in ON resistance without sacrificing gate oxide reliability.",
-      "certifications": [
-        "AEC-Q101",
-        "ISO 9001",
-        "ISO 14001"
-      ],
-      "capabilities": [
-        "4-inch & 6-inch SiC wafer fab",
-        "Bare die supply with Ag-sinter backside metallization",
-        "Automotive qualification screening"
-      ],
-      "contactEmail": "sic-solutions@rohm.com",
-      "minOrderQuantity": "250 pcs",
-      "verified": true,
-      "components": [
-        {
-          "id": "cmp-rohm-gen4-die",
-          "name": "Gen-4 Automotive 750V / 1200V SiC MOSFET Bare Die",
-          "partNumber": "SCT4018DE",
-          "category": "Bare Die / Transistor",
-          "specSummary": "1200V, Rds(on)=18 mΩ bare die with Ag-sinter backside metallization",
-          "keyMetrics": {
-            "Breakdown Voltage": "1200 V",
-            "Rds(on)": "18 mΩ",
-            "Die Dimensions": "3.8 × 3.8 mm",
-            "Backside Metal": "Ti-Ni-Ag (Sinterable)"
-          },
-          "leadTimeWeeks": 10,
-          "sampleAvailable": true
-        }
-      ]
-    },
-    {
-      "id": "sup-wolfspeed-sic",
-      "name": "Wolfspeed Inc. — Silicon Carbide Fabs & Power Modules",
-      "country": "United States",
-      "headquarters": "Durham, NC / Marcy, NY",
-      "domain": "Silicon Carbide Wafers, Bare Dies & Half-Bridge Modules",
-      "tier": "Tier 1 Certified",
-      "description": "Pioneer of pure-play Silicon Carbide materials and high-power XM3 half-bridge modules optimized for ultra-dense EV motor drives and solar inverters.",
-      "certifications": [
-        "IATF 16949",
-        "AEC-Q101",
-        "ISO 9001",
-        "AQG 324"
-      ],
-      "capabilities": [
-        "200mm SiC Mohawk Valley mega-fab production",
-        "Ultra-low inductance XM3 housing (<4.9 nH)",
-        "Integrated temperature sensing and Kelvin source connections"
-      ],
-      "contactEmail": "automotive@wolfspeed.com",
-      "minOrderQuantity": "50 pcs",
-      "verified": true,
-      "components": [
-        {
-          "id": "cmp-wolf-xm3",
-          "name": "XM3 1200V / 450A Silicon Carbide Half-Bridge Module",
-          "partNumber": "CAB011M12FM3",
-          "category": "Power Semiconductor Module",
-          "specSummary": "1200V / 11 mΩ half-bridge, 175°C junction temp, terminal direct liquid-cooling",
-          "keyMetrics": {
-            "Breakdown Voltage": "1200 V",
-            "Rds(on) @ 25°C": "11 mΩ",
-            "Inductance Lloop": "4.9 nH",
-            "Continuous Current": "450 A"
-          },
-          "leadTimeWeeks": 5,
-          "sampleAvailable": true,
-          "datasheetUrl": "https://wolfspeed.com/xm3-spec"
-        }
-      ]
-    },
-    {
-      "id": "sup-rogers-curamik",
-      "name": "Rogers Corporation — Curamik Advanced Electronics Solutions",
-      "country": "Germany / USA",
-      "headquarters": "Eschenbach, Germany / Chandler, AZ",
-      "domain": "Direct Bonded Copper (DBC) & Active Metal Brazed (AMB) Substrates",
-      "tier": "Tier 1 Certified",
-      "description": "Industry standard in Curamik Ceramic Substrates engineered for extreme power density, thermal shock durability, and high partial-discharge resistance.",
-      "certifications": [
-        "ISO 9001",
-        "IATF 16949",
-        "ISO 14001",
-        "AQG 324"
-      ],
-      "capabilities": [
-        "Si3N4 and AlN AMB substrate brazing with dimpled copper",
-        "Integrated pin-fin direct liquid cooling baseplates",
-        "Automated optical void scanning and partial discharge screening"
-      ],
-      "contactEmail": "curamik-sales@rogerscorp.com",
-      "minOrderQuantity": "100 pcs",
-      "verified": true,
-      "components": [
-        {
-          "id": "cmp-rogers-amb-perf",
-          "name": "Curamik Performance Si3N4 AMB Power Substrate",
-          "partNumber": "CUR-SN-AMB-050",
-          "category": "Substrates & Packaging",
-          "specSummary": "Silicon Nitride AMB with 0.5mm / 0.8mm etched copper circuitry, 90 W/mK",
-          "keyMetrics": {
-            "Thermal Conductivity": "90 W/(m·K)",
-            "Dielectric Strength": ">15 kV/mm",
-            "Thermal Cycle Endurance": ">200,000 cycles",
-            "Copper Thickness": "0.50 mm"
-          },
-          "leadTimeWeeks": 6,
-          "sampleAvailable": true
-        }
-      ]
+      "minOrderQuantity": "100 pcs (Engineering Samples)"
     }
   ],
   "labs": [
     {
+      "id": "lab-imec-power",
+      "name": "IMEC — Power & Wide-Bandgap Semiconductor Pilot Line",
+      "location": "Leuven, Belgium",
+      "verified": true,
+      "description": "Premier European pilot line for wide-bandgap and ultra-wide-bandgap power semiconductor device physics, defect spectroscopy, and wafer-level reliability screening.",
+      "institution": "Interuniversity Microelectronics Centre (IMEC)",
+      "equipmentList": [
+        {
+          "id": "eq-imec-1",
+          "name": "Semi-Automated Cryogenic & High-Temp Wafer Prober",
+          "model": "FormFactor Summit 12000 Probe Station",
+          "manufacturer": "FormFactor Inc.",
+          "hourlyRateEst": "€290 / hour",
+          "operatingRange": "-60°C to +300°C, triaxial Kelvin probing up to 10 kV / 100A pulse",
+          "sampleThroughput": "Full 200mm wafer mapping in 3 hours",
+          "standardsCompliant": [
+            "SEMI E10",
+            "IEC 60747"
+          ]
+        }
+      ],
+      "leadScientist": "Dr. Stefaan Decoutere",
+      "accreditations": [
+        "ISO 9001",
+        "European Nanotechnology Consortium Accredited"
+      ],
+      "testingDomains": [
+        "200mm/300mm GaN-on-Si Epitaxial Characterization",
+        "Ultra-Wide-Bandgap (Ga2O3 / Diamond) High-Field Breakdown",
+        "Atomic Force Microscopy (AFM) & Transmission Electron Microscopy (TEM)"
+      ],
+      "availabilityStatus": "Available"
+    },
+    {
+      "id": "lab-fraunhofer-iisb",
+      "name": "Fraunhofer IISB — Power Electronics & Cleantech Test Center",
+      "location": "Erlangen, Germany",
+      "verified": true,
+      "description": "Specialized industrial laboratory for semiconductor packaging, active thermal shock cycling (ΔTj = 100K), and void-free Ag-sintering qualification according to AQG 324.",
+      "institution": "Fraunhofer Institute for Integrated Systems and Device Technology",
+      "equipmentList": [
+        {
+          "id": "eq-fraun-1",
+          "name": "Automated Power Cycling System with Tj Real-Time Sensing",
+          "model": "Mentor Graphics Micred Power Tester 1500A",
+          "manufacturer": "Siemens EDA / Mentor Graphics",
+          "hourlyRateEst": "€240 / hour",
+          "operatingRange": "1500A pulse current, automated Vds(on) measurement during operation",
+          "sampleThroughput": "100,000 cycles in 5 days continuous run",
+          "standardsCompliant": [
+            "AQG 324",
+            "IEC 60747-9"
+          ]
+        },
+        {
+          "id": "eq-fraun-2",
+          "name": "High-Resolution Scanning Acoustic Microscope (C-SAM)",
+          "model": "Sonix Echo Ultrasonic Imaging System",
+          "manufacturer": "Sonix Inc.",
+          "hourlyRateEst": "€210 / hour",
+          "operatingRange": "15 MHz – 300 MHz transducers, 5 μm void detection resolution",
+          "sampleThroughput": "12 power modules / hour scan rate",
+          "standardsCompliant": [
+            "J-STD-035",
+            "MIL-STD-883"
+          ]
+        }
+      ],
+      "leadScientist": "Dr. Martin März",
+      "accreditations": [
+        "DAkkS Accredited",
+        "AQG 324 Recognized Test Lab"
+      ],
+      "testingDomains": [
+        "Power Module Thermal Cycling & Lifetime Testing",
+        "Double-Sided Sintering & Interconnect Shear Strength",
+        "Scanning Acoustic Microscopy (SAM) Non-Destructive Flaw Inspection"
+      ],
+      "availabilityStatus": "Booking 2-3 Weeks Out"
+    },
+    {
       "id": "lab-eth-pes",
       "name": "ETH Zurich — Power Electronic Systems Laboratory (PES)",
-      "institution": "Swiss Federal Institute of Technology (ETH Zurich)",
       "location": "Zurich, Switzerland",
+      "verified": true,
+      "description": "World-renowned academic and industrial test laboratory equipped with ultra-high-bandwidth dynamometers, calorimetric loss measurement rigs, and GaN/SiC power analyzers.",
+      "institution": "Swiss Federal Institute of Technology (ETH Zurich)",
+      "equipmentList": [
+        {
+          "id": "eq-eth-1",
+          "name": "300 kW Liquid-Cooled Automotive Dynamometer Bench",
+          "model": "AVL DynoPrime 300",
+          "manufacturer": "AVL List GmbH",
+          "hourlyRateEst": "€320 / hour",
+          "operatingRange": "0–20,000 RPM, 650 Nm, 0–1000V DC link, 105°C coolant inlet",
+          "sampleThroughput": "Full WLTP drive-cycle sweep in 4 hours",
+          "standardsCompliant": [
+            "ECE R85",
+            "ISO 21782"
+          ]
+        },
+        {
+          "id": "eq-eth-2",
+          "name": "High-Bandwidth Multi-Channel Power Analyzer",
+          "model": "Yokogawa WT5000 Precision Power Analyzer",
+          "manufacturer": "Yokogawa Electric",
+          "hourlyRateEst": "€180 / hour",
+          "operatingRange": "10 MHz bandwidth, 0.03% basic power accuracy, 7 input elements",
+          "sampleThroughput": "Real-time 1 MS/s continuous logging",
+          "standardsCompliant": [
+            "IEC 61000-4-7",
+            "IEEE 1459"
+          ]
+        },
+        {
+          "id": "eq-eth-3",
+          "name": "Semi-Anechoic EMI Chamber for Inverters",
+          "model": "Rohde & Schwarz SAC-3 Plus",
+          "manufacturer": "Rohde & Schwarz",
+          "hourlyRateEst": "€280 / hour",
+          "operatingRange": "9 kHz – 6 GHz, CISPR 25 Class 5 automotive compliant",
+          "sampleThroughput": "Pre-compliance frequency scan in 2 hours",
+          "standardsCompliant": [
+            "CISPR 25",
+            "ISO 11452-2"
+          ]
+        }
+      ],
+      "leadScientist": "Prof. Dr. Johann W. Kolar",
       "accreditations": [
         "ISO/IEC 17025 Accredited",
         "Swiss National Science Foundation Partner"
@@ -629,183 +892,22 @@
         "CISPR 25 Class 5 Conducted & Radiated EMI",
         "Zero-Voltage-Switching (ZVS) Benchmarking"
       ],
-      "leadScientist": "Prof. Dr. Johann W. Kolar",
-      "availabilityStatus": "Available",
-      "description": "World-renowned academic and industrial test laboratory equipped with ultra-high-bandwidth dynamometers, calorimetric loss measurement rigs, and GaN/SiC power analyzers.",
-      "verified": true,
-      "equipmentList": [
-        {
-          "id": "eq-eth-1",
-          "name": "300 kW Liquid-Cooled Automotive Dynamometer Bench",
-          "model": "AVL DynoPrime 300",
-          "manufacturer": "AVL List GmbH",
-          "operatingRange": "0–20,000 RPM, 650 Nm, 0–1000V DC link, 105°C coolant inlet",
-          "standardsCompliant": [
-            "ECE R85",
-            "ISO 21782"
-          ],
-          "sampleThroughput": "Full WLTP drive-cycle sweep in 4 hours",
-          "hourlyRateEst": "€320 / hour"
-        },
-        {
-          "id": "eq-eth-2",
-          "name": "High-Bandwidth Multi-Channel Power Analyzer",
-          "model": "Yokogawa WT5000 Precision Power Analyzer",
-          "manufacturer": "Yokogawa Electric",
-          "operatingRange": "10 MHz bandwidth, 0.03% basic power accuracy, 7 input elements",
-          "standardsCompliant": [
-            "IEC 61000-4-7",
-            "IEEE 1459"
-          ],
-          "sampleThroughput": "Real-time 1 MS/s continuous logging",
-          "hourlyRateEst": "€180 / hour"
-        },
-        {
-          "id": "eq-eth-3",
-          "name": "Semi-Anechoic EMI Chamber for Inverters",
-          "model": "Rohde & Schwarz SAC-3 Plus",
-          "manufacturer": "Rohde & Schwarz",
-          "operatingRange": "9 kHz – 6 GHz, CISPR 25 Class 5 automotive compliant",
-          "standardsCompliant": [
-            "CISPR 25",
-            "ISO 11452-2"
-          ],
-          "sampleThroughput": "Pre-compliance frequency scan in 2 hours",
-          "hourlyRateEst": "€280 / hour"
-        }
-      ]
-    },
-    {
-      "id": "lab-fraunhofer-iisb",
-      "name": "Fraunhofer IISB — Power Electronics & Cleantech Test Center",
-      "institution": "Fraunhofer Institute for Integrated Systems and Device Technology",
-      "location": "Erlangen, Germany",
-      "accreditations": [
-        "DAkkS Accredited",
-        "AQG 324 Recognized Test Lab"
-      ],
-      "testingDomains": [
-        "Power Module Thermal Cycling & Lifetime Testing",
-        "Double-Sided Sintering & Interconnect Shear Strength",
-        "Scanning Acoustic Microscopy (SAM) Non-Destructive Flaw Inspection"
-      ],
-      "leadScientist": "Dr. Martin März",
-      "availabilityStatus": "Booking 2-3 Weeks Out",
-      "description": "Specialized industrial laboratory for semiconductor packaging, active thermal shock cycling (ΔTj = 100K), and void-free Ag-sintering qualification according to AQG 324.",
-      "verified": true,
-      "equipmentList": [
-        {
-          "id": "eq-fraun-1",
-          "name": "Automated Power Cycling System with Tj Real-Time Sensing",
-          "model": "Mentor Graphics Micred Power Tester 1500A",
-          "manufacturer": "Siemens EDA / Mentor Graphics",
-          "operatingRange": "1500A pulse current, automated Vds(on) measurement during operation",
-          "standardsCompliant": [
-            "AQG 324",
-            "IEC 60747-9"
-          ],
-          "sampleThroughput": "100,000 cycles in 5 days continuous run",
-          "hourlyRateEst": "€240 / hour"
-        },
-        {
-          "id": "eq-fraun-2",
-          "name": "High-Resolution Scanning Acoustic Microscope (C-SAM)",
-          "model": "Sonix Echo Ultrasonic Imaging System",
-          "manufacturer": "Sonix Inc.",
-          "operatingRange": "15 MHz – 300 MHz transducers, 5 μm void detection resolution",
-          "standardsCompliant": [
-            "J-STD-035",
-            "MIL-STD-883"
-          ],
-          "sampleThroughput": "12 power modules / hour scan rate",
-          "hourlyRateEst": "€210 / hour"
-        }
-      ]
-    },
-    {
-      "id": "lab-imec-power",
-      "name": "IMEC — Power & Wide-Bandgap Semiconductor Pilot Line",
-      "institution": "Interuniversity Microelectronics Centre (IMEC)",
-      "location": "Leuven, Belgium",
-      "accreditations": [
-        "ISO 9001",
-        "European Nanotechnology Consortium Accredited"
-      ],
-      "testingDomains": [
-        "200mm/300mm GaN-on-Si Epitaxial Characterization",
-        "Ultra-Wide-Bandgap (Ga2O3 / Diamond) High-Field Breakdown",
-        "Atomic Force Microscopy (AFM) & Transmission Electron Microscopy (TEM)"
-      ],
-      "leadScientist": "Dr. Stefaan Decoutere",
-      "availabilityStatus": "Available",
-      "description": "Premier European pilot line for wide-bandgap and ultra-wide-bandgap power semiconductor device physics, defect spectroscopy, and wafer-level reliability screening.",
-      "verified": true,
-      "equipmentList": [
-        {
-          "id": "eq-imec-1",
-          "name": "Semi-Automated Cryogenic & High-Temp Wafer Prober",
-          "model": "FormFactor Summit 12000 Probe Station",
-          "manufacturer": "FormFactor Inc.",
-          "operatingRange": "-60°C to +300°C, triaxial Kelvin probing up to 10 kV / 100A pulse",
-          "standardsCompliant": [
-            "SEMI E10",
-            "IEC 60747"
-          ],
-          "sampleThroughput": "Full 200mm wafer mapping in 3 hours",
-          "hourlyRateEst": "€290 / hour"
-        }
-      ]
+      "availabilityStatus": "Available"
     }
   ],
   "experts": [
     {
-      "id": "exp-johann-kolar",
-      "name": "Prof. Dr. Johann W. Kolar",
-      "title": "Professor Emeritus of Power Electronics & IEEE Fellow",
-      "affiliation": "ETH Zurich (PES Lab) / Qartinia Advisory Council",
-      "location": "Zurich, Switzerland",
-      "domainExpertise": [
-        "Ultra-Compact Inverters",
-        "Soft-Switching & Active Gate Driving",
-        "Multilevel Converters",
-        "Wide-Bandgap Pareto Optimization"
-      ],
-      "yearsExperience": 34,
-      "publicationsCount": 680,
-      "patentsCount": 195,
-      "advisoryFee": "€380 / hour",
-      "availability": "Open for Consultations",
-      "bio": "Pioneered the Vienna Rectifier and active gate-trajectory shaping for SiC/GaN power modules. Advised top European OEMs and semiconductor fabricators on next-generation 800V drivetrains.",
-      "rating": 4.98,
-      "verified": true
-    },
-    {
-      "id": "exp-martin-maerz",
-      "name": "Dr. Martin März",
-      "title": "Head of Power Electronics Packaging & Reliability",
-      "affiliation": "Fraunhofer IISB Erlangen",
-      "location": "Nuremberg / Erlangen, Germany",
-      "domainExpertise": [
-        "Ag & Cu Sintering Technologies",
-        "Low-Inductance Power Modules",
-        "AQG-324 Automotive Qualification",
-        "Thermal Impedance Extraction"
-      ],
-      "yearsExperience": 26,
-      "publicationsCount": 210,
-      "patentsCount": 48,
-      "advisoryFee": "€310 / hour",
-      "availability": "Open for Consultations",
-      "bio": "Lead author on AQG-324 qualification guidelines for automotive power electronics. Expert in double-sided cooling, micro-channel cold plates, and high-frequency EMI containment.",
-      "rating": 4.94,
-      "verified": true
-    },
-    {
       "id": "exp-elena-rostova",
+      "bio": "Specializes in structuring multi-institutional IP agreements, research consortium frameworks, and non-dilutive licensing arrangements across Swiss, German, and French universities and Tier 1 suppliers.",
       "name": "Dr. Elena Rostova",
       "title": "Senior European Patent Attorney & Deep-Tech IP Strategist",
-      "affiliation": "European Patent Office (EPO) Registered Representative",
+      "rating": 4.96,
       "location": "Munich, Germany",
+      "verified": true,
+      "advisoryFee": "€340 / hour",
+      "affiliation": "European Patent Office (EPO) Registered Representative",
+      "availability": "Open for Consultations",
+      "patentsCount": 14,
       "domainExpertise": [
         "Wide-Bandgap Patent Landscapes",
         "Freedom-to-Operate (FTO) Opinions",
@@ -813,13 +915,49 @@
         "Background IP Ring-Fencing"
       ],
       "yearsExperience": 18,
-      "publicationsCount": 35,
-      "patentsCount": 14,
-      "advisoryFee": "€340 / hour",
+      "publicationsCount": 35
+    },
+    {
+      "id": "exp-martin-maerz",
+      "bio": "Lead author on AQG-324 qualification guidelines for automotive power electronics. Expert in double-sided cooling, micro-channel cold plates, and high-frequency EMI containment.",
+      "name": "Dr. Martin März",
+      "title": "Head of Power Electronics Packaging & Reliability",
+      "rating": 4.94,
+      "location": "Nuremberg / Erlangen, Germany",
+      "verified": true,
+      "advisoryFee": "€310 / hour",
+      "affiliation": "Fraunhofer IISB Erlangen",
       "availability": "Open for Consultations",
-      "bio": "Specializes in structuring multi-institutional IP agreements, research consortium frameworks, and non-dilutive licensing arrangements across Swiss, German, and French universities and Tier 1 suppliers.",
-      "rating": 4.96,
-      "verified": true
+      "patentsCount": 48,
+      "domainExpertise": [
+        "Ag & Cu Sintering Technologies",
+        "Low-Inductance Power Modules",
+        "AQG-324 Automotive Qualification",
+        "Thermal Impedance Extraction"
+      ],
+      "yearsExperience": 26,
+      "publicationsCount": 210
+    },
+    {
+      "id": "exp-johann-kolar",
+      "bio": "Pioneered the Vienna Rectifier and active gate-trajectory shaping for SiC/GaN power modules. Advised top European OEMs and semiconductor fabricators on next-generation 800V drivetrains.",
+      "name": "Prof. Dr. Johann W. Kolar",
+      "title": "Professor Emeritus of Power Electronics & IEEE Fellow",
+      "rating": 4.98,
+      "location": "Zurich, Switzerland",
+      "verified": true,
+      "advisoryFee": "€380 / hour",
+      "affiliation": "ETH Zurich (PES Lab) / Qartinia Advisory Council",
+      "availability": "Open for Consultations",
+      "patentsCount": 195,
+      "domainExpertise": [
+        "Ultra-Compact Inverters",
+        "Soft-Switching & Active Gate Driving",
+        "Multilevel Converters",
+        "Wide-Bandgap Pareto Optimization"
+      ],
+      "yearsExperience": 34,
+      "publicationsCount": 680
     }
   ],
   "brainstormRooms": [
@@ -1074,66 +1212,28 @@
   ],
   "knowledgeItems": [
     {
-      "id": "kno-1",
-      "title": "Zero-Voltage-Switching and Active Gate Trajectory Control in 800V Automotive Traction Inverters",
-      "type": "Paper",
-      "authorsOrOrg": "Prof. Dr. Johann W. Kolar, Dr. D. Bortis (ETH Zurich PES)",
-      "doiOrRef": "10.1109/TPEL.2026.3198204",
-      "domain": "Power Electronics",
-      "abstract": "Presents a condition-aware active gate-shaping circuit topology reducing partial-load switching losses by 58% in 1200V SiC MOSFET bridges under 800V automotive drive cycles, while maintaining strict compliance with CISPR 25 Class 5 radiated EMI.",
-      "keyFindings": [
-        "Eliminates 58% of turn-on energy at partial load torque points",
-        "Active Miller clamping suppresses spurious turn-on at 50 V/ns dV/dt",
-        "Verified experimentally on 250 kW liquid-cooled dynamometer bench"
-      ],
+      "id": "kno-4",
       "tags": [
-        "SiC",
-        "800V",
-        "Active Gate Driver",
-        "WLTP",
-        "Automotive"
+        "Patent",
+        "EP4198231A1",
+        "Gate Driver",
+        "Licensing"
       ],
-      "citationsCount": 42,
+      "type": "Patent",
       "year": 2026,
-      "downloadUrl": "https://doi.org/10.1109/TPEL.2026.3198204"
-    },
-    {
-      "id": "kno-2",
-      "title": "AQG 324 — Automotive Qualification Guideline for Power Semiconductor Modules",
-      "type": "Standard",
-      "authorsOrOrg": "ECPE European Center for Power Electronics",
-      "doiOrRef": "ECPE Guideline AQG 324 Edition 04/2026",
-      "domain": "Automotive Reliability",
-      "abstract": "Defines rigorous thermal, mechanical, electrical, and environmental stress requirements for power semiconductor modules deployed in electric and hybrid road vehicle powertrains.",
+      "title": "Closed-Loop Real-Time Trajectory Controller for Wide-Bandgap Semiconductor Half-Bridges",
+      "domain": "Intellectual Property",
+      "abstract": "Discloses a feedback-assisted gate control apparatus capable of modulating instantaneous gate charging current based on real-time collector/drain dV/dt and dI/dt measurements.",
+      "doiOrRef": "EP4198231A1 / WO2026041892A1",
       "keyFindings": [
-        "Power cycling lifetime verification requirements under ΔTj = 80K and ΔTj = 100K",
-        "Vibration and mechanical shock profile standards up to 30g",
-        "Void fraction threshold standards in Ag/Cu sinter layers (<5% area)"
+        "Claims priority on dynamic impedance modulation during switching transients",
+        "Exclusive automotive field-of-use licensing option governed via Qartinia Protected Room"
       ],
-      "tags": [
-        "Standard",
-        "AQG 324",
-        "Qualification",
-        "Thermal Cycling",
-        "Automotive"
-      ],
-      "citationsCount": 185,
-      "year": 2026,
-      "downloadUrl": "https://ecpe.org/guidelines/aqg324"
+      "authorsOrOrg": "ETH Zurich Transfer / Swiss Spin-Off",
+      "citationsCount": 16
     },
     {
       "id": "kno-3",
-      "title": "SPICE & PLECS Electro-Thermal Modeling Tutorial: Stray Inductance Extraction in SiC Modules",
-      "type": "Technical Tutorial",
-      "authorsOrOrg": "Qartinia Engineering Technical Staff",
-      "doiOrRef": "QRT-TUT-2026-08",
-      "domain": "Simulation & Tools",
-      "abstract": "Step-by-step tutorial on extracting parasitic inductances from 3D CAD step files and integrating frequency-dependent loss models into SPICE and PLECS simulation environments.",
-      "keyFindings": [
-        "Ansys Q3D field solver extraction workflow for 6-pack inverter modules",
-        "Temperature-dependent lookup table formulation for conduction and switching loss",
-        "Automated double-pulse waveform comparison with bench telemetry"
-      ],
       "tags": [
         "Tutorial",
         "SPICE",
@@ -1141,32 +1241,247 @@
         "Parasitics",
         "CAD"
       ],
-      "citationsCount": 29,
-      "year": 2026
+      "type": "Technical Tutorial",
+      "year": 2026,
+      "title": "SPICE & PLECS Electro-Thermal Modeling Tutorial: Stray Inductance Extraction in SiC Modules",
+      "domain": "Simulation & Tools",
+      "abstract": "Step-by-step tutorial on extracting parasitic inductances from 3D CAD step files and integrating frequency-dependent loss models into SPICE and PLECS simulation environments.",
+      "doiOrRef": "QRT-TUT-2026-08",
+      "keyFindings": [
+        "Ansys Q3D field solver extraction workflow for 6-pack inverter modules",
+        "Temperature-dependent lookup table formulation for conduction and switching loss",
+        "Automated double-pulse waveform comparison with bench telemetry"
+      ],
+      "authorsOrOrg": "Qartinia Engineering Technical Staff",
+      "citationsCount": 29
     },
     {
-      "id": "kno-4",
-      "title": "Closed-Loop Real-Time Trajectory Controller for Wide-Bandgap Semiconductor Half-Bridges",
-      "type": "Patent",
-      "authorsOrOrg": "ETH Zurich Transfer / Swiss Spin-Off",
-      "doiOrRef": "EP4198231A1 / WO2026041892A1",
-      "domain": "Intellectual Property",
-      "abstract": "Discloses a feedback-assisted gate control apparatus capable of modulating instantaneous gate charging current based on real-time collector/drain dV/dt and dI/dt measurements.",
-      "keyFindings": [
-        "Claims priority on dynamic impedance modulation during switching transients",
-        "Exclusive automotive field-of-use licensing option governed via Qartinia Protected Room"
-      ],
+      "id": "kno-2",
       "tags": [
-        "Patent",
-        "EP4198231A1",
-        "Gate Driver",
-        "Licensing"
+        "Standard",
+        "AQG 324",
+        "Qualification",
+        "Thermal Cycling",
+        "Automotive"
       ],
-      "citationsCount": 16,
-      "year": 2026
+      "type": "Standard",
+      "year": 2026,
+      "title": "AQG 324 — Automotive Qualification Guideline for Power Semiconductor Modules",
+      "domain": "Automotive Reliability",
+      "abstract": "Defines rigorous thermal, mechanical, electrical, and environmental stress requirements for power semiconductor modules deployed in electric and hybrid road vehicle powertrains.",
+      "doiOrRef": "ECPE Guideline AQG 324 Edition 04/2026",
+      "downloadUrl": "https://ecpe.org/guidelines/aqg324",
+      "keyFindings": [
+        "Power cycling lifetime verification requirements under ΔTj = 80K and ΔTj = 100K",
+        "Vibration and mechanical shock profile standards up to 30g",
+        "Void fraction threshold standards in Ag/Cu sinter layers (<5% area)"
+      ],
+      "authorsOrOrg": "ECPE European Center for Power Electronics",
+      "citationsCount": 185
+    },
+    {
+      "id": "kno-1",
+      "tags": [
+        "SiC",
+        "800V",
+        "Active Gate Driver",
+        "WLTP",
+        "Automotive"
+      ],
+      "type": "Paper",
+      "year": 2026,
+      "title": "Zero-Voltage-Switching and Active Gate Trajectory Control in 800V Automotive Traction Inverters",
+      "domain": "Power Electronics",
+      "abstract": "Presents a condition-aware active gate-shaping circuit topology reducing partial-load switching losses by 58% in 1200V SiC MOSFET bridges under 800V automotive drive cycles, while maintaining strict compliance with CISPR 25 Class 5 radiated EMI.",
+      "doiOrRef": "10.1109/TPEL.2026.3198204",
+      "downloadUrl": "https://doi.org/10.1109/TPEL.2026.3198204",
+      "keyFindings": [
+        "Eliminates 58% of turn-on energy at partial load torque points",
+        "Active Miller clamping suppresses spurious turn-on at 50 V/ns dV/dt",
+        "Verified experimentally on 250 kW liquid-cooled dynamometer bench"
+      ],
+      "authorsOrOrg": "Prof. Dr. Johann W. Kolar, Dr. D. Bortis (ETH Zurich PES)",
+      "citationsCount": 42
     }
   ],
   "notifications": [
+    {
+      "id": "notif-1791536475563-g7wo8",
+      "createdAt": "2026-10-09T09:01:15.563Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "milestone_updated",
+      "title": "Milestone Verified: QRT-RM-7268",
+      "message": "Milestone \"Gate Driver Sub-Circuit SPICE Verification\" in project \"Top-Secret 1200V SiC Traction Module Room\" has been verified as \"Verified\".",
+      "linkSection": "projects",
+      "linkId": "prj-1791536474101",
+      "metadata": {
+        "projectId": "prj-1791536474101",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-7268",
+        "milestoneId": "ms-1791536475362",
+        "milestoneTitle": "Gate Driver Sub-Circuit SPICE Verification",
+        "milestoneStatus": "Verified"
+      }
+    },
+    {
+      "id": "notif-1791536475433-ykwtd",
+      "createdAt": "2026-10-09T09:01:15.433Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "milestone_created",
+      "title": "New Milestone in QRT-RM-7268",
+      "message": "Collaborator posted new milestone: \"Gate Driver Sub-Circuit SPICE Verification\" (Due: 2026-11-15) for project \"Top-Secret 1200V SiC Traction Module Room\".",
+      "linkSection": "projects",
+      "linkId": "prj-1791536474101",
+      "metadata": {
+        "projectId": "prj-1791536474101",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-7268",
+        "milestoneId": "ms-1791536475362",
+        "milestoneTitle": "Gate Driver Sub-Circuit SPICE Verification"
+      }
+    },
+    {
+      "id": "notif-1791536475104-1fiyf",
+      "createdAt": "2026-10-09T09:01:15.104Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "project_added",
+      "title": "Added to Project: QRT-RM-7268",
+      "message": "You were added as \"Hardware Reliability Lead\" to protected project \"Top-Secret 1200V SiC Traction Module Room\" (QRT-RM-7268) under Stage 01 Mutual NDA.",
+      "recipientOrg": "Siemens Energy R&D",
+      "linkSection": "projects",
+      "linkId": "prj-1791536474101",
+      "metadata": {
+        "projectId": "prj-1791536474101",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-7268",
+        "actorName": "Dr. Lukas Weber",
+        "actorOrg": "Siemens Energy R&D"
+      }
+    },
+    {
+      "id": "notif-1791536471801-82a1a",
+      "createdAt": "2026-10-09T09:01:11.801Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "request_status_updated",
+      "title": "Frontier Benchmark Updated",
+      "message": "Administrator revised technical specifications and benchmark criteria for \"Admin Certified GaN Fast Switching Benchmark\".",
+      "linkSection": "frontier",
+      "linkId": "frt-1791536470791",
+      "metadata": {
+        "frontierId": "frt-1791536470791",
+        "title": "Admin Certified GaN Fast Switching Benchmark",
+        "domain": "Power Electronics"
+      }
+    },
+    {
+      "id": "notif-1791536029841-xrhff",
+      "createdAt": "2026-10-09T08:53:49.841Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "project_added",
+      "title": "Added to Project: QRT-RM-4502",
+      "message": "You were added as \"Hardware Reliability Lead\" to protected project \"Top-Secret 1200V SiC Traction Module Room\" (QRT-RM-4502) under Stage 01 Mutual NDA.",
+      "recipientOrg": "Siemens Energy R&D",
+      "linkSection": "projects",
+      "linkId": "prj-1791536029026",
+      "metadata": {
+        "projectId": "prj-1791536029026",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-4502",
+        "actorName": "dr.lukas.weber",
+        "actorOrg": "Siemens Energy R&D"
+      }
+    },
+    {
+      "id": "notif-1791536026888-0a5gw",
+      "createdAt": "2026-10-09T08:53:46.888Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "request_status_updated",
+      "title": "Frontier Benchmark Updated",
+      "message": "Administrator revised technical specifications and benchmark criteria for \"Admin Certified GaN Fast Switching Benchmark\".",
+      "linkSection": "frontier",
+      "linkId": "frt-1791536025915",
+      "metadata": {
+        "frontierId": "frt-1791536025915",
+        "title": "Admin Certified GaN Fast Switching Benchmark",
+        "domain": "Power Electronics"
+      }
+    },
+    {
+      "id": "notif-1791536004670-isqyy",
+      "createdAt": "2026-10-09T08:53:24.670Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "project_added",
+      "title": "Added to Project: QRT-RM-5128",
+      "message": "You were added as \"Hardware Reliability Lead\" to protected project \"Top-Secret 1200V SiC Traction Module Room\" (QRT-RM-5128) under Stage 01 Mutual NDA.",
+      "recipientOrg": "Siemens Energy R&D",
+      "linkSection": "projects",
+      "linkId": "prj-1791536003777",
+      "metadata": {
+        "projectId": "prj-1791536003777",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-5128",
+        "actorName": "dr.lukas.weber",
+        "actorOrg": "Siemens Energy R&D"
+      }
+    },
+    {
+      "id": "notif-1791536001363-c5ih0",
+      "createdAt": "2026-10-09T08:53:21.363Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "request_status_updated",
+      "title": "Frontier Benchmark Updated",
+      "message": "Administrator revised technical specifications and benchmark criteria for \"Admin Certified GaN Fast Switching Benchmark\".",
+      "linkSection": "frontier",
+      "linkId": "frt-1791535965407",
+      "metadata": {
+        "frontierId": "frt-1791535965407",
+        "title": "Admin Certified GaN Fast Switching Benchmark",
+        "domain": "Power Electronics"
+      }
+    },
+    {
+      "id": "notif-1791535925234-nbr4m",
+      "createdAt": "2026-10-09T08:52:05.234Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "project_added",
+      "title": "Added to Project: QRT-RM-5578",
+      "message": "You were added as \"Hardware Reliability Lead\" to protected project \"Top-Secret 1200V SiC Traction Module Room\" (QRT-RM-5578) under Stage 01 Mutual NDA.",
+      "recipientOrg": "Siemens Energy R&D",
+      "linkSection": "projects",
+      "linkId": "prj-1791535924311",
+      "metadata": {
+        "projectId": "prj-1791535924311",
+        "projectTitle": "Top-Secret 1200V SiC Traction Module Room",
+        "projectCode": "QRT-RM-5578",
+        "actorName": "dr.lukas.weber",
+        "actorOrg": "Siemens Energy R&D"
+      }
+    },
+    {
+      "id": "notif-1791535922072-qidv5",
+      "createdAt": "2026-10-09T08:52:02.072Z",
+      "timestamp": "Just now",
+      "read": false,
+      "type": "request_status_updated",
+      "title": "Frontier Benchmark Updated",
+      "message": "Administrator revised technical specifications and benchmark criteria for \"Admin Certified GaN Fast Switching Benchmark\".",
+      "linkSection": "frontier",
+      "linkId": "frt-1791535883076",
+      "metadata": {
+        "frontierId": "frt-1791535883076",
+        "title": "Admin Certified GaN Fast Switching Benchmark",
+        "domain": "Power Electronics"
+      }
+    },
     {
       "id": "notif-1791135622583-e2x0b",
       "createdAt": "2026-10-04T17:40:22.583Z",
