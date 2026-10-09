@@ -34,6 +34,7 @@ import {
   DirectMessage,
   UserConnection,
 } from './src/types/qartinia.ts';
+export type { ProtectedProjectRoom };
 import {
   INITIAL_SUPPLIERS,
   INITIAL_LABS,
@@ -282,7 +283,7 @@ function broadcastSSE(event: string, data: any) {
   });
 }
 
-async function isAuthorizedOrgLeaderOrAdmin(
+export async function isAuthorizedOrgLeaderOrAdmin(
   actor: AuthenticatedUser,
   targetOrgId?: string | null
 ): Promise<boolean> {
@@ -1422,7 +1423,7 @@ async function getSupabaseExpertById(id: string): Promise<ExpertItem | null> {
   return (localStore.experts || []).find((e) => e.id === id) || null;
 }
 
-function userHasProjectAccess(project: ProtectedProjectRoom, actor?: AuthenticatedUser | null): boolean {
+export function userHasProjectAccess(project: ProtectedProjectRoom, actor?: AuthenticatedUser | null): boolean {
   if (!actor) return false;
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   if (isAdmin) return true;
@@ -1433,20 +1434,12 @@ function userHasProjectAccess(project: ProtectedProjectRoom, actor?: Authenticat
     (p: any) =>
       p.id === actor.id ||
       p.userId === actor.id ||
-      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase()) ||
-      (p.name && actor.fullName && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
-      (p.name && actor.email && p.name.toLowerCase() === actor.email.split('@')[0].toLowerCase()) ||
-      (p.organization && actor.organizationName && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
+      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase())
   );
-  const isSameOrg = Boolean(
-    project.createdByOrg &&
-    actor.organizationName &&
-    project.createdByOrg.toLowerCase() === actor.organizationName.toLowerCase()
-  );
-  return Boolean(isCreator || isParticipant || isSameOrg);
+  return Boolean(isCreator || isParticipant);
 }
 
-function userCanModifyProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+export function userCanModifyProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   if (isAdmin) return true;
   const isCreator =
@@ -1456,15 +1449,12 @@ function userCanModifyProject(project: ProtectedProjectRoom, actor: Authenticate
     (p: any) =>
       p.id === actor.id ||
       p.userId === actor.id ||
-      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase()) ||
-      (p.name && actor.fullName && p.name.toLowerCase() === actor.fullName.toLowerCase()) ||
-      (p.name && actor.email && p.name.toLowerCase() === actor.email.split('@')[0].toLowerCase()) ||
-      (p.organization && actor.organizationName && p.organization.toLowerCase() === actor.organizationName.toLowerCase())
+      (p.email && actor.email && p.email.toLowerCase() === actor.email.toLowerCase())
   );
   return Boolean(isCreator || isParticipant);
 }
 
-function userCanDeleteProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+export function userCanDeleteProject(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   if (isAdmin) return true;
   const isCreator =
@@ -7532,4 +7522,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
