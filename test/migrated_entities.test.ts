@@ -17,6 +17,9 @@ describe('Migrated Supabase Entities Data Layer Test', () => {
     // Check tightened INSERT policy requiring created_by = auth.uid() for ordinary users
     assert.match(sql, /created_by = auth\.uid\(\)/);
     assert.match(sql, /profiles\.role IN \('admin', 'platform_admin'\)/);
+
+    // Verify private project-room records are excluded from public catalog reads
+    assert.match(sql, /type NOT IN \('project_room', 'direct_message'\)/);
   });
 
   it('fetchSupabaseProjects uses Supabase exclusively and returns an array when initialized or throws when uninitialized/query fails', async () => {

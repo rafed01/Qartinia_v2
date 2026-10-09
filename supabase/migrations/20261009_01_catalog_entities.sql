@@ -21,6 +21,24 @@ CREATE TABLE IF NOT EXISTS public.catalog (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Preserve existing table structures by ensuring missing columns are safely added if table pre-existed
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS type TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS organization TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS trl INTEGER DEFAULT 1;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS trl_stage TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS publication_state TEXT DEFAULT 'published';
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- Performance Indexes (Safely Repeatable)
 CREATE INDEX IF NOT EXISTS idx_catalog_type ON public.catalog(type);
 CREATE INDEX IF NOT EXISTS idx_catalog_org_id ON public.catalog(organization_id);
@@ -42,13 +60,13 @@ DROP POLICY IF EXISTS "Creators or Admins can delete catalog items" ON public.ca
 DROP POLICY IF EXISTS "Catalog delete policy" ON public.catalog;
 
 -- 1. SELECT Policy:
--- Published entries are readable by all.
--- Drafts/private entries are readable only by record creator, organization members, or platform admins.
+-- Published entries (excluding private project rooms and direct messages) are readable by all.
+-- Private project rooms, drafts, and private entries are readable only by record creator, organization members, or platform admins.
 CREATE POLICY "Catalog select policy"
   ON public.catalog
   FOR SELECT
   USING (
-    publication_state = 'published' OR
+    (publication_state = 'published' AND type NOT IN ('project_room', 'direct_message')) OR
     (auth.uid() IS NOT NULL AND (
       created_by = auth.uid() OR
       (organization_id IS NOT NULL AND organization_id IN (
@@ -141,3 +159,4 @@ CREATE TRIGGER trigger_catalog_updated_at
   BEFORE UPDATE ON public.catalog
   FOR EACH ROW
   EXECUTE FUNCTION update_catalog_timestamp();
+
