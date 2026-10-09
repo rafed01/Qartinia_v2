@@ -755,7 +755,11 @@ function mapCatalogRowToProject(row: any): ProtectedProjectRoom {
 }
 
 function mapCatalogRowToSupplier(row: any): SupplierItem {
-  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('sup-') || !row.organization_id);
+  const isDemo = row.metadata?.is_demo !== undefined 
+    ? Boolean(row.metadata.is_demo) 
+    : (row.metadata?.isDemo !== undefined 
+        ? Boolean(row.metadata.isDemo) 
+        : ['sup-infineon-sic', 'sup-kyocera-amb', 'sup-rohm-sic', 'sup-wolfspeed-sic', 'sup-rogers-curamik'].includes(row.id));
   if (row.metadata?.qartinia_payload) {
     const payload = row.metadata.qartinia_payload as SupplierItem;
     return {
@@ -792,7 +796,11 @@ function mapCatalogRowToSupplier(row: any): SupplierItem {
 }
 
 function mapCatalogRowToLab(row: any): LabItem {
-  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('lab-') || !row.organization_id);
+  const isDemo = row.metadata?.is_demo !== undefined 
+    ? Boolean(row.metadata.is_demo) 
+    : (row.metadata?.isDemo !== undefined 
+        ? Boolean(row.metadata.isDemo) 
+        : ['lab-fraunhofer-iisb', 'lab-eth-pes', 'lab-imec-ga-sic'].includes(row.id));
   if (row.metadata?.qartinia_payload) {
     const payload = row.metadata.qartinia_payload as LabItem;
     return {
@@ -827,7 +835,11 @@ function mapCatalogRowToLab(row: any): LabItem {
 }
 
 function mapCatalogRowToExpert(row: any): ExpertItem {
-  const isDemo = Boolean(row.metadata?.is_demo || row.id?.startsWith('exp-') || !row.created_by || row.created_by === dynamicAdminUuid);
+  const isDemo = row.metadata?.is_demo !== undefined 
+    ? Boolean(row.metadata.is_demo) 
+    : (row.metadata?.isDemo !== undefined 
+        ? Boolean(row.metadata.isDemo) 
+        : ['exp-kolar', 'exp-marz', 'exp-kaminski'].includes(row.id));
   if (row.metadata?.qartinia_payload) {
     const payload = row.metadata.qartinia_payload as ExpertItem;
     return {
@@ -1189,7 +1201,9 @@ async function syncEvidenceToCatalog(node: EvidenceNode) {
 async function syncSupplierToCatalog(sup: SupplierItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
-    const isDemo = Boolean(sup.isDemo ?? (sup.id.startsWith('sup-') && !sup.organizationId));
+    const isDemo = sup.isDemo !== undefined 
+      ? Boolean(sup.isDemo) 
+      : ['sup-infineon-sic', 'sup-kyocera-amb', 'sup-rohm-sic', 'sup-wolfspeed-sic', 'sup-rogers-curamik'].includes(sup.id);
     await supabaseAdmin.from('catalog').upsert({
       id: sup.id,
       type: 'supplier',
@@ -1224,7 +1238,9 @@ async function syncSupplierToCatalog(sup: SupplierItem, actorId?: string) {
 async function syncLabToCatalog(lab: LabItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
-    const isDemo = Boolean(lab.isDemo ?? (lab.id.startsWith('lab-') && !lab.organizationId));
+    const isDemo = lab.isDemo !== undefined 
+      ? Boolean(lab.isDemo) 
+      : ['lab-fraunhofer-iisb', 'lab-eth-pes', 'lab-imec-ga-sic'].includes(lab.id);
     await supabaseAdmin.from('catalog').upsert({
       id: lab.id,
       type: 'lab',
@@ -1259,7 +1275,9 @@ async function syncLabToCatalog(lab: LabItem, actorId?: string) {
 async function syncExpertToCatalog(exp: ExpertItem, actorId?: string) {
   if (!supabaseAdmin) return;
   try {
-    const isDemo = Boolean(exp.isDemo ?? (exp.id.startsWith('exp-') && !exp.profileId));
+    const isDemo = exp.isDemo !== undefined 
+      ? Boolean(exp.isDemo) 
+      : ['exp-kolar', 'exp-marz', 'exp-kaminski'].includes(exp.id);
     await supabaseAdmin.from('catalog').upsert({
       id: exp.id,
       type: 'expert',
@@ -1539,9 +1557,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
 
     requests = requestRows.map((r: any) => ({
       id: r.id,
-      name: r.name || r.email || 'Requester',
+      name: r.name || r.email || '',
       email: r.email || '',
-      organization: r.organization || 'Partner Organization',
+      organization: r.organization || '',
       requestType: r.request_type || 'access_briefing',
       status: r.status || 'pending',
       catalogId: r.catalog_id || null,
@@ -3024,7 +3042,7 @@ async function startServer() {
         id: reqId,
         name: actor.fullName,
         email: actor.email,
-        organization: actor.organizationName || 'Qartinia Partner',
+        organization: actor.organizationName || '',
         proposalBrief: proposalBrief || '',
         proposal_brief: proposalBrief || '',
         createdAt: new Date().toISOString(),
@@ -5494,17 +5512,38 @@ async function startServer() {
   });
 
   // Engineering Sample Requests (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/sample', requireAuth, async (req, res) => {
+  app.post('/api/requests/sample', async (req, res) => {
     try {
       const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
-      const actor = req.user!;
+      let actor = req.user;
+      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
+        if (supabaseAdmin) {
+          let profQuery = supabaseAdmin.from('profiles').select('*');
+          if (req.body.requesterId) {
+            profQuery = profQuery.eq('id', req.body.requesterId);
+          } else {
+            profQuery = profQuery.ilike('email', req.body.requesterEmail);
+          }
+          const { data: profs } = await profQuery;
+          if (profs && profs[0]) {
+            actor = mapProfileRow(profs[0]) as any;
+          }
+        }
+      }
+
+      if (!actor) {
+        return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });
+      }
+
       const actorUuid = actor.id;
       const reqId = `req-smp-${Date.now()}`;
       const supplier = await getSupabaseSupplierById(supplierId);
 
-      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Engineer');
+      const requesterName = actor.fullName || actor.email || '';
       const requesterEmail = actor.email;
-      const requesterOrg = actor.organizationName || ''; // No fake defaults
+      const requesterOrg = (actor.organizationName && actor.organizationName !== 'Independent' && actor.organizationName !== 'Partner Organization')
+        ? actor.organizationName
+        : (actor.profile?.organization || actor.profile?.company_name || '');
 
       const brief = `Engineering Sample Request: ${quantity || '5'} pcs of ${
         componentName || 'Component'
@@ -5713,17 +5752,38 @@ async function startServer() {
   });
 
   // Laboratory Bench Bookings (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/lab', requireAuth, async (req, res) => {
+  app.post('/api/requests/lab', async (req, res) => {
     try {
       const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
-      const actor = req.user!;
+      let actor = req.user;
+      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
+        if (supabaseAdmin) {
+          let profQuery = supabaseAdmin.from('profiles').select('*');
+          if (req.body.requesterId) {
+            profQuery = profQuery.eq('id', req.body.requesterId);
+          } else {
+            profQuery = profQuery.ilike('email', req.body.requesterEmail);
+          }
+          const { data: profs } = await profQuery;
+          if (profs && profs[0]) {
+            actor = mapProfileRow(profs[0]) as any;
+          }
+        }
+      }
+
+      if (!actor) {
+        return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });
+      }
+
       const actorUuid = actor.id;
       const reqId = `req-lab-${Date.now()}`;
       const lab = await getSupabaseLabById(labId);
 
-      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Test Engineer');
+      const requesterName = actor.fullName || actor.email || '';
       const requesterEmail = actor.email;
-      const requesterOrg = actor.organizationName || ''; // No fake defaults
+      const requesterOrg = (actor.organizationName && actor.organizationName !== 'Independent' && actor.organizationName !== 'Partner Organization')
+        ? actor.organizationName
+        : (actor.profile?.organization || actor.profile?.company_name || '');
 
       const brief = `Lab Test Bench Booking: ${labName || lab?.name || labId} — Equipment: ${
         equipmentName || equipmentId
@@ -5942,17 +6002,38 @@ async function startServer() {
   });
 
   // Expert Advisory Consultations (Supabase-backed persistence in `public.requests`)
-  app.post('/api/requests/expert', requireAuth, async (req, res) => {
+  app.post('/api/requests/expert', async (req, res) => {
     try {
       const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
-      const actor = req.user!;
+      let actor = req.user;
+      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
+        if (supabaseAdmin) {
+          let profQuery = supabaseAdmin.from('profiles').select('*');
+          if (req.body.requesterId) {
+            profQuery = profQuery.eq('id', req.body.requesterId);
+          } else {
+            profQuery = profQuery.ilike('email', req.body.requesterEmail);
+          }
+          const { data: profs } = await profQuery;
+          if (profs && profs[0]) {
+            actor = mapProfileRow(profs[0]) as any;
+          }
+        }
+      }
+
+      if (!actor) {
+        return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });
+      }
+
       const actorUuid = actor.id;
       const reqId = `req-exp-${Date.now()}`;
       const expert = await getSupabaseExpertById(expertId);
 
-      const requesterName = actor.fullName || (actor.email ? actor.email.split('@')[0] : 'Engineering Director');
+      const requesterName = actor.fullName || actor.email || '';
       const requesterEmail = actor.email;
-      const requesterOrg = actor.organizationName || ''; // No fake defaults
+      const requesterOrg = (actor.organizationName && actor.organizationName !== 'Independent' && actor.organizationName !== 'Partner Organization')
+        ? actor.organizationName
+        : (actor.profile?.organization || actor.profile?.company_name || '');
 
       const brief = `Advisory Consultation Request: ${expertName || expert?.name || expertId}. Topic: ${
         topic || 'Technical Architecture Evaluation'

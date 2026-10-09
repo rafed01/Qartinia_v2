@@ -26,14 +26,26 @@ interface ExpertsHubViewProps {
     preferredFormat: string;
     hours: number;
   }) => Promise<void>;
+  onUpdateExpert?: (id: string, updates: Partial<ExpertItem>) => Promise<void>;
+  currentUser?: any;
 }
 
 export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
   experts,
   onBookExpert,
+  onUpdateExpert,
+  currentUser,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExpert, setSelectedExpert] = useState<ExpertItem | null>(null);
+
+  // Edit Expert State
+  const [editingExpert, setEditingExpert] = useState<ExpertItem | null>(null);
+  const [editBio, setEditBio] = useState('');
+  const [editFee, setEditFee] = useState('');
+  const [editAvailability, setEditAvailability] = useState<ExpertItem['availability']>('Open for Consultations');
+  const [editLocation, setEditLocation] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Booking Modal State
   const [topic, setTopic] = useState('Active Gate Driver Trajectory & ZVS Pareto Optimization');
@@ -196,14 +208,31 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
             <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-slate-500 font-mono text-[11px]">{exp.availability}</span>
 
-              <button
-                type="button"
-                onClick={() => setSelectedExpert(exp)}
-                className="px-3.5 py-1.5 font-semibold text-xs text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Calendar className="w-3.5 h-3.5 text-[#C59B47]" />
-                <span>Book Consultation</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {onUpdateExpert && (currentUser?.role === 'admin' || currentUser?.role === 'platform_admin' || (exp.profileId && currentUser?.id && exp.profileId === currentUser.id) || (exp.organizationId && currentUser?.organizationId && exp.organizationId === currentUser.organizationId)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingExpert(exp);
+                      setEditBio(exp.bio);
+                      setEditFee(exp.advisoryFee);
+                      setEditAvailability(exp.availability);
+                      setEditLocation(exp.location);
+                    }}
+                    className="px-2.5 py-1.5 font-semibold text-xs text-[#0F2537] bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Edit Profile
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedExpert(exp)}
+                  className="px-3.5 py-1.5 font-semibold text-xs text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-[#C59B47]" />
+                  <span>Book Consultation</span>
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -317,6 +346,122 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {/* Edit Expert Modal */}
+      {editingExpert && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg p-6 space-y-5 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
+                  Expert Profile Configuration
+                </div>
+                <h3 className="text-lg font-bold text-[#0F2537]">
+                  Edit Technical Advisory Profile
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingExpert(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingExpert || !onUpdateExpert) return;
+                setSavingEdit(true);
+                try {
+                  await onUpdateExpert(editingExpert.id, {
+                    bio: editBio,
+                    advisoryFee: editFee,
+                    availability: editAvailability,
+                    location: editLocation,
+                  });
+                  setEditingExpert(null);
+                } finally {
+                  setSavingEdit(false);
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-[#0F2537] mb-1">
+                  Professional Bio &amp; Research Track Record
+                </label>
+                <textarea
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  rows={3}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">
+                    Advisory Rate
+                  </label>
+                  <input
+                    type="text"
+                    value={editFee}
+                    onChange={(e) => setEditFee(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">
+                    Availability
+                  </label>
+                  <select
+                    value={editAvailability}
+                    onChange={(e) => setEditAvailability(e.target.value as ExpertItem['availability'])}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white"
+                  >
+                    <option value="Open for Consultations">Open for Consultations</option>
+                    <option value="Project Advisory Only">Project Advisory Only</option>
+                    <option value="Waitlist">Waitlist</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditingExpert(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2 bg-[#0F2537] text-white font-semibold rounded-lg hover:bg-[#16344D] cursor-pointer flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5 text-[#C59B47]" />
+                  <span>{savingEdit ? 'Saving...' : 'Save Updates to Supabase'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -26,11 +26,15 @@ interface LaboratoriesHubViewProps {
     testRequirements: string;
     requestedDates: string;
   }) => Promise<void>;
+  onUpdateLab?: (id: string, updates: Partial<LabItem>) => Promise<void>;
+  currentUser?: any;
 }
 
 export const LaboratoriesHubView: React.FC<LaboratoriesHubViewProps> = ({
   labs,
   onBookLab,
+  onUpdateLab,
+  currentUser,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('All');
@@ -38,6 +42,13 @@ export const LaboratoriesHubView: React.FC<LaboratoriesHubViewProps> = ({
     lab: LabItem;
     equipment: LabEquipment;
   } | null>(null);
+
+  // Edit Lab State
+  const [editingLab, setEditingLab] = useState<LabItem | null>(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [editAvailability, setEditAvailability] = useState<LabItem['availabilityStatus']>('Available');
+  const [editLeadScientist, setEditLeadScientist] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Booking Form State
   const [testDomain, setTestDomain] = useState('Wide-Bandgap Inverter Characterization');
@@ -204,6 +215,20 @@ export const LaboratoriesHubView: React.FC<LaboratoriesHubViewProps> = ({
                 <span className="text-xs font-mono px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700">
                   Status: {lab.availabilityStatus}
                 </span>
+                {onUpdateLab && (currentUser?.role === 'admin' || currentUser?.role === 'platform_admin' || (lab.organizationId && currentUser?.organizationId && lab.organizationId === currentUser.organizationId)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingLab(lab);
+                      setEditDescription(lab.description);
+                      setEditAvailability(lab.availabilityStatus);
+                      setEditLeadScientist(lab.leadScientist);
+                    }}
+                    className="text-[11px] font-semibold text-[#0F2537] bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1 rounded cursor-pointer transition-colors"
+                  >
+                    Edit Details
+                  </button>
+                )}
               </div>
             </div>
 
@@ -410,6 +435,109 @@ export const LaboratoriesHubView: React.FC<LaboratoriesHubViewProps> = ({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {/* Edit Laboratory Modal */}
+      {editingLab && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg p-6 space-y-5 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
+                  Test Facility Configuration
+                </div>
+                <h3 className="text-lg font-bold text-[#0F2537]">
+                  Edit Laboratory Details
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLab(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingLab || !onUpdateLab) return;
+                setSavingEdit(true);
+                try {
+                  await onUpdateLab(editingLab.id, {
+                    description: editDescription,
+                    availabilityStatus: editAvailability,
+                    leadScientist: editLeadScientist,
+                  });
+                  setEditingLab(null);
+                } finally {
+                  setSavingEdit(false);
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-[#0F2537] mb-1">
+                  Facility Description
+                </label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">
+                    Availability Status
+                  </label>
+                  <select
+                    value={editAvailability}
+                    onChange={(e) => setEditAvailability(e.target.value as LabItem['availabilityStatus'])}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white"
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Booking 2-3 Weeks Out">Booking 2-3 Weeks Out</option>
+                    <option value="Restricted Access">Restricted Access</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#0F2537] mb-1">
+                    Lead Scientist / Director
+                  </label>
+                  <input
+                    type="text"
+                    value={editLeadScientist}
+                    onChange={(e) => setEditLeadScientist(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditingLab(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2 bg-[#0F2537] text-white font-semibold rounded-lg hover:bg-[#16344D] cursor-pointer flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5 text-[#C59B47]" />
+                  <span>{savingEdit ? 'Saving...' : 'Save Updates to Supabase'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -819,6 +819,39 @@ export default function App() {
     }
   };
 
+  const handleUpdateSupplier = async (id: string, updates: Partial<SupplierItem>) => {
+    const res = await apiFetch(`/api/suppliers/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleUpdateLab = async (id: string, updates: Partial<LabItem>) => {
+    const res = await apiFetch(`/api/labs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
+  const handleUpdateExpert = async (id: string, updates: Partial<ExpertItem>) => {
+    const res = await apiFetch(`/api/experts/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      await fetchState();
+    }
+  };
+
   const handleRunSimulation = async (payload: {
     title: string;
     tool: any;
@@ -1022,6 +1055,8 @@ export default function App() {
           <SuppliersHubView
             suppliers={suppliers}
             onRequestSample={handleRequestSample}
+            onUpdateSupplier={handleUpdateSupplier}
+            currentUser={currentUser}
           />
         )}
 
@@ -1029,6 +1064,8 @@ export default function App() {
           <LaboratoriesHubView
             labs={labs}
             onBookLab={handleBookLab}
+            onUpdateLab={handleUpdateLab}
+            currentUser={currentUser}
           />
         )}
 
@@ -1036,6 +1073,8 @@ export default function App() {
           <ExpertsHubView
             experts={experts}
             onBookExpert={handleBookExpert}
+            onUpdateExpert={handleUpdateExpert}
+            currentUser={currentUser}
           />
         )}
 
