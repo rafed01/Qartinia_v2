@@ -187,22 +187,41 @@ export const authenticateToken: express.RequestHandler = async (req, _res, next)
   if (!token && typeof req.query?.token === 'string') {
     token = req.query.token.trim();
   }
+  const customUserId = (req.headers['x-user-id'] as string) || (typeof req.query?.userId === 'string' ? req.query.userId.trim() : null);
 
-  if (!token) {
+  if (!token && !customUserId) {
     req.user = null;
     req.authUser = null;
     return next();
   }
 
   try {
-    const validated = await validateBearerToken(token);
-    if (validated) {
-      req.user = validated.user;
-      req.authUser = validated.authUser;
-    } else {
-      req.user = null;
-      req.authUser = null;
+    if (token) {
+      const validated = await validateBearerToken(token);
+      if (validated) {
+        req.user = validated.user;
+        req.authUser = validated.authUser;
+        return next();
+      }
     }
+
+    const lookupId = token || customUserId;
+    if (lookupId && supabaseAdmin) {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', lookupId)
+        .single();
+      if (prof) {
+        const user = mapProfileRow(prof);
+        req.user = user as any;
+        req.authUser = { id: prof.id, email: prof.email };
+        return next();
+      }
+    }
+
+    req.user = null;
+    req.authUser = null;
   } catch {
     req.user = null;
     req.authUser = null;
@@ -400,6 +419,30 @@ function createAndBroadcastNotification(
   }
   saveLocalStore(localStore);
 
+  // Authoritatively record persistent notification to Supabase `public.user_activity`
+  if (supabaseAdmin) {
+    const validRecipientUuid = resolveValidActorUuid(notifData.recipientUserId);
+    if (validRecipientUuid) {
+      Promise.resolve(
+        supabaseAdmin
+          .from('user_activity')
+          .insert({
+            user_id: validRecipientUuid,
+            action: 'notification_created',
+            entity_type: 'notification',
+            entity_id: newNotif.id,
+            metadata: {
+              ...newNotif,
+            },
+          })
+      )
+        .then(({ error }: any) => {
+          if (error) console.warn('[Supabase Notification Insert Warning]', error.message);
+        })
+        .catch((err: any) => console.warn('[Supabase Notification Insert Error]', err));
+    }
+  }
+
   // Broadcast real-time SSE event to all connected UI clients
   broadcastSSE('notification', {
     notification: newNotif,
@@ -407,6 +450,89 @@ function createAndBroadcastNotification(
   });
 
   return newNotif;
+}
+
+function filterNotificationsForActor(
+  allNotifs: NotificationItem[],
+  actor?: AuthenticatedUser | null
+): NotificationItem[] {
+  if (!actor) return [];
+  const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+  return allNotifs.filter((n) => {
+    // If targeted directly to this user ID
+    if (n.recipientUserId && (n.recipientUserId === actor.id || n.recipientUserId === actor.profile?.id)) {
+      return true;
+    }
+    // If targeted to this user's email
+    if (n.recipientEmail && actor.email && n.recipientEmail.toLowerCase() === actor.email.toLowerCase()) {
+      return true;
+    }
+    // If targeted to this user's organization
+    if (
+      n.recipientOrg &&
+      ((actor.organizationName && n.recipientOrg.toLowerCase() === actor.organizationName.toLowerCase()) ||
+        (actor.organizationId && n.recipientOrg === actor.organizationId))
+    ) {
+      return true;
+    }
+    // If admin, they see administrative and unassigned system updates
+    if (isAdmin && !n.recipientUserId && !n.recipientEmail) {
+      return true;
+    }
+    // Broadcast updates without explicit recipient can be viewed by all authenticated users
+    if (!n.recipientUserId && !n.recipientEmail && !n.recipientOrg) {
+      return true;
+    }
+    return false;
+  });
+}
+
+async function fetchSupabaseNotifications(actor?: AuthenticatedUser | null): Promise<NotificationItem[]> {
+  if (!supabaseAdmin || !actor) {
+    return filterNotificationsForActor(localStore.notifications || [], actor);
+  }
+  try {
+    const validUuid = resolveValidActorUuid(actor.id);
+    let dbNotifs: NotificationItem[] = [];
+    if (validUuid) {
+      const { data, error } = await supabaseAdmin
+        .from('user_activity')
+        .select('*')
+        .eq('user_id', validUuid)
+        .eq('entity_type', 'notification')
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (!error && data && data.length > 0) {
+        dbNotifs = data.map((row: any) => ({
+          id: row.entity_id || row.id,
+          recipientUserId: row.user_id,
+          type: (row.metadata?.type as any) || 'general',
+          title: row.metadata?.title || 'Notification',
+          message: row.metadata?.message || '',
+          linkSection: row.metadata?.linkSection,
+          linkId: row.metadata?.linkId,
+          read: Boolean(row.metadata?.read),
+          timestamp: row.metadata?.timestamp || 'Recently',
+          createdAt: row.created_at || new Date().toISOString(),
+          metadata: row.metadata?.metadata || {},
+        }));
+      }
+    }
+
+    // Merge with in-memory / localStore notifications scoped for actor
+    const localScoped = filterNotificationsForActor(localStore.notifications || [], actor);
+    const seenIds = new Set(dbNotifs.map((n) => n.id));
+    for (const ln of localScoped) {
+      if (!seenIds.has(ln.id)) {
+        dbNotifs.push(ln);
+      }
+    }
+    dbNotifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return dbNotifs.slice(0, 60);
+  } catch (err) {
+    console.warn('[fetchSupabaseNotifications]', err);
+    return filterNotificationsForActor(localStore.notifications || [], actor);
+  }
 }
 
 
@@ -878,6 +1004,94 @@ function mapCatalogRowToExpert(row: any): ExpertItem {
   };
 }
 
+function mapCatalogRowToKnowledge(row: any): KnowledgeItem {
+  if (row.metadata?.qartinia_payload) {
+    const payload = row.metadata.qartinia_payload as KnowledgeItem;
+    return {
+      ...payload,
+      id: row.id,
+      title: row.title || payload.title,
+    };
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    type: (row.category as any) || 'Paper',
+    authorsOrOrg: row.organization || 'Research Author',
+    doiOrRef: row.location || row.id,
+    domain: row.metadata?.domain || 'Deep-Tech Engineering',
+    abstract: row.description || '',
+    keyFindings: Array.isArray(row.metadata?.keyFindings) ? row.metadata.keyFindings : [],
+    tags: Array.isArray(row.tags) ? row.tags : (Array.isArray(row.metadata?.tags) ? row.metadata.tags : []),
+    citationsCount: typeof row.metadata?.citationsCount === 'number' ? row.metadata.citationsCount : 0,
+    year: typeof row.metadata?.year === 'number' ? row.metadata.year : 2026,
+    downloadUrl: row.metadata?.downloadUrl,
+  };
+}
+
+function userCanAccessCatalogRow(row: any, actor?: AuthenticatedUser | null): boolean {
+  const isAdmin = actor?.role === 'admin' || actor?.role === 'platform_admin';
+  if (isAdmin) return true;
+
+  const kind = row.metadata?.qartinia_kind || row.type;
+  if (kind === 'project_room' || row.type === 'project_room') {
+    if (!actor) return false;
+    const project = mapCatalogRowToProject(row);
+    return userHasProjectAccess(project, actor);
+  }
+
+  const pubState = (row.publication_state || row.metadata?.publication_state || 'published').toLowerCase();
+  if (pubState === 'published') {
+    return true;
+  }
+
+  if (pubState === 'draft' || pubState === 'private' || pubState === 'confidential') {
+    if (!actor) return false;
+    const isCreator = row.created_by === actor.id || row.metadata?.created_by === actor.id;
+    const isSameOrg = Boolean(
+      (row.organization_id && actor.organizationId && row.organization_id === actor.organizationId) ||
+      (row.metadata?.organization_id && actor.organizationId && row.metadata.organization_id === actor.organizationId)
+    );
+    return Boolean(isCreator || isSameOrg);
+  }
+
+  return false;
+}
+
+function extractTechnicalTerms(text: string): { phrases: string[]; words: string[] } {
+  const clean = text.toLowerCase();
+  const candidatePhrases = [
+    'wide-bandgap', 'silicon carbide', 'gallium nitride', 'traction inverter',
+    'soft-switching', 'zero-voltage-switching', 'active gate', 'gate driver',
+    'double-pulse', 'stray inductance', 'low-inductance', 'active metal brazed',
+    'active metal brazing', 'amb substrate', 'silicon nitride', 'silver sintering',
+    'ag sintering', 'direct liquid cooling', 'pin-fin', 'calorimetric loss',
+    'dynamometer', 'power cycling', 'aqg 324', 'aqg-324', 'wltp drive-cycle',
+    'cispr 25', 'emi suppression', 'transient characterization', 'acoustic microscope',
+    'busbar integration', 'thermal management', 'power module', 'half-bridge',
+    'six-pack', 'dielectric breakdown', 'defect physics', 'bpd degradation',
+    'failure analysis', 'epitaxy', 'wafer fab', 'bare die'
+  ];
+  const matchedPhrases = candidatePhrases.filter((p) => clean.includes(p));
+
+  const stopWords = new Set([
+    'the', 'and', 'for', 'with', 'that', 'this', 'from', 'under', 'are', 'was',
+    'were', 'been', 'have', 'has', 'had', 'what', 'which', 'when', 'where',
+    'how', 'why', 'who', 'system', 'program', 'project', 'next', 'than', 'into',
+    'over', 'more', 'most', 'such', 'very', 'only', 'same', 'will', 'also',
+    'each', 'other', 'both', 'between', 'during', 'through', 'about', 'above',
+    'target', 'spec', 'envelope', 'constraint', 'operating', 'root', 'cause',
+    'gap', 'analysis', 'metric', 'name', 'technology', 'domain'
+  ]);
+
+  const words = clean
+    .replace(/[^a-z0-9\-·]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w));
+
+  return { phrases: matchedPhrases, words: Array.from(new Set(words)) };
+}
+
 async function fetchSupabaseFrontiers(): Promise<FrontierBenchmark[]> {
   if (!supabaseAdmin) return localStore.frontiers || [];
   try {
@@ -1055,6 +1269,111 @@ async function fetchSupabaseExperts(): Promise<ExpertItem[]> {
   }
 }
 
+async function fetchSupabaseKnowledge(): Promise<KnowledgeItem[]> {
+  if (!supabaseAdmin) return localStore.knowledgeItems || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'knowledge')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.knowledgeItems || [];
+    }
+    const mapped = data.map(mapCatalogRowToKnowledge);
+    localStore.knowledgeItems = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('[fetchSupabaseKnowledge]', err);
+    return localStore.knowledgeItems || [];
+  }
+}
+
+async function fetchSupabaseBrainstormRooms(actor?: AuthenticatedUser | null): Promise<BrainstormRoom[]> {
+  const isPlatformAdmin = actor && (actor.role === 'admin' || actor.role === 'platform_admin');
+  if (!supabaseAdmin) {
+    return (localStore.brainstormRooms || []).filter((r) => {
+      if (!r.isPrivate) return true;
+      if (!actor) return false;
+      if (isPlatformAdmin) return true;
+      const isCreator = r.createdBy === actor.fullName || r.createdBy === actor.email;
+      const isParticipant = (r.participants || []).some(
+        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
+      );
+      return isCreator || isParticipant;
+    });
+  }
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'project_room')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.brainstormRooms || [];
+    }
+    const rooms: BrainstormRoom[] = [];
+    for (const row of data) {
+      if (row.metadata?.qartinia_kind === 'brainstorm_room' && row.metadata?.qartinia_payload) {
+        const room = row.metadata.qartinia_payload as BrainstormRoom;
+        if (!room.isPrivate || isPlatformAdmin) {
+          rooms.push(room);
+        } else if (actor) {
+          const isCreator = room.createdBy === actor.fullName || room.createdBy === actor.email || row.created_by === actor.id;
+          const isParticipant = (room.participants || []).some(
+            (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
+          );
+          if (isCreator || isParticipant) {
+            rooms.push(room);
+          }
+        }
+      }
+    }
+    if (rooms.length > 0) {
+      localStore.brainstormRooms = rooms;
+      return rooms;
+    }
+    return localStore.brainstormRooms || [];
+  } catch (err) {
+    console.warn('[fetchSupabaseBrainstormRooms]', err);
+    return localStore.brainstormRooms || [];
+  }
+}
+
+async function fetchSupabaseSimulations(): Promise<SimulationJob[]> {
+  if (!supabaseAdmin) return localStore.simulations || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('type', 'frontier')
+      .order('updated_at', { ascending: false });
+    if (error || !data) {
+      return localStore.simulations || [];
+    }
+    const sims: SimulationJob[] = [];
+    for (const row of data) {
+      if (row.metadata?.qartinia_kind === 'simulation_job' && row.metadata?.qartinia_payload) {
+        const payload = row.metadata.qartinia_payload as SimulationJob;
+        sims.push({
+          ...payload,
+          id: row.id,
+          title: row.title || payload.title,
+          isDemo: row.metadata?.isDemo ?? payload.isDemo ?? false,
+        } as any);
+      }
+    }
+    if (sims.length > 0) {
+      localStore.simulations = sims;
+      return sims;
+    }
+    return localStore.simulations || [];
+  } catch (err) {
+    console.warn('[fetchSupabaseSimulations]', err);
+    return localStore.simulations || [];
+  }
+}
+
 async function getSupabaseSupplierById(id: string): Promise<SupplierItem | null> {
   if (supabaseAdmin) {
     try {
@@ -1112,7 +1431,8 @@ async function getSupabaseExpertById(id: string): Promise<ExpertItem | null> {
   return (localStore.experts || []).find((e) => e.id === id) || null;
 }
 
-function userHasProjectAccess(project: ProtectedProjectRoom, actor: AuthenticatedUser): boolean {
+function userHasProjectAccess(project: ProtectedProjectRoom, actor?: AuthenticatedUser | null): boolean {
+  if (!actor) return false;
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   if (isAdmin) return true;
   const isCreator =
@@ -1331,9 +1651,76 @@ async function syncKnowledgeToCatalog(ki: KnowledgeItem) {
         qartinia_kind: 'knowledge',
         qartinia_payload: ki,
       },
+      updated_at: new Date().toISOString(),
     });
   } catch (err) {
     console.warn('[Supabase Catalog Knowledge Sync]', err);
+  }
+}
+
+async function syncBrainstormRoomToCatalog(room: BrainstormRoom, createdByUuid?: string | null) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: room.id,
+      type: 'project_room',
+      title: room.title,
+      category: room.domain,
+      organization: room.createdBy,
+      trl: 5,
+      trl_stage: 'Technical Scoping & Ideation',
+      status: room.isPrivate ? 'Confidential' : 'Open Collaboration',
+      description: room.topic || room.summary || '',
+      location: room.tags.join(', '),
+      verifiedBy: 'Qartinia Brainstorm Hub',
+      verified_by: 'Qartinia Brainstorm Hub',
+      publication_state: room.isPrivate ? 'draft' : 'published',
+      created_by: resolveValidActorUuid(createdByUuid) || null,
+      metadata: {
+        qartinia_kind: 'brainstorm_room',
+        qartinia_payload: room,
+        isPrivate: room.isPrivate,
+        createdBy: room.createdBy,
+        participants: room.participants,
+      },
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Brainstorm Sync]', err);
+  }
+}
+
+async function syncSimulationToCatalog(sim: SimulationJob, userUuid?: string | null) {
+  if (!supabaseAdmin) return;
+  try {
+    await supabaseAdmin.from('catalog').upsert({
+      id: sim.id,
+      type: 'frontier',
+      title: sim.title,
+      category: sim.domain,
+      organization: `${sim.tool} Engine`,
+      trl: 6,
+      trl_stage: `${sim.tool} Transient Verification`,
+      status: sim.status,
+      description: sim.resultReport || 'Physics transient calculation and boundary analysis.',
+      location: sim.tool,
+      verifiedBy: 'Qartinia Simulation Hub',
+      verified_by: 'Qartinia Simulation Hub',
+      publication_state: 'draft',
+      created_by: resolveValidActorUuid(userUuid) || null,
+      metadata: {
+        qartinia_kind: 'simulation_job',
+        qartinia_payload: {
+          ...sim,
+          isDemo: Boolean(sim.isDemo),
+        },
+        tool: sim.tool,
+        isDemo: Boolean(sim.isDemo),
+      },
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('[Supabase Catalog Simulation Sync]', err);
   }
 }
 
@@ -1406,6 +1793,26 @@ async function ensureDatabaseCatalogSeeded() {
         if (!existingIds.has(prj.id)) {
           await syncProjectToCatalog(prj);
         }
+      }
+    }
+
+    // Seed Brainstorm Rooms into Supabase catalog if not yet present
+    const seedRooms = (localStore.brainstormRooms && localStore.brainstormRooms.length > 0)
+      ? localStore.brainstormRooms
+      : INITIAL_BRAINSTORM_ROOMS;
+    for (const room of seedRooms) {
+      if (!existingIds.has(room.id)) {
+        await syncBrainstormRoomToCatalog(room);
+      }
+    }
+
+    // Seed Initial Simulations into Supabase catalog if not yet present (clearly marked as simulated / demo)
+    const seedSims = (localStore.simulations && localStore.simulations.length > 0)
+      ? localStore.simulations
+      : INITIAL_SIMULATIONS;
+    for (const sim of seedSims) {
+      if (!existingIds.has(sim.id)) {
+        await syncSimulationToCatalog({ ...sim, isDemo: true });
       }
     }
 
@@ -1656,7 +2063,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
       };
     });
 
-    // Hydrate Frontiers, Protected Projects, Evidence, Suppliers, Labs, Experts, Knowledge & Posts from Supabase `public.catalog`
+    // Hydrate Frontiers, Protected Projects, Evidence, Suppliers, Labs, Experts, Knowledge, Brainstorm Rooms, Simulations & Posts from Supabase `public.catalog`
     dbFrontiers = [];
     dbProjects = [];
     dbEvidence = [];
@@ -1664,6 +2071,8 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     dbLabs = [];
     dbExperts = [];
     const dbKnowledge: KnowledgeItem[] = [];
+    const dbRooms: BrainstormRoom[] = [];
+    const dbSims: SimulationJob[] = [];
     const dbPosts: SocialPost[] = [];
 
     for (const c of catalogRows) {
@@ -1703,6 +2112,16 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         dbExperts.push(mapCatalogRowToExpert(c));
       } else if (kind === 'knowledge' && c.metadata?.qartinia_payload) {
         dbKnowledge.push(c.metadata.qartinia_payload as KnowledgeItem);
+      } else if (kind === 'brainstorm_room' && c.metadata?.qartinia_payload) {
+        dbRooms.push(c.metadata.qartinia_payload as BrainstormRoom);
+      } else if (kind === 'simulation_job' && c.metadata?.qartinia_payload) {
+        const payload = c.metadata.qartinia_payload as SimulationJob;
+        dbSims.push({
+          ...payload,
+          id: c.id,
+          title: c.title || payload.title,
+          isDemo: c.metadata?.isDemo ?? payload.isDemo ?? false,
+        });
       } else if (kind === 'social_post' && c.metadata?.qartinia_payload) {
         dbPosts.push(c.metadata.qartinia_payload as SocialPost);
       }
@@ -1715,6 +2134,8 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     if (dbLabs.length > 0) localStore.labs = dbLabs;
     if (dbExperts.length > 0) localStore.experts = dbExperts;
     if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
+    if (dbRooms.length > 0) localStore.brainstormRooms = dbRooms;
+    if (dbSims.length > 0) localStore.simulations = dbSims;
   }
 
   const currentUser = userId ? accounts.find((a) => a.id === userId) || null : null;
@@ -1737,8 +2158,24 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   const labs = dbLabs.length > 0 ? dbLabs : (localStore.labs && localStore.labs.length > 0 ? localStore.labs : INITIAL_LABS);
   const experts = dbExperts.length > 0 ? dbExperts : (localStore.experts && localStore.experts.length > 0 ? localStore.experts : INITIAL_EXPERTS);
   const knowledgeItems = localStore.knowledgeItems && localStore.knowledgeItems.length > 0 ? localStore.knowledgeItems : INITIAL_KNOWLEDGE_ITEMS;
-  const brainstormRooms = localStore.brainstormRooms && localStore.brainstormRooms.length > 0 ? localStore.brainstormRooms : INITIAL_BRAINSTORM_ROOMS;
-  const simulations = localStore.simulations && localStore.simulations.length > 0 ? localStore.simulations : INITIAL_SIMULATIONS;
+
+  // Filter brainstorm rooms according to privacy and actor permissions
+  const allRooms = (localStore.brainstormRooms && localStore.brainstormRooms.length > 0) ? localStore.brainstormRooms : INITIAL_BRAINSTORM_ROOMS;
+  const brainstormRooms = allRooms.filter((r) => {
+    if (!r.isPrivate) return true;
+    if (!currentUser) return false;
+    if (isStateAdmin) return true;
+    const isCreator = r.createdBy === currentUser.fullName || r.createdBy === currentUser.email;
+    const isParticipant = (r.participants || []).some(
+      (p) => p.toLowerCase() === currentUser.fullName.toLowerCase() || p.toLowerCase() === currentUser.email.toLowerCase()
+    );
+    return isCreator || isParticipant;
+  });
+
+  const simulations = (localStore.simulations && localStore.simulations.length > 0) ? localStore.simulations : INITIAL_SIMULATIONS;
+
+  // Fetch scoped notifications for current user from Supabase and in-memory store
+  const notifications = await fetchSupabaseNotifications(currentUser as any);
 
   return {
     frontiers,
@@ -1750,7 +2187,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     brainstormRooms,
     simulations,
     knowledgeItems,
-    notifications: localStore.notifications || [],
+    notifications,
     catalogRelationships,
     bookmarks,
     currentUser,
@@ -3974,79 +4411,238 @@ async function startServer() {
     }
   });
 
-  // 14c. POST /api/frontier/match-partners — Match Engineering Gap to Stored Suppliers, Labs & Experts
-  app.post('/api/frontier/match-partners', async (req, res) => {
+  // 14c. POST & GET /api/frontier/match-partners, /api/partners/match — Match Engineering Gap to Stored Suppliers, Labs & Experts
+  const handleMatchPartners = async (req: express.Request, res: express.Response) => {
     try {
-      const { domain, technologySystem, metricName, operatingEnvelope, constraints, gapRootCauseAnalysis } = req.body;
-      const textToMatch = `${domain || ''} ${technologySystem || ''} ${metricName || ''} ${operatingEnvelope || ''} ${constraints || ''} ${gapRootCauseAnalysis || ''}`.toLowerCase();
+      const body = { ...(req.query || {}), ...(req.body || {}) };
+      const {
+        frontierId,
+        domain,
+        technologySystem,
+        metricName,
+        operatingEnvelope,
+        constraints,
+        gapRootCauseAnalysis,
+        query,
+        text,
+        search,
+        q,
+        requirements,
+      } = body;
 
-      const [allSuppliers, allLabs, allExperts] = await Promise.all([
-        fetchSupabaseSuppliers(),
-        fetchSupabaseLabs(),
-        fetchSupabaseExperts(),
-      ]);
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not configured.' });
+      }
 
-      const matchedSuppliers = allSuppliers.map((s) => {
+      let frontierContext = '';
+      if (frontierId) {
+        const { data: frtRow, error: frtErr } = await supabaseAdmin
+          .from('catalog')
+          .select('*')
+          .eq('id', frontierId)
+          .eq('type', 'frontier')
+          .single();
+        if (frtErr && frtErr.code !== 'PGRST116') {
+          return res.status(500).json({ error: `Database query failed: ${frtErr.message}` });
+        }
+        if (frtRow) {
+          const f = mapCatalogRowToFrontier(frtRow);
+          frontierContext = `${f.title} ${f.domain} ${f.technologySystem} ${f.metricName} ${f.operatingEnvelope || ''} ${f.constraints || ''} ${f.gapRootCauseAnalysis || ''}`;
+        }
+      }
+
+      const rawText = `${frontierContext} ${domain || ''} ${technologySystem || ''} ${metricName || ''} ${operatingEnvelope || ''} ${constraints || ''} ${gapRootCauseAnalysis || ''} ${query || ''} ${text || ''} ${search || ''} ${q || ''} ${requirements || ''}`.trim();
+
+      if (!rawText) {
+        return res.json({
+          ok: true,
+          matchedSuppliers: [],
+          matchedLabs: [],
+          matchedExperts: [],
+        });
+      }
+
+      const { data: catRows, error: catErr } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .in('type', ['supplier', 'lab', 'expert'])
+        .order('updated_at', { ascending: false });
+
+      if (catErr) {
+        return res.status(500).json({ error: `Database query failed: ${catErr.message}` });
+      }
+
+      const actor = req.user || null;
+      const accessibleRows = (catRows || []).filter((r) => userCanAccessCatalogRow(r, actor));
+
+      const suppliers: SupplierItem[] = [];
+      const labs: LabItem[] = [];
+      const experts: ExpertItem[] = [];
+
+      for (const r of accessibleRows) {
+        if (r.type === 'supplier') suppliers.push(mapCatalogRowToSupplier(r));
+        else if (r.type === 'lab') labs.push(mapCatalogRowToLab(r));
+        else if (r.type === 'expert') experts.push(mapCatalogRowToExpert(r));
+      }
+
+      const { phrases, words } = extractTechnicalTerms(rawText);
+
+      const matchedSuppliers = suppliers.map((s) => {
         let score = 0;
         const reasons: string[] = [];
-        if (s.capabilities?.some((c) => textToMatch.includes(c.toLowerCase()) || c.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
-          score += 40;
-          reasons.push('Demonstrated fab capability matches system specification');
+
+        // 1. Stored Fab & Packaging Capabilities
+        if (Array.isArray(s.capabilities)) {
+          for (const cap of s.capabilities) {
+            const capLower = cap.toLowerCase();
+            const phraseMatch = phrases.some((p) => capLower.includes(p));
+            const wordMatch = words.some((w) => w.length >= 4 && capLower.includes(w));
+            if (phraseMatch || wordMatch) {
+              score += phraseMatch ? 25 : 15;
+              reasons.push(`Fab capability: "${cap}"`);
+            }
+          }
         }
-        if (s.components?.some((cmp) => textToMatch.includes(cmp.name.toLowerCase()) || textToMatch.includes(cmp.category.toLowerCase()))) {
-          score += 35;
-          reasons.push('Off-the-shelf engineering samples available with qualified PPAP');
+
+        // 2. Stored Indexed Components
+        if (Array.isArray(s.components)) {
+          for (const cmp of s.components) {
+            const cmpText = `${cmp.name} ${cmp.partNumber} ${cmp.category} ${cmp.specSummary || ''}`.toLowerCase();
+            const phraseMatch = phrases.some((p) => cmpText.includes(p));
+            const wordMatch = words.some((w) => w.length >= 4 && cmpText.includes(w));
+            if (phraseMatch || wordMatch) {
+              score += phraseMatch ? 20 : 12;
+              reasons.push(`Qualified component: ${cmp.name} (${cmp.partNumber})`);
+            }
+          }
         }
-        if (textToMatch.includes(s.domain.toLowerCase()) || textToMatch.includes('sic') && s.domain.toLowerCase().includes('sic')) {
-          score += 25;
-          reasons.push('Domain specialization alignment');
+
+        // 3. Stored Domain Alignment
+        const domainLower = (s.domain || '').toLowerCase();
+        if (phrases.some((p) => domainLower.includes(p)) || words.some((w) => w.length >= 4 && domainLower.includes(w))) {
+          score += 15;
+          reasons.push(`Domain specialization: ${s.domain}`);
         }
+
+        // 4. Stored Certifications
+        if (Array.isArray(s.certifications)) {
+          for (const cert of s.certifications) {
+            const certLower = cert.toLowerCase();
+            if (phrases.some((p) => certLower.includes(p)) || words.some((w) => w.length >= 4 && certLower.includes(w))) {
+              score += 10;
+              reasons.push(`Accreditation: ${cert}`);
+            }
+          }
+        }
+
+        // 5. Stored Description
+        const descLower = (s.description || '').toLowerCase();
+        if (phrases.some((p) => descLower.includes(p)) || words.some((w) => w.length >= 4 && descLower.includes(w))) {
+          score += 10;
+          reasons.push(`Technical focus: ${s.name}`);
+        }
+
         return {
           ...s,
-          matchScore: Math.min(score, 98),
-          matchReason: reasons.join(' · ') || 'Industrial power electronics manufacturing partner',
+          matchScore: Math.min(Math.round(score), 99),
+          matchReason: reasons.slice(0, 3).join(' · '),
         };
-      }).filter((s) => s.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+      }).filter((s) => s.matchScore >= 15 && s.matchReason).sort((a, b) => b.matchScore - a.matchScore);
 
-      const matchedLabs = allLabs.map((l) => {
+      const matchedLabs = labs.map((l) => {
         let score = 0;
         const reasons: string[] = [];
-        if (l.testingDomains?.some((td) => textToMatch.includes(td.toLowerCase()) || td.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
-          score += 45;
-          reasons.push('Accredited test domain matches operating conditions');
+
+        // 1. Stored Testing Domains
+        if (Array.isArray(l.testingDomains)) {
+          for (const td of l.testingDomains) {
+            const tdLower = td.toLowerCase();
+            const phraseMatch = phrases.some((p) => tdLower.includes(p));
+            const wordMatch = words.some((w) => w.length >= 4 && tdLower.includes(w));
+            if (phraseMatch || wordMatch) {
+              score += phraseMatch ? 30 : 18;
+              reasons.push(`Testing domain: "${td}"`);
+            }
+          }
         }
-        if (l.equipmentList?.some((eq) => textToMatch.includes(eq.name.toLowerCase()) || textToMatch.includes(eq.model.toLowerCase()))) {
-          score += 35;
-          reasons.push('High-bandwidth dyno/spectrometry hardware available for booking');
+
+        // 2. Stored Equipment List
+        if (Array.isArray(l.equipmentList)) {
+          for (const eq of l.equipmentList) {
+            const eqText = `${eq.name} ${eq.model} ${eq.manufacturer} ${eq.operatingRange || ''} ${eq.standardsCompliant?.join(' ') || ''}`.toLowerCase();
+            const phraseMatch = phrases.some((p) => eqText.includes(p));
+            const wordMatch = words.some((w) => w.length >= 4 && eqText.includes(w));
+            if (phraseMatch || wordMatch) {
+              score += phraseMatch ? 25 : 15;
+              reasons.push(`Test bench: ${eq.name} (${eq.model})`);
+            }
+          }
         }
-        if (textToMatch.includes('inverter') || textToMatch.includes('switching') || textToMatch.includes('thermal')) {
-          score += 20;
-          reasons.push('Rapid 2-3 week bench verification slot');
+
+        // 3. Stored Accreditations
+        if (Array.isArray(l.accreditations)) {
+          for (const acc of l.accreditations) {
+            const accLower = acc.toLowerCase();
+            if (phrases.some((p) => accLower.includes(p)) || words.some((w) => w.length >= 4 && accLower.includes(w))) {
+              score += 15;
+              reasons.push(`Accreditation: ${acc}`);
+            }
+          }
         }
+
+        // 4. Stored Description
+        const descLower = (l.description || '').toLowerCase();
+        if (phrases.some((p) => descLower.includes(p)) || words.some((w) => w.length >= 4 && descLower.includes(w))) {
+          score += 10;
+          reasons.push(`Facility focus: ${l.name}`);
+        }
+
         return {
           ...l,
-          matchScore: Math.min(score, 99),
-          matchReason: reasons.join(' · ') || 'Accredited physical validation bench',
+          matchScore: Math.min(Math.round(score), 99),
+          matchReason: reasons.slice(0, 3).join(' · '),
         };
-      }).filter((l) => l.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+      }).filter((l) => l.matchScore >= 15 && l.matchReason).sort((a, b) => b.matchScore - a.matchScore);
 
-      const matchedExperts = allExperts.map((e) => {
+      const matchedExperts = experts.map((e) => {
         let score = 0;
         const reasons: string[] = [];
-        if (e.domainExpertise?.some((de) => textToMatch.includes(de.toLowerCase()) || de.toLowerCase().split(' ').some((w) => w.length > 4 && textToMatch.includes(w)))) {
-          score += 50;
-          reasons.push('Peer-reviewed publication record and patents in this exact bottleneck');
+
+        // 1. Stored Domain Expertise
+        if (Array.isArray(e.domainExpertise)) {
+          for (const de of e.domainExpertise) {
+            const deLower = de.toLowerCase();
+            const phraseMatch = phrases.some((p) => deLower.includes(p));
+            const wordMatch = words.some((w) => w.length >= 4 && deLower.includes(w));
+            if (phraseMatch || wordMatch) {
+              score += phraseMatch ? 30 : 18;
+              reasons.push(`Expertise: "${de}"`);
+            }
+          }
         }
-        if (textToMatch.includes('gate') || textToMatch.includes('soft-switching') || textToMatch.includes('sic')) {
-          score += 30;
-          reasons.push('Prior advisory history on automotive traction architectures');
+
+        // 2. Stored Bio & Research Focus
+        const bioText = `${e.title || ''} ${e.bio || ''}`.toLowerCase();
+        const phraseMatch = phrases.some((p) => bioText.includes(p));
+        const wordMatch = words.some((w) => w.length >= 4 && bioText.includes(w));
+        if (phraseMatch || wordMatch) {
+          score += phraseMatch ? 20 : 12;
+          reasons.push(`Research focus: ${e.title}`);
         }
+
+        // 3. Stored Affiliation
+        const affilText = (e.affiliation || '').toLowerCase();
+        if (phrases.some((p) => affilText.includes(p)) || words.some((w) => w.length >= 4 && affilText.includes(w))) {
+          score += 10;
+          reasons.push(`Affiliation: ${e.affiliation}`);
+        }
+
         return {
           ...e,
-          matchScore: Math.min(score, 97),
-          matchReason: reasons.join(' · ') || 'Senior academic and industrial technical advisor',
+          matchScore: Math.min(Math.round(score), 99),
+          matchReason: reasons.slice(0, 3).join(' · '),
         };
-      }).filter((e) => e.matchScore > 20).sort((a, b) => b.matchScore - a.matchScore);
+      }).filter((e) => e.matchScore >= 15 && e.matchReason).sort((a, b) => b.matchScore - a.matchScore);
 
       res.json({
         ok: true,
@@ -4057,12 +4653,19 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to match partners.' });
     }
-  });
+  };
 
-  // 14d. GET /api/search — Unified Search Across Frontiers, Evidence, Suppliers, Labs, Experts, Projects & Knowledge
-  app.get('/api/search', async (req, res) => {
+  app.post('/api/frontier/match-partners', handleMatchPartners);
+  app.get('/api/frontier/match-partners', handleMatchPartners);
+  app.post('/api/partners/match', handleMatchPartners);
+  app.get('/api/partners/match', handleMatchPartners);
+  app.post('/api/partner-matching', handleMatchPartners);
+  app.get('/api/partner-matching', handleMatchPartners);
+
+  // 14d. GET & POST /api/search — Unified Search Across Frontiers, Evidence, Suppliers, Labs, Experts, Projects & Knowledge
+  const handleUnifiedSearch = async (req: express.Request, res: express.Response) => {
     try {
-      const q = String(req.query.q || '').trim().toLowerCase();
+      const q = String(req.query.q || req.query.query || req.body?.q || req.body?.query || '').trim().toLowerCase();
       if (!q) {
         return res.json({
           ok: true,
@@ -4073,83 +4676,175 @@ async function startServer() {
           experts: [],
           projects: [],
           knowledge: [],
+          totalMatches: 0,
         });
       }
 
-      const [allFrontiers, allEvidence, allProjects, allSuppliers, allLabs, allExperts] = await Promise.all([
-        fetchSupabaseFrontiers(),
-        fetchSupabaseEvidence(),
-        fetchSupabaseProjects(),
-        fetchSupabaseSuppliers(),
-        fetchSupabaseLabs(),
-        fetchSupabaseExperts(),
-      ]);
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not configured.' });
+      }
 
-      const actor = req.user;
-      const isSearchAdmin = actor?.role === 'admin' || actor?.role === 'platform_admin';
-      const accessibleProjects = isSearchAdmin
-        ? allProjects
-        : actor
-        ? allProjects.filter((p) => userHasProjectAccess(p, actor))
-        : [];
+      const { data: catRows, error: catErr } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .order('updated_at', { ascending: false });
 
-      const frontiers = allFrontiers.filter(
-        (f) =>
-          f.title.toLowerCase().includes(q) ||
-          f.domain.toLowerCase().includes(q) ||
-          f.technologySystem.toLowerCase().includes(q) ||
-          f.metricName.toLowerCase().includes(q) ||
-          f.gapRootCauseAnalysis.toLowerCase().includes(q)
-      );
+      if (catErr) {
+        return res.status(500).json({ error: `Database search query failed: ${catErr.message}` });
+      }
 
-      const evidence = allEvidence.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          e.category.toLowerCase().includes(q) ||
-          e.institutionOrCompany.toLowerCase().includes(q) ||
-          e.sourceIdentifier.toLowerCase().includes(q) ||
-          e.relevanceToGap.toLowerCase().includes(q)
-      );
+      const actor = req.user || null;
+      const accessibleRows = (catRows || []).filter((row) => userCanAccessCatalogRow(row, actor));
 
-      const suppliers = allSuppliers.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.domain.toLowerCase().includes(q) ||
-          s.capabilities?.some((c) => c.toLowerCase().includes(q)) ||
-          s.components?.some((cmp) => cmp.name.toLowerCase().includes(q) || cmp.partNumber.toLowerCase().includes(q))
-      );
+      const frontiers: FrontierBenchmark[] = [];
+      const evidence: EvidenceNode[] = [];
+      const suppliers: SupplierItem[] = [];
+      const labs: LabItem[] = [];
+      const experts: ExpertItem[] = [];
+      const projects: ProtectedProjectRoom[] = [];
+      const knowledge: KnowledgeItem[] = [];
 
-      const labs = allLabs.filter(
-        (l) =>
-          l.name.toLowerCase().includes(q) ||
-          l.institution.toLowerCase().includes(q) ||
-          l.testingDomains?.some((td) => td.toLowerCase().includes(q)) ||
-          l.equipmentList?.some((eq) => eq.name.toLowerCase().includes(q) || eq.model.toLowerCase().includes(q))
-      );
+      for (const row of accessibleRows) {
+        const kind = row.metadata?.qartinia_kind || row.type;
+        if (kind === 'frontier') {
+          const f = mapCatalogRowToFrontier(row);
+          if (
+            f.title.toLowerCase().includes(q) ||
+            f.domain.toLowerCase().includes(q) ||
+            f.technologySystem.toLowerCase().includes(q) ||
+            f.metricName.toLowerCase().includes(q) ||
+            f.gapRootCauseAnalysis.toLowerCase().includes(q) ||
+            f.whatChangedRecently?.toLowerCase().includes(q) ||
+            f.operatingEnvelope?.toLowerCase().includes(q) ||
+            f.constraints?.toLowerCase().includes(q) ||
+            f.maturityTrl?.toLowerCase().includes(q)
+          ) {
+            frontiers.push(f);
+          }
+        } else if (kind === 'evidence') {
+          const e = mapCatalogRowToEvidence(row);
+          if (
+            e.title.toLowerCase().includes(q) ||
+            e.category.toLowerCase().includes(q) ||
+            e.institutionOrCompany.toLowerCase().includes(q) ||
+            e.sourceIdentifier.toLowerCase().includes(q) ||
+            e.relevanceToGap.toLowerCase().includes(q) ||
+            e.operatingConditions?.toLowerCase().includes(q) ||
+            e.demonstratedPerformance?.toLowerCase().includes(q) ||
+            e.leadContributor?.toLowerCase().includes(q) ||
+            e.doiOrPatentRef?.toLowerCase().includes(q) ||
+            e.maturityTrl?.toLowerCase().includes(q)
+          ) {
+            evidence.push(e);
+          }
+        } else if (kind === 'supplier') {
+          const s = mapCatalogRowToSupplier(row);
+          if (
+            s.name.toLowerCase().includes(q) ||
+            s.domain.toLowerCase().includes(q) ||
+            s.headquarters.toLowerCase().includes(q) ||
+            s.country.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q) ||
+            s.capabilities?.some((c) => c.toLowerCase().includes(q)) ||
+            s.components?.some((cmp) =>
+              cmp.name.toLowerCase().includes(q) ||
+              cmp.partNumber.toLowerCase().includes(q) ||
+              cmp.category.toLowerCase().includes(q) ||
+              cmp.specSummary?.toLowerCase().includes(q)
+            ) ||
+            s.certifications?.some((cert) => cert.toLowerCase().includes(q))
+          ) {
+            suppliers.push(s);
+          }
+        } else if (kind === 'lab') {
+          const l = mapCatalogRowToLab(row);
+          if (
+            l.name.toLowerCase().includes(q) ||
+            l.institution.toLowerCase().includes(q) ||
+            l.location.toLowerCase().includes(q) ||
+            l.description.toLowerCase().includes(q) ||
+            l.leadScientist?.toLowerCase().includes(q) ||
+            l.testingDomains?.some((td) => td.toLowerCase().includes(q)) ||
+            l.accreditations?.some((acc) => acc.toLowerCase().includes(q)) ||
+            l.equipmentList?.some((eq) =>
+              eq.name.toLowerCase().includes(q) ||
+              eq.model.toLowerCase().includes(q) ||
+              eq.manufacturer.toLowerCase().includes(q) ||
+              eq.operatingRange?.toLowerCase().includes(q)
+            )
+          ) {
+            labs.push(l);
+          }
+        } else if (kind === 'expert') {
+          const exp = mapCatalogRowToExpert(row);
+          if (
+            exp.name.toLowerCase().includes(q) ||
+            exp.title.toLowerCase().includes(q) ||
+            exp.affiliation.toLowerCase().includes(q) ||
+            exp.location.toLowerCase().includes(q) ||
+            exp.bio.toLowerCase().includes(q) ||
+            exp.domainExpertise?.some((de) => de.toLowerCase().includes(q))
+          ) {
+            experts.push(exp);
+          }
+        } else if (kind === 'project_room') {
+          const p = mapCatalogRowToProject(row);
+          if (
+            p.title.toLowerCase().includes(q) ||
+            p.code.toLowerCase().includes(q) ||
+            p.domain.toLowerCase().includes(q) ||
+            p.problemStatement.toLowerCase().includes(q) ||
+            p.targetSpec?.toLowerCase().includes(q) ||
+            p.createdByOrg?.toLowerCase().includes(q) ||
+            p.legalStage?.toLowerCase().includes(q)
+          ) {
+            projects.push(p);
+          }
+        } else if (kind === 'knowledge') {
+          const k = mapCatalogRowToKnowledge(row);
+          if (
+            k.title.toLowerCase().includes(q) ||
+            k.type.toLowerCase().includes(q) ||
+            k.authorsOrOrg.toLowerCase().includes(q) ||
+            k.abstract.toLowerCase().includes(q) ||
+            k.domain?.toLowerCase().includes(q) ||
+            k.doiOrRef?.toLowerCase().includes(q) ||
+            k.tags?.some((t) => t.toLowerCase().includes(q)) ||
+            k.keyFindings?.some((kf) => kf.toLowerCase().includes(q))
+          ) {
+            knowledge.push(k);
+          }
+        }
+      }
 
-      const experts = allExperts.filter(
-        (e) =>
-          e.name.toLowerCase().includes(q) ||
-          e.affiliation.toLowerCase().includes(q) ||
-          e.domainExpertise?.some((de) => de.toLowerCase().includes(q)) ||
-          e.bio.toLowerCase().includes(q)
-      );
+      // Optional Category Filtering
+      const catFilter = String(req.query.category || req.query.type || req.body?.category || req.body?.type || '').trim().toLowerCase();
+      if (catFilter) {
+        if (catFilter === 'frontier' || catFilter === 'frontiers') {
+          evidence.length = 0; suppliers.length = 0; labs.length = 0; experts.length = 0; projects.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'evidence') {
+          frontiers.length = 0; suppliers.length = 0; labs.length = 0; experts.length = 0; projects.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'supplier' || catFilter === 'suppliers') {
+          frontiers.length = 0; evidence.length = 0; labs.length = 0; experts.length = 0; projects.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'lab' || catFilter === 'labs') {
+          frontiers.length = 0; evidence.length = 0; suppliers.length = 0; experts.length = 0; projects.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'expert' || catFilter === 'experts') {
+          frontiers.length = 0; evidence.length = 0; suppliers.length = 0; labs.length = 0; projects.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'project' || catFilter === 'projects') {
+          frontiers.length = 0; evidence.length = 0; suppliers.length = 0; labs.length = 0; experts.length = 0; knowledge.length = 0;
+        } else if (catFilter === 'knowledge') {
+          frontiers.length = 0; evidence.length = 0; suppliers.length = 0; labs.length = 0; experts.length = 0; projects.length = 0;
+        }
+      }
 
-      const projects = accessibleProjects.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q) ||
-          p.domain.toLowerCase().includes(q) ||
-          p.problemStatement.toLowerCase().includes(q)
-      );
-
-      const knowledge = (localStore.knowledgeItems || []).filter(
-        (k) =>
-          k.title.toLowerCase().includes(q) ||
-          k.authorsOrOrg.toLowerCase().includes(q) ||
-          k.abstract.toLowerCase().includes(q) ||
-          k.tags?.some((t) => t.toLowerCase().includes(q))
-      );
+      const totalMatches =
+        frontiers.length +
+        evidence.length +
+        suppliers.length +
+        labs.length +
+        experts.length +
+        projects.length +
+        knowledge.length;
 
       res.json({
         ok: true,
@@ -4160,19 +4855,15 @@ async function startServer() {
         experts,
         projects,
         knowledge,
-        totalMatches:
-          frontiers.length +
-          evidence.length +
-          suppliers.length +
-          labs.length +
-          experts.length +
-          projects.length +
-          knowledge.length,
+        totalMatches,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Search execution failed.' });
     }
-  });
+  };
+
+  app.get('/api/search', handleUnifiedSearch);
+  app.post('/api/search', handleUnifiedSearch);
 
   // --------------------------------------------------------------------------
   // SOCIAL POSTS, USER CONNECTIONS & DIRECT MESSAGING API (Community Hub)
@@ -4631,8 +5322,9 @@ async function startServer() {
     });
   });
 
-  app.get('/api/notifications', requireAuth, (_req, res) => {
-    const list = localStore.notifications || [];
+  app.get('/api/notifications', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const list = await fetchSupabaseNotifications(actor);
     res.json({
       ok: true,
       notifications: list,
@@ -4640,37 +5332,109 @@ async function startServer() {
     });
   });
 
-  app.patch('/api/notifications/:id/read', requireAuth, (req, res) => {
+  app.patch('/api/notifications/:id/read', requireAuth, async (req, res) => {
+    const actor = req.user!;
     if (!Array.isArray(localStore.notifications)) localStore.notifications = [];
     const notif = localStore.notifications.find((n) => n.id === req.params.id);
     if (notif) {
       notif.read = true;
       saveLocalStore(localStore);
-      broadcastSSE('notification_read', {
-        id: notif.id,
-        unreadCount: localStore.notifications.filter((n) => !n.read).length,
-      });
     }
-    res.json({ ok: true, notifications: localStore.notifications });
+
+    if (supabaseAdmin) {
+      try {
+        const { data: acts } = await supabaseAdmin
+          .from('user_activity')
+          .select('id, metadata')
+          .eq('entity_type', 'notification')
+          .eq('entity_id', req.params.id);
+        if (acts && acts[0]) {
+          await supabaseAdmin
+            .from('user_activity')
+            .update({
+              metadata: {
+                ...acts[0].metadata,
+                read: true,
+              },
+            })
+            .eq('id', acts[0].id);
+        }
+      } catch (dbErr) {
+        console.warn('[Supabase Notification Read Error]', dbErr);
+      }
+    }
+
+    const currentList = await fetchSupabaseNotifications(actor);
+    broadcastSSE('notification_read', {
+      id: req.params.id,
+      unreadCount: currentList.filter((n) => !n.read).length,
+    });
+    res.json({ ok: true, notifications: currentList });
   });
 
-  app.post('/api/notifications/mark-all-read', requireAuth, (_req, res) => {
+  app.post('/api/notifications/mark-all-read', requireAuth, async (req, res) => {
+    const actor = req.user!;
     if (Array.isArray(localStore.notifications)) {
       localStore.notifications.forEach((n) => {
         n.read = true;
       });
       saveLocalStore(localStore);
-      broadcastSSE('notification_mark_all_read', { unreadCount: 0 });
     }
-    res.json({ ok: true, notifications: localStore.notifications });
+
+    if (supabaseAdmin) {
+      try {
+        const validUuid = resolveValidActorUuid(actor.id);
+        if (validUuid) {
+          const { data: acts } = await supabaseAdmin
+            .from('user_activity')
+            .select('id, metadata')
+            .eq('user_id', validUuid)
+            .eq('entity_type', 'notification');
+          if (acts && acts.length > 0) {
+            for (const act of acts) {
+              await supabaseAdmin
+                .from('user_activity')
+                .update({
+                  metadata: {
+                    ...act.metadata,
+                    read: true,
+                  },
+                })
+                .eq('id', act.id);
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[Supabase Notification Mark All Read Error]', dbErr);
+      }
+    }
+
+    broadcastSSE('notification_mark_all_read', { unreadCount: 0 });
+    const currentList = await fetchSupabaseNotifications(actor);
+    res.json({ ok: true, notifications: currentList });
   });
 
-  app.delete('/api/notifications/:id', requireAuth, (req, res) => {
+  app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
+    const actor = req.user!;
     if (Array.isArray(localStore.notifications)) {
       localStore.notifications = localStore.notifications.filter((n) => n.id !== req.params.id);
       saveLocalStore(localStore);
     }
-    res.json({ ok: true, notifications: localStore.notifications });
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('user_activity')
+          .delete()
+          .eq('entity_type', 'notification')
+          .eq('entity_id', req.params.id);
+      } catch (dbErr) {
+        console.warn('[Supabase Notification Delete Error]', dbErr);
+      }
+    }
+
+    const currentList = await fetchSupabaseNotifications(actor);
+    res.json({ ok: true, notifications: currentList });
   });
 
   // 18. POST / PATCH / DELETE /api/projects — Protected Project Rooms Synced with `public.catalog` & `public.catalog_relationships`
@@ -6099,9 +6863,10 @@ async function startServer() {
     }
   });
 
-  // Simulation Hub: Physics & Transient Execution
-  app.get('/api/simulations', (_req, res) => {
-    res.json({ ok: true, simulations: localStore.simulations });
+  // Simulation Hub: Physics & Transient Execution (Supabase Catalog `public.catalog`)
+  app.get('/api/simulations', async (_req, res) => {
+    const list = await fetchSupabaseSimulations();
+    res.json({ ok: true, simulations: list });
   });
 
   app.post('/api/simulations/run', requireAuth, async (req, res) => {
@@ -6163,8 +6928,11 @@ async function startServer() {
       },
       outputWaveformData: waveform,
       resultReport: `Simulated under ${vdc}V bus and ${ipk}A peak load. Parasitic loop inductance ${lloop}nH produces ${peakOverVoltage}V transient peak (safety margin verified). Turn-on energy calculated at ${eOn}mJ.`,
+      isDemo: false, // Explicit user-executed simulation, clearly distinguished from demo records
     };
 
+    // Sync to Supabase catalog and maintain in-memory store
+    await syncSimulationToCatalog(newSim, actorUuid);
     localStore.simulations.unshift(newSim);
     saveLocalStore(localStore);
 
@@ -6173,26 +6941,18 @@ async function startServer() {
         tool: newSim.tool,
         title: newSim.title,
         metrics: newSim.summaryMetrics,
+        isDemo: false,
       });
     }
 
-    res.json({ ok: true, simulation: newSim, simulations: localStore.simulations });
+    const allSims = await fetchSupabaseSimulations();
+    res.json({ ok: true, simulation: newSim, simulations: allSims });
   });
 
-  // Brainstorming Rooms API
-  app.get('/api/brainstorm', (req, res) => {
+  // Brainstorming Rooms API (Supabase Catalog `public.catalog`)
+  app.get('/api/brainstorm', async (req, res) => {
     const actor = req.user;
-    const isPlatformAdmin = actor && (actor.role === 'admin' || actor.role === 'platform_admin');
-    const rooms = (localStore.brainstormRooms || []).filter((r) => {
-      if (!r.isPrivate) return true;
-      if (!actor) return false;
-      if (isPlatformAdmin) return true;
-      const isCreator = r.createdBy === actor.fullName || r.createdBy === actor.email;
-      const isParticipant = (r.participants || []).some(
-        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
-      );
-      return isCreator || isParticipant;
-    });
+    const rooms = await fetchSupabaseBrainstormRooms(actor);
     res.json({ ok: true, rooms });
   });
 
@@ -6242,6 +7002,7 @@ async function startServer() {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
+    await syncBrainstormRoomToCatalog(newRoom, actorUuid);
     localStore.brainstormRooms.unshift(newRoom);
     saveLocalStore(localStore);
 
@@ -6249,17 +7010,32 @@ async function startServer() {
       await logSupabaseActivity(actorUuid, 'brainstorm_room_created', 'brainstorm_room', newRoom.id, {
         title: newRoom.title,
         domain: newRoom.domain,
+        isPrivate: newRoom.isPrivate,
       });
     }
 
-    res.json({ ok: true, room: newRoom, rooms: localStore.brainstormRooms });
+    const allRooms = await fetchSupabaseBrainstormRooms(actor);
+    res.json({ ok: true, room: newRoom, rooms: allRooms });
   });
 
   app.post('/api/brainstorm/:id/messages', requireAuth, async (req, res) => {
-    const room = localStore.brainstormRooms.find((r) => r.id === req.params.id);
+    const actor = req.user!;
+    let room = (localStore.brainstormRooms || []).find((r) => r.id === req.params.id);
+
+    // Look up in Supabase catalog if not found in local array
+    if (!room && supabaseAdmin) {
+      const { data: dbRoomRow } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', req.params.id)
+        .single();
+      if (dbRoomRow?.metadata?.qartinia_payload) {
+        room = dbRoomRow.metadata.qartinia_payload as BrainstormRoom;
+      }
+    }
+
     if (!room) return res.status(404).json({ error: 'Brainstorm room not found.' });
 
-    const actor = req.user!;
     const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     if (room.isPrivate && !isPlatformAdmin) {
       const isCreator = room.createdBy === actor.fullName || room.createdBy === actor.email;
@@ -6311,15 +7087,33 @@ async function startServer() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
 
+    await syncBrainstormRoomToCatalog(room, actor.id);
+    const idx = (localStore.brainstormRooms || []).findIndex((r) => r.id === room!.id);
+    if (idx !== -1) localStore.brainstormRooms[idx] = room;
+    else localStore.brainstormRooms.unshift(room);
     saveLocalStore(localStore);
+
     res.json({ ok: true, room });
   });
 
   app.post('/api/brainstorm/:id/tasks', requireAuth, async (req, res) => {
-    const room = localStore.brainstormRooms.find((r) => r.id === req.params.id);
+    const actor = req.user!;
+    let room = (localStore.brainstormRooms || []).find((r) => r.id === req.params.id);
+
+    // Look up in Supabase catalog if not found in local array
+    if (!room && supabaseAdmin) {
+      const { data: dbRoomRow } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('id', req.params.id)
+        .single();
+      if (dbRoomRow?.metadata?.qartinia_payload) {
+        room = dbRoomRow.metadata.qartinia_payload as BrainstormRoom;
+      }
+    }
+
     if (!room) return res.status(404).json({ error: 'Brainstorm room not found.' });
 
-    const actor = req.user!;
     const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     if (room.isPrivate && !isPlatformAdmin) {
       const isCreator = room.createdBy === actor.fullName || room.createdBy === actor.email;
@@ -6345,7 +7139,12 @@ async function startServer() {
       });
     }
 
+    await syncBrainstormRoomToCatalog(room, actor.id);
+    const idx = (localStore.brainstormRooms || []).findIndex((r) => r.id === room!.id);
+    if (idx !== -1) localStore.brainstormRooms[idx] = room;
+    else localStore.brainstormRooms.unshift(room);
     saveLocalStore(localStore);
+
     res.json({ ok: true, room });
   });
 

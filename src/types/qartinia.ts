@@ -289,6 +289,7 @@ export interface SimulationJob {
   summaryMetrics?: Record<string, string>;
   outputWaveformData?: { time: number; value: number }[];
   resultReport?: string;
+  isDemo?: boolean;
 }
 
 export interface KnowledgeItem {
