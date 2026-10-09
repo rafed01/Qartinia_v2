@@ -259,18 +259,69 @@ interface LocalStore {
   currentUserId: string | null;
 }
 
-// Active Server-Sent Events client connections
-const sseClients = new Set<express.Response>();
+// Active Server-Sent Events client connections with user identity
+interface SSEClientConnection {
+  res: express.Response;
+  user: AuthenticatedUser;
+}
+
+const sseClients = new Set<SSEClientConnection>();
 
 function broadcastSSE(event: string, data: any) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   sseClients.forEach((client) => {
     try {
-      client.write(payload);
+      if (event === 'notification' && data?.notification) {
+        const allowed = filterNotificationsForActor([data.notification], client.user);
+        if (allowed.length === 0) return;
+      }
+      client.res.write(payload);
     } catch {
       sseClients.delete(client);
     }
   });
+}
+
+async function isAuthorizedOrgLeaderOrAdmin(
+  actor: AuthenticatedUser,
+  targetOrgId?: string | null
+): Promise<boolean> {
+  if (actor.role === 'admin' || actor.role === 'platform_admin') {
+    return true;
+  }
+  if (!targetOrgId) {
+    targetOrgId = actor.organizationId || null;
+  }
+  if (!targetOrgId || !supabaseAdmin) {
+    return false;
+  }
+
+  try {
+    const { data: orgRow } = await supabaseAdmin
+      .from('organizations')
+      .select('owner_id')
+      .eq('id', targetOrgId)
+      .maybeSingle();
+
+    if (orgRow && orgRow.owner_id === actor.id) {
+      return true;
+    }
+
+    const { data: memberRow } = await supabaseAdmin
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', targetOrgId)
+      .eq('user_id', actor.id)
+      .maybeSingle();
+
+    if (memberRow && (memberRow.role === 'owner' || memberRow.role === 'admin')) {
+      return true;
+    }
+  } catch (err) {
+    console.warn('[isAuthorizedOrgLeaderOrAdmin error]', err);
+  }
+
+  return false;
 }
 
 function loadLocalStore(): LocalStore {
@@ -2142,6 +2193,37 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   // Fetch scoped notifications for current user from Supabase and in-memory store
   const notifications = await fetchSupabaseNotifications(currentUser as any);
 
+  // Scope private workspace data according to user role and ownership
+  const scopedApprovals = isStateAdmin ? approvals : [];
+  const scopedAccounts = isStateAdmin ? accounts : (currentUser ? [currentUser] : []);
+  const scopedActivityLog = isStateAdmin
+    ? activityLog
+    : currentUser
+    ? activityLog.filter((a) => a.userId === currentUser.id)
+    : [];
+  const scopedRequests = isStateAdmin
+    ? requests
+    : currentUser
+    ? requests.filter(
+        (r) =>
+          r.userId === currentUser.id ||
+          (r.email && currentUser.email && r.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+          (r.organization && currentUser.organizationName && r.organization.toLowerCase() === currentUser.organizationName.toLowerCase())
+      )
+    : [];
+  const scopedEnterpriseMembers = isStateAdmin
+    ? enterpriseMembers
+    : currentUser
+    ? enterpriseMembers.filter(
+        (m) =>
+          (currentUser.organizationId && m.organizationId === currentUser.organizationId) ||
+          (currentUser.organizationName && m.organizationName && m.organizationName.toLowerCase() === currentUser.organizationName.toLowerCase())
+      )
+    : [];
+  const scopedBookmarks = currentUser
+    ? bookmarks.filter((bm) => bm.userId === currentUser.id)
+    : [];
+
   return {
     frontiers,
     projects,
@@ -2154,14 +2236,14 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     knowledgeItems,
     notifications,
     catalogRelationships,
-    bookmarks,
+    bookmarks: scopedBookmarks,
     currentUser,
-    accounts,
+    accounts: scopedAccounts,
     organizations,
-    enterpriseMembers,
-    requests,
-    approvals,
-    activityLog,
+    enterpriseMembers: scopedEnterpriseMembers,
+    requests: scopedRequests,
+    approvals: scopedApprovals,
+    activityLog: scopedActivityLog,
     supabaseConnected: Boolean(supabaseAdmin),
   };
 }
@@ -2676,7 +2758,7 @@ async function startServer() {
   await ensureDatabaseCatalogSeeded();
 
   // 1. GET /api/state — Live Supabase + Local Workspace State
-  app.get('/api/state', async (req, res) => {
+  app.get('/api/state', requireAuth, async (req, res) => {
     try {
       const state = await fetchFullWorkspaceState(req.user?.id || null);
       res.json(state);
@@ -2686,7 +2768,7 @@ async function startServer() {
   });
 
   // 2. GET /api/dev/diagnostics — Live Supabase Schema, 8 Tables, Enum & RPC Verification
-  app.get('/api/dev/diagnostics', async (_req, res) => {
+  app.get('/api/dev/diagnostics', requireAdmin, async (_req, res) => {
     const startMs = Date.now();
     if (!supabaseAdmin) {
       return res.json({
@@ -3043,8 +3125,27 @@ async function startServer() {
       }
 
       const actor = req.user!;
-      // Only administrators can edit other profiles; regular users can only edit their own
-      const targetId = actor.role === 'admin' && req.body.id ? req.body.id : actor.id;
+      const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
+
+      if (req.body.id && req.body.id !== actor.id && !isPlatformAdmin) {
+        return res.status(403).json({
+          error: "Forbidden: You do not have permission to edit another user's profile.",
+        });
+      }
+
+      if (
+        (req.body.role !== undefined ||
+          req.body.status !== undefined ||
+          req.body.approvalStatus !== undefined) &&
+        !isPlatformAdmin
+      ) {
+        return res.status(403).json({
+          error:
+            'Forbidden: Only platform administrators can modify privileged profile fields (role, status, approvalStatus).',
+        });
+      }
+
+      const targetId = isPlatformAdmin && req.body.id ? req.body.id : actor.id;
 
       const { data: existingProf } = await supabaseAdmin
         .from('profiles')
@@ -3409,15 +3510,12 @@ async function startServer() {
         }
       }
 
-      // Enforce organization membership / administrator permissions
-      const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-      const isOrgLeader =
-        (targetOrgId && targetOrgId === actor.organizationId) ||
-        (organizationName && organizationName.trim().toLowerCase() === actor.organizationName.trim().toLowerCase());
+      // Enforce organization membership / administrator permissions: explicit stored organization owner/admin required
+      const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, targetOrgId);
 
-      if (!isPlatformAdmin && !isOrgLeader) {
+      if (!isOrgLeader) {
         return res.status(403).json({
-          error: 'Forbidden: You do not have permission to manage seats for this organization.',
+          error: 'Forbidden: Explicit organization owner or administrator permission required.',
         });
       }
 
@@ -5401,14 +5499,36 @@ async function startServer() {
   });
 
   // 17. REAL-TIME SERVER-SENT EVENTS (SSE) & NOTIFICATIONS API
-  app.get('/api/events', (req, res) => {
+  app.get('/api/events', async (req, res) => {
+    let token: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim();
+    } else if (typeof req.query.token === 'string') {
+      token = req.query.token.trim();
+    }
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required for SSE stream.' });
+    }
+
+    const validated = await validateBearerToken(token);
+    if (!validated || !validated.user) {
+      return res.status(401).json({ error: 'Invalid or expired authentication token.' });
+    }
+
+    if (validated.user.approvalStatus === 'rejected') {
+      return res.status(403).json({ error: 'Access denied: Your account registration has been rejected.' });
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    sseClients.add(res);
+    const clientConn: SSEClientConnection = { res, user: validated.user };
+    sseClients.add(clientConn);
 
     // Initial connection ack
     res.write(
@@ -5421,13 +5541,13 @@ async function startServer() {
         res.write(': ping\n\n');
       } catch {
         clearInterval(keepAlive);
-        sseClients.delete(res);
+        sseClients.delete(clientConn);
       }
     }, 25000);
 
     req.on('close', () => {
       clearInterval(keepAlive);
-      sseClients.delete(res);
+      sseClients.delete(clientConn);
     });
   });
 
@@ -6163,9 +6283,7 @@ async function startServer() {
 
     if (!isPlatformAdmin) {
       members = members.filter(
-        (m) =>
-          (actor.organizationId && m.organizationId === actor.organizationId) ||
-          (actor.organizationName && m.organizationName && m.organizationName.toLowerCase() === actor.organizationName.toLowerCase())
+        (m) => actor.organizationId && m.organizationId === actor.organizationId
       );
     }
 
@@ -6174,7 +6292,6 @@ async function startServer() {
 
   app.post('/api/enterprise/members/invite', requireAuth, async (req, res) => {
     const actor = req.user!;
-    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { organizationId, organizationName, fullName, email, role, title, department, permissions } = req.body;
     if (!email || !fullName) {
       return res.status(400).json({ error: 'Full name and email are required for membership invitation.' });
@@ -6183,12 +6300,10 @@ async function startServer() {
     const targetOrgId = organizationId || actor.organizationId;
     const targetOrgName = organizationName || actor.organizationName || 'Qartinia Deep-Tech';
 
-    const isOrgLeader =
-      (actor.organizationId && targetOrgId === actor.organizationId) ||
-      (actor.organizationName && targetOrgName.toLowerCase() === actor.organizationName.toLowerCase());
+    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, targetOrgId);
 
-    if (!isPlatformAdmin && !isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to invite members to this organization.' });
+    if (!isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
     }
 
     const memberRole = role || 'employee';
@@ -6300,12 +6415,10 @@ async function startServer() {
       return res.status(404).json({ error: 'Organization member not found.' });
     }
 
-    const isOrgLeader =
-      (actor.organizationId && member.organizationId === actor.organizationId) ||
-      (actor.organizationName && member.organizationName && member.organizationName.toLowerCase() === actor.organizationName.toLowerCase());
+    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
 
-    if (!isPlatformAdmin && !isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to modify this organization member.' });
+    if (!isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
     }
 
     if (role) member.role = role;
@@ -6395,12 +6508,10 @@ async function startServer() {
     }
 
     const member = localStore.enterpriseMembers[index];
-    const isOrgLeader =
-      (actor.organizationId && member.organizationId === actor.organizationId) ||
-      (actor.organizationName && member.organizationName && member.organizationName.toLowerCase() === actor.organizationName.toLowerCase());
+    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
 
-    if (!isPlatformAdmin && !isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to remove members from this organization.' });
+    if (!isOrgLeader) {
+      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
     }
 
     const removed = localStore.enterpriseMembers.splice(index, 1)[0];
