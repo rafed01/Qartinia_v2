@@ -105,7 +105,6 @@ interface UserDashboardViewProps {
   onSelectFrontier: (frontierId: string) => void;
   onOpenAuthModal: () => void;
   onOpenProfileModal?: () => void;
-  onQuickSwitchAccount?: (profileId: string) => Promise<void>;
   onUpdateRequestStatus?: (
     requestId: string,
     status: string,
@@ -143,7 +142,6 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({
   onSelectFrontier,
   onOpenAuthModal,
   onOpenProfileModal,
-  onQuickSwitchAccount,
   onUpdateRequestStatus,
   onDeleteRequest,
   onInviteMember,
@@ -513,41 +511,6 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({
               <Lock className="w-3.5 h-3.5 text-[#108548]" />
               <span>Protected Rooms</span>
             </button>
-          </div>
-        </div>
-
-        {/* Multi-User Persona Switcher Strip */}
-        <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-            <Users className="w-4 h-4 text-[#108548]" />
-            <span className="font-semibold text-[#0F2537]">Switch Testing Persona:</span>
-            <span className="text-slate-400 hidden sm:inline">(Simulate Admin vs Employee permissions in real time)</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {accounts.slice(0, 6).map((acc) => {
-              const isSelected = acc.id === currentUser?.id || acc.email === currentUser?.email;
-              const accIsAdmin = acc.role === 'admin' || acc.role === 'platform_admin' || acc.role === 'owner';
-              return (
-                <button
-                  key={acc.id}
-                  type="button"
-                  onClick={() => onQuickSwitchAccount && onQuickSwitchAccount(acc.id)}
-                  className={`px-2.5 py-1 text-[11px] rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-[#0F2537] text-white font-bold shadow-xs'
-                      : 'bg-[#FAF9F6] text-slate-700 hover:bg-slate-100 border border-slate-200'
-                  }`}
-                  title={`${acc.fullName} (${acc.role}) · ${acc.organizationName}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#108548]' : 'bg-slate-400'}`} />
-                  <span className="truncate max-w-[110px]">{acc.fullName || acc.email.split('@')[0]}</span>
-                  <span className={`text-[9px] font-mono px-1 py-0.2 rounded font-bold ${accIsAdmin ? 'bg-amber-100/30 text-amber-300' : 'opacity-60'}`}>
-                    {acc.role}
-                  </span>
-                </button>
-              );
-            })}
           </div>
         </div>
 

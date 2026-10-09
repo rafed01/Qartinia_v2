@@ -184,43 +184,21 @@ export async function validateBearerToken(token: string): Promise<{ authUser: an
 
 export const authenticateToken: express.RequestHandler = async (req, _res, next) => {
   const authHeader = req.headers.authorization;
-  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-  if (!token && typeof req.query?.token === 'string') {
-    token = req.query.token.trim();
-  }
-  const customUserId = (req.headers['x-user-id'] as string) || (typeof req.query?.userId === 'string' ? req.query.userId.trim() : null);
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
 
-  if (!token && !customUserId) {
+  if (!token) {
     req.user = null;
     req.authUser = null;
     return next();
   }
 
   try {
-    if (token) {
-      const validated = await validateBearerToken(token);
-      if (validated) {
-        req.user = validated.user;
-        req.authUser = validated.authUser;
-        return next();
-      }
+    const validated = await validateBearerToken(token);
+    if (validated) {
+      req.user = validated.user;
+      req.authUser = validated.authUser;
+      return next();
     }
-
-    const lookupId = token || customUserId;
-    if (lookupId && supabaseAdmin) {
-      const { data: prof } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('id', lookupId)
-        .single();
-      if (prof) {
-        const user = mapProfileRow(prof);
-        req.user = user as any;
-        req.authUser = { id: prof.id, email: prof.email };
-        return next();
-      }
-    }
-
     req.user = null;
     req.authUser = null;
   } catch {
@@ -263,56 +241,6 @@ export const requireAdmin: express.RequestHandler = (req, res, next) => {
   }
   next();
 };
-
-/**
- * Creates or retrieves a real Supabase Auth session token for a given user email.
- * This guarantees the frontend receives a valid Supabase access-token.
- */
-async function createSessionForEmail(email: string): Promise<{ token: string; userId: string } | null> {
-  if (!supabaseAdmin || !supabaseAnon) return null;
-  const cleanEmail = email.trim().toLowerCase();
-  try {
-    let { data: users } = await supabaseAdmin.auth.admin.listUsers();
-    let user = users?.users?.find((u) => u.email?.toLowerCase() === cleanEmail);
-    if (!user) {
-      const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-        email: cleanEmail,
-        email_confirm: true,
-      });
-      if (error || !created?.user) {
-        console.error('[createSessionForEmail error]', error);
-        return null;
-      }
-      user = created.user;
-    }
-
-    const linkRes = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: user.email!,
-    });
-    if (linkRes.error || !linkRes.data?.properties?.hashed_token) {
-      console.error('[generateLink error]', linkRes.error);
-      return null;
-    }
-
-    const verifyRes = await supabaseAnon.auth.verifyOtp({
-      token_hash: linkRes.data.properties.hashed_token,
-      type: 'magiclink',
-    });
-    if (verifyRes.error || !verifyRes.data?.session?.access_token) {
-      console.error('[verifyOtp error]', verifyRes.error);
-      return null;
-    }
-
-    return {
-      token: verifyRes.data.session.access_token,
-      userId: user.id,
-    };
-  } catch (err) {
-    console.error('[createSessionForEmail exception]', err);
-    return null;
-  }
-}
 
 interface LocalStore {
   frontiers: FrontierBenchmark[];
@@ -544,6 +472,17 @@ async function fetchSupabaseNotifications(actor?: AuthenticatedUser | null): Pro
 function toPostgresUserRole(roleInput?: string): 'admin' | 'company' | 'employee' | 'user' {
   const r = String(roleInput || '').toLowerCase();
   if (r === 'admin' || r === 'platform_admin') return 'admin';
+  if (r === 'company' || r === 'enterprise_admin' || r === 'startup_founder') return 'company';
+  if (r === 'employee' || r === 'enterprise_employee') return 'employee';
+  return 'user';
+}
+
+/**
+ * Safe server-controlled role mapping for self-registration or unauthenticated account creation.
+ * Never allows self-assignment of 'admin' or 'platform_admin'.
+ */
+function toSafePostgresUserRole(roleInput?: string): 'company' | 'employee' | 'user' {
+  const r = String(roleInput || '').toLowerCase();
   if (r === 'company' || r === 'enterprise_admin' || r === 'startup_founder') return 'company';
   if (r === 'employee' || r === 'enterprise_employee') return 'employee';
   return 'user';
@@ -2860,91 +2799,53 @@ async function startServer() {
   // 3. POST /api/auth/login — Authenticate with Real Supabase Auth + Profiles
   app.post('/api/auth/login', async (req, res) => {
     try {
-      const { email, password, profileId, fullName } = req.body;
-      if (!supabaseAdmin) {
+      const { email, password } = req.body;
+      if (!supabaseAdmin || !supabaseAnon) {
         return res.status(500).json({ error: 'Supabase client is not configured.' });
       }
 
-      if (profileId) {
-        const { data: prof } = await supabaseAdmin
-          .from('profiles')
-          .select('*')
-          .eq('id', profileId)
-          .single();
-        if (!prof) {
-          return res.status(404).json({ error: 'Profile not found in Supabase.' });
-        }
-        const session = await createSessionForEmail(prof.email);
-        await logSupabaseActivity(prof.id, 'auth_session_switch', 'profile', prof.email, {
-          role: prof.role,
-          status: prof.approval_status,
-        });
-        const state = await fetchFullWorkspaceState(prof.id);
-        return res.json({
-          ok: true,
-          token: session?.token || null,
-          currentUser: state.currentUser,
-          state,
-        });
-      }
-
       const cleanEmail = String(email || '').trim().toLowerCase();
-      if (!cleanEmail) {
-        return res.status(400).json({ error: 'Please enter an email address.' });
+      const cleanPassword = String(password || '').trim();
+
+      if (!cleanEmail || !cleanPassword) {
+        return res.status(400).json({ error: 'Please enter both email and password.' });
       }
 
-      const { data: existingProfiles } = await supabaseAdmin
+      const { data: signInData, error: signInError } = await supabaseAnon.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (signInError || !signInData?.user || !signInData?.session?.access_token) {
+        return res.status(401).json({
+          error: signInError?.message || 'Invalid email or password.',
+        });
+      }
+
+      const authUserId = signInData.user.id;
+      const sessionToken = signInData.session.access_token;
+
+      let { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('*')
-        .ilike('email', cleanEmail);
-
-      let profile = existingProfiles && existingProfiles[0] ? existingProfiles[0] : null;
-
-      let authUserId: string | null = profile?.id || null;
-      let sessionToken: string | null = null;
-
-      if (password && supabaseAnon) {
-        const { data: signInData } = await supabaseAnon.auth.signInWithPassword({
-          email: cleanEmail,
-          password: String(password),
-        });
-        if (signInData?.user) {
-          authUserId = signInData.user.id;
-          sessionToken = signInData.session?.access_token || null;
-        }
-      }
+        .eq('id', authUserId)
+        .single();
 
       if (!profile) {
-        if (!authUserId) {
-          const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
-          const existingAuthUser = listData?.users?.find(
-            (u) => u.email?.toLowerCase() === cleanEmail
-          );
-          if (existingAuthUser) {
-            authUserId = existingAuthUser.id;
-          } else {
-            return res.status(401).json({
-              error: 'Account not found. Please register or verify your credentials.',
-            });
-          }
-        }
-
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
-        const existingAuthUser = listData?.users?.find((u) => u.id === authUserId);
-        const initialRole = existingAuthUser?.user_metadata?.role || 'company';
-        const initialApproval = existingAuthUser?.user_metadata?.approval_status || 'pending';
+        const initialRole = 'company';
+        const initialApproval = 'approved';
 
         const { data: upsertedProfile, error: upsertErr } = await supabaseAdmin
           .from('profiles')
           .upsert({
             id: authUserId,
             email: cleanEmail,
-            full_name: fullName || existingAuthUser?.user_metadata?.full_name || cleanEmail.split('@')[0],
+            full_name: signInData.user.user_metadata?.full_name || cleanEmail.split('@')[0],
             role: initialRole,
             approval_status: initialApproval,
             status: initialApproval,
-            organization: existingAuthUser?.user_metadata?.organization || cleanEmail.split('@')[1] || 'Qartinia Partner',
-            onboarding_completed: initialApproval === 'approved',
+            organization: signInData.user.user_metadata?.organization || cleanEmail.split('@')[1] || 'Qartinia Partner',
+            onboarding_completed: true,
           })
           .select()
           .single();
@@ -2955,13 +2856,6 @@ async function startServer() {
         profile = upsertedProfile;
       }
 
-      if (!sessionToken) {
-        const session = await createSessionForEmail(cleanEmail);
-        if (session) {
-          sessionToken = session.token;
-        }
-      }
-
       await logSupabaseActivity(profile.id, 'auth_login', 'profile', profile.email, {
         role: profile.role,
         approval_status: profile.approval_status,
@@ -2970,7 +2864,7 @@ async function startServer() {
       const state = await fetchFullWorkspaceState(profile.id);
       return res.json({
         ok: true,
-        token: sessionToken || null,
+        token: sessionToken,
         currentUser: state.currentUser,
         state,
       });
@@ -3019,7 +2913,6 @@ async function startServer() {
         department,
         title,
         taxId,
-        requireApproval,
       } = req.body;
 
       if (!supabaseAdmin) {
@@ -3027,13 +2920,14 @@ async function startServer() {
       }
 
       const cleanEmail = String(email || '').trim().toLowerCase();
-      if (!cleanEmail || !fullName) {
-        return res.status(400).json({ error: 'Full name and email are required.' });
+      const cleanPassword = String(password || '').trim();
+
+      if (!cleanEmail || !fullName || !cleanPassword) {
+        return res.status(400).json({ error: 'Full name, email, and password are required.' });
       }
 
-      const dbRole = toPostgresUserRole(role);
-      const approvalStatus: 'approved' | 'pending' =
-        requireApproval || dbRole === 'employee' ? 'pending' : 'approved';
+      const dbRole = toSafePostgresUserRole(role);
+      const approvalStatus: 'approved' | 'pending' = dbRole === 'employee' ? 'pending' : 'approved';
 
       const { data: existingList } = await supabaseAdmin.auth.admin.listUsers();
       let userId =
@@ -3041,8 +2935,8 @@ async function startServer() {
 
       if (!userId) {
         const metadata = {
-          full_name: fullName,
-          organization: organizationName || 'Qartinia Partner',
+          full_name: fullName.trim(),
+          organization: organizationName?.trim() || 'Qartinia Partner',
           role: dbRole,
           approval_status: approvalStatus,
           status: approvalStatus,
@@ -3050,7 +2944,7 @@ async function startServer() {
 
         const resCreate = await securelyInviteOrRegisterUser({
           email: cleanEmail,
-          password: password ? String(password).trim() : undefined,
+          password: cleanPassword,
           metadata,
         });
 
@@ -3061,7 +2955,7 @@ async function startServer() {
       }
 
       let orgId: string | null = null;
-      if (organizationName) {
+      if (organizationName?.trim()) {
         const { data: existingOrgs } = await supabaseAdmin
           .from('organizations')
           .select('*')
@@ -3091,16 +2985,16 @@ async function startServer() {
         role: dbRole,
         approval_status: approvalStatus,
         status: approvalStatus,
-        organization: organizationName || 'Independent',
-        company_name: dbRole === 'company' ? organizationName : null,
+        organization: organizationName?.trim() || 'Independent',
+        company_name: dbRole === 'company' ? organizationName?.trim() : null,
         organization_id: orgId,
-        focus_area: department || 'Deep-Tech Engineering',
-        tax_id: taxId || null,
+        focus_area: department?.trim() || 'Deep-Tech Engineering',
+        tax_id: taxId?.trim() || null,
         onboarding_completed: true,
         metadata: {
-          qartinia_track: role,
-          department: department || 'R&D & Engineering',
-          title: title || 'Engineering Lead',
+          qartinia_track: dbRole,
+          department: department?.trim() || 'R&D & Engineering',
+          title: title?.trim() || 'Engineering Lead',
         },
       });
 
@@ -3113,13 +3007,11 @@ async function startServer() {
           organization_id: orgId,
           user_id: userId,
           role: dbRole === 'company' ? 'owner' : 'employee',
-          title: title || department || 'R&D Staff',
-          department: department || 'Engineering',
+          title: title?.trim() || department?.trim() || 'R&D Staff',
+          department: department?.trim() || 'Engineering',
           is_primary: true,
         });
       }
-
-      const session = await createSessionForEmail(cleanEmail);
 
       await logSupabaseActivity(userId, 'auth_register', 'profile', cleanEmail, {
         role: dbRole,
@@ -3127,12 +3019,10 @@ async function startServer() {
         organization: organizationName,
       });
 
-      const state = await fetchFullWorkspaceState(userId);
       res.json({
         ok: true,
-        token: session?.token || null,
-        currentUser: state.currentUser,
-        state,
+        message: 'Account registered successfully. Please sign in with your credentials.',
+        token: null,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Registration failed.' });
@@ -6682,21 +6572,7 @@ async function startServer() {
   app.post('/api/requests/sample', requireAuth, async (req, res) => {
     try {
       const { supplierId, componentId, componentName, quantity, targetApplication, notes } = req.body;
-      let actor = req.user;
-      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
-        if (supabaseAdmin) {
-          let profQuery = supabaseAdmin.from('profiles').select('*');
-          if (req.body.requesterId) {
-            profQuery = profQuery.eq('id', req.body.requesterId);
-          } else {
-            profQuery = profQuery.ilike('email', req.body.requesterEmail);
-          }
-          const { data: profs } = await profQuery;
-          if (profs && profs[0]) {
-            actor = mapProfileRow(profs[0]) as any;
-          }
-        }
-      }
+      const actor = req.user!;
 
       if (!actor) {
         return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });
@@ -6922,21 +6798,7 @@ async function startServer() {
   app.post('/api/requests/lab', requireAuth, async (req, res) => {
     try {
       const { labId, labName, equipmentId, equipmentName, testingDomain, testRequirements, requestedDates } = req.body;
-      let actor = req.user;
-      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
-        if (supabaseAdmin) {
-          let profQuery = supabaseAdmin.from('profiles').select('*');
-          if (req.body.requesterId) {
-            profQuery = profQuery.eq('id', req.body.requesterId);
-          } else {
-            profQuery = profQuery.ilike('email', req.body.requesterEmail);
-          }
-          const { data: profs } = await profQuery;
-          if (profs && profs[0]) {
-            actor = mapProfileRow(profs[0]) as any;
-          }
-        }
-      }
+      const actor = req.user!;
 
       if (!actor) {
         return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });
@@ -7172,21 +7034,7 @@ async function startServer() {
   app.post('/api/requests/expert', requireAuth, async (req, res) => {
     try {
       const { expertId, expertName, topic, projectContext, preferredFormat, hours } = req.body;
-      let actor = req.user;
-      if (!actor && (req.body.requesterId || req.body.requesterEmail)) {
-        if (supabaseAdmin) {
-          let profQuery = supabaseAdmin.from('profiles').select('*');
-          if (req.body.requesterId) {
-            profQuery = profQuery.eq('id', req.body.requesterId);
-          } else {
-            profQuery = profQuery.ilike('email', req.body.requesterEmail);
-          }
-          const { data: profs } = await profQuery;
-          if (profs && profs[0]) {
-            actor = mapProfileRow(profs[0]) as any;
-          }
-        }
-      }
+      const actor = req.user!;
 
       if (!actor) {
         return res.status(401).json({ error: 'Authentication required. Please log in with a valid account to submit requests.' });

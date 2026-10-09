@@ -218,10 +218,8 @@ export default function App() {
   }, [fetchState, currentUser?.id]);
 
   const handleLogin = async (payload: {
-    email?: string;
-    password?: string;
-    fullName?: string;
-    profileId?: string;
+    email: string;
+    password: string;
   }) => {
     const res = await apiFetch('/api/auth/login', {
       method: 'POST',
@@ -236,20 +234,15 @@ export default function App() {
     applyServerState(data.state);
   };
 
-  const handleQuickSwitchAccount = async (profileId: string) => {
-    await handleLogin({ profileId });
-  };
-
   const handleRegister = async (payload: {
     email: string;
     fullName: string;
-    password?: string;
+    password: string;
     role: UserRole;
     organizationName?: string;
     department?: string;
     title?: string;
     taxId?: string;
-    requireApproval?: boolean;
   }) => {
     const res = await apiFetch('/api/auth/register', {
       method: 'POST',
@@ -261,7 +254,9 @@ export default function App() {
     if (data.token) {
       setSessionToken(data.token);
     }
-    applyServerState(data.state);
+    if (data.state) {
+      applyServerState(data.state);
+    }
   };
 
   const handleLogout = async () => {
@@ -1008,7 +1003,6 @@ export default function App() {
             onSelectFrontier={setActiveFrontierId}
             onOpenAuthModal={() => setAuthModalOpen(true)}
             onOpenProfileModal={() => setProfileModalOpen(true)}
-            onQuickSwitchAccount={handleQuickSwitchAccount}
             onUpdateRequestStatus={handleUpdateRequestStatus}
             onDeleteRequest={handleDeleteRequest}
             onInviteMember={handleInviteMember}
@@ -1134,7 +1128,6 @@ export default function App() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        accounts={accounts}
         currentUser={currentUser}
         onLogin={handleLogin}
         onRegister={handleRegister}

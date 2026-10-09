@@ -1,37 +1,31 @@
 import React, { useState } from 'react';
 import { UserAccount, UserRole } from '../types/qartinia';
-import { X, Lock, UserPlus, LogIn, Database, CheckCircle2 } from 'lucide-react';
+import { X, Lock, UserPlus, LogIn } from 'lucide-react';
 import { QartiniaCrestSvg } from './QartiniaLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  accounts: UserAccount[];
   currentUser: UserAccount | null;
   onLogin: (payload: {
-    email?: string;
-    password?: string;
-    fullName?: string;
-    profileId?: string;
+    email: string;
+    password: string;
   }) => Promise<void>;
   onRegister: (payload: {
     email: string;
-    password?: string;
+    password: string;
     fullName: string;
     role: UserRole;
     organizationName: string;
     department: string;
     title: string;
     taxId?: string;
-    requireApproval: boolean;
   }) => Promise<void>;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
-  accounts,
-  currentUser,
   onLogin,
   onRegister,
 }) => {
@@ -44,8 +38,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [department, setDepartment] = useState('');
   const [title, setTitle] = useState('');
   const [taxId, setTaxId] = useState('');
-  const [requireApproval, setRequireApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
@@ -53,50 +47,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setSubmitting(true);
     try {
       if (mode === 'login') {
         await onLogin({
           email: email.trim(),
-          password: password || undefined,
-          fullName: fullName.trim() || undefined,
+          password: password.trim(),
         });
+        setEmail('');
+        setPassword('');
+        onClose();
       } else {
         await onRegister({
           email: email.trim(),
-          password: password || undefined,
+          password: password.trim(),
           fullName: fullName.trim(),
           role,
           organizationName: organizationName.trim(),
           department: department.trim(),
           title: title.trim(),
           taxId: taxId.trim() || undefined,
-          requireApproval,
         });
+        setEmail('');
+        setPassword('');
+        setFullName('');
+        setOrganizationName('');
+        setDepartment('');
+        setTitle('');
+        setTaxId('');
+        setSuccessMsg('Registration completed successfully! Please log in with your credentials.');
+        setMode('login');
       }
-      setEmail('');
-      setPassword('');
-      setFullName('');
-      setOrganizationName('');
-      setDepartment('');
-      setTitle('');
-      setTaxId('');
-      onClose();
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleQuickSwitch = async (account: UserAccount) => {
-    setError(null);
-    setSubmitting(true);
-    try {
-      await onLogin({ profileId: account.id, email: account.email });
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to switch session.');
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <div className="text-xs text-slate-500">
                 {mode === 'login'
-                  ? 'Supabase Auth & Profile Session Sign-In'
+                  ? 'Supabase Auth Verified Session Sign-In'
                   : 'Provision New Account in public.profiles'}
               </div>
             </div>
@@ -135,6 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={() => {
               setMode('login');
               setError(null);
+              setSuccessMsg(null);
             }}
             className={`py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               mode === 'login' ? 'bg-white text-[#0F2537] shadow-xs' : 'text-slate-600'
@@ -148,6 +133,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={() => {
               setMode('register');
               setError(null);
+              setSuccessMsg(null);
             }}
             className={`py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               mode === 'register' ? 'bg-white text-[#0F2537] shadow-xs' : 'text-slate-600'
@@ -164,56 +150,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* Quick Live Supabase Account Selector (in Sign In mode) */}
-        {mode === 'login' && accounts.length > 0 && (
-          <div className="mb-4 p-3 bg-[#FAF9F6] border border-slate-200 rounded-lg space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
-              <span className="flex items-center gap-1.5 font-semibold text-[#0F2537]">
-                <Database className="w-3.5 h-3.5 text-[#108548]" />
-                <span>LIVE SUPABASE ACCOUNTS (public.profiles)</span>
-              </span>
-              <span>1-Click Sign In</span>
-            </div>
-            <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-              {accounts.map((acc) => {
-                const isCurrent = currentUser?.id === acc.id;
-                return (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => handleQuickSwitch(acc)}
-                    className={`w-full text-left px-2.5 py-1.5 rounded border text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                      isCurrent
-                        ? 'bg-emerald-50/80 border-emerald-300 text-[#0F2537]'
-                        : 'bg-white border-slate-200 hover:border-[#0F2537]'
-                    }`}
-                  >
-                    <div className="truncate pr-2">
-                      <span className="font-semibold text-[#0F2537]">{acc.fullName}</span>
-                      <span className="text-slate-500 font-mono ml-1.5">({acc.email})</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 font-mono text-[11px]">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[#0F2537] font-semibold">
-                        {acc.role}
-                      </span>
-                      <span
-                        className={
-                          acc.status === 'approved'
-                            ? 'text-[#108548]'
-                            : acc.status === 'pending'
-                            ? 'text-amber-600'
-                            : 'text-red-600'
-                        }
-                      >
-                        {acc.status}
-                      </span>
-                      {isCurrent && <CheckCircle2 className="w-3.5 h-3.5 text-[#108548]" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+        {successMsg && (
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+            {successMsg}
           </div>
         )}
 
@@ -243,18 +182,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="rafedriahi.rr@gmail.com or corporate email"
+              placeholder="user@organization.com"
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-              Password {mode === 'login' ? '(Optional for existing Supabase profile)' : '*'}
+              Password *
             </label>
             <input
               type="password"
-              required={mode === 'register'}
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••••••"
@@ -266,28 +205,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <>
               <div>
                 <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                  PostgreSQL Account Role (public.user_role enum)
+                  PostgreSQL Account Role
                 </label>
                 <select
                   value={role}
-                  onChange={(e) => {
-                    const nextRole = e.target.value as UserRole;
-                    setRole(nextRole);
-                    setRequireApproval(nextRole === 'employee');
-                  }}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
                 >
                   <option value="company">
                     company — Enterprise Organization / Deep-Tech Partner
                   </option>
                   <option value="employee">
-                    employee — Enterprise R&amp;D Seat (Triggers 004 Seat Approval RPC)
+                    employee — Enterprise R&amp;D Seat
                   </option>
                   <option value="user">
                     user — University Researcher / Lab Principal Investigator
-                  </option>
-                  <option value="admin">
-                    admin — Qartinia Platform Governance Admin
                   </option>
                 </select>
               </div>
@@ -301,7 +233,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="text"
                     value={organizationName}
                     onChange={(e) => setOrganizationName(e.target.value)}
-                    placeholder="e.g. rana org / ETH Zurich"
+                    placeholder="e.g. ETH Zurich / Enterprise Lab"
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
                   />
                 </div>
@@ -345,18 +277,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
                 </div>
               </div>
-
-              <label className="flex items-center gap-2 text-xs text-slate-700 pt-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={requireApproval}
-                  onChange={(e) => setRequireApproval(e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-                <span>
-                  Set initial PostgreSQL status to <code className="font-mono">pending</code> (routes to Atomic Approval RPC)
-                </span>
-              </label>
             </>
           )}
 
@@ -368,10 +288,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
             <span>
               {submitting
-                ? 'Syncing with Supabase...'
+                ? 'Processing...'
                 : mode === 'login'
-                ? 'Authenticate & Load Supabase Session'
-                : 'Create Account in Supabase & Sign In'}
+                ? 'Authenticate & Load Session'
+                : 'Create Account'}
             </span>
           </button>
         </form>
