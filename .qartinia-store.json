@@ -1,6 +1,260 @@
 {
   "frontiers": [
     {
+      "id": "frt-1791552201107",
+      "title": "Cryogenic Superconducting Magnet Benchmark",
+      "domain": "Applied Physics",
+      "technologySystem": "REBCO High-Temperature Superconducting Tape Magnet",
+      "metricName": "Magnetic Field Strengh",
+      "metricUnit": "Tesla",
+      "operatingEnvelope": "4.2K liquid Helium cooling, 1.2kA transport current",
+      "constraints": "Hoop stress strain limit < 0.4%, quench protection reaction < 10ms",
+      "analysisMode": "unverified_preliminary",
+      "comparabilityAssessment": "Preliminary analytical model. Operating conditions and measurement basis have not been verified against external empirical laboratory test data or manufacturer qualification reports. Disclosed limitation: thermal impedance, parasitics, and component tolerances may shift actual boundaries.",
+      "disclaimer": "Unverified preliminary analysis. External retrieval service is offline. Commercial and research values are analytical model estimates, not certified empirical data. Do not treat as certified commercial or research specifications.",
+      "retrievalTimestamp": "2026-10-09",
+      "positions": [
+        {
+          "position": "Customer technology",
+          "valueDisplay": "18.5 Tesla",
+          "meaning": "Where the company stands today under the stated operating envelope",
+          "referenceSource": "Customer Baseline (REBCO High-Temperature Superconducting Tape Magnet)",
+          "provenanceType": "customer_baseline",
+          "verificationStatus": "customer_provided",
+          "operatingConditions": "4.2K liquid Helium cooling, 1.2kA transport current"
+        },
+        {
+          "position": "Commercial frontier",
+          "valueDisplay": "22.68 Tesla",
+          "meaning": "Estimated industrially available performance (unverified analytical projection)",
+          "referenceSource": "Unverified Analytical Estimate (Retrieval Offline)",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "operatingConditions": "4.2K liquid Helium cooling, 1.2kA transport current",
+          "comparabilityNotice": "Preliminary estimate; measurement basis and operating conditions have not been verified against empirical datasheets."
+        },
+        {
+          "position": "Research frontier",
+          "valueDisplay": "26.2 Tesla",
+          "meaning": "Estimated research-demonstrated performance (unverified analytical projection)",
+          "referenceSource": "Unverified Analytical Projection (Retrieval Offline)",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "operatingConditions": "4.2K liquid Helium cooling, 1.2kA transport current",
+          "comparabilityNotice": "Theoretical extrapolation; requires peer-reviewed empirical validation under matching operating envelope."
+        },
+        {
+          "position": "Target",
+          "valueDisplay": "28.0 Tesla",
+          "meaning": "The customer's ambition requiring targeted technology innovation and gap closure",
+          "referenceSource": "Customer Target Specification",
+          "provenanceType": "customer_target",
+          "verificationStatus": "customer_provided"
+        }
+      ],
+      "gapRootCauseAnalysis": "Under 4.2K liquid Helium cooling, 1.2kA transport current and constrained by Hoop stress strain limit < 0.4%, quench protection reaction < 10ms, advancing REBCO High-Temperature Superconducting Tape Magnet from 18.5 Tesla toward 28.0 Tesla is subject to domain-specific physics boundaries and thermal/electrical trade-offs.",
+      "whatChangedRecently": "Preliminary analytical synthesis suggests ongoing movement along this frontier toward 26.2 Tesla; empirical literature retrieval is required to confirm latest publications and commercial qualification milestones.",
+      "evidenceRecords": [
+        {
+          "id": "ev-1790897242344-3",
+          "title": "Experimental Assessment of JHG Performance",
+          "category": "Publication",
+          "createdAt": "2026-10-01",
+          "maturityTrl": "TRL 2",
+          "relevanceToGap": "Represents the absolute ceiling for theoretical JHG performance",
+          "leadContributor": "Prof. B. Zhang",
+          "publicationState": "published",
+          "sourceIdentifier": "LAB-2023-001",
+          "operatingConditions": "Extreme temperature variance within defined ou envelope",
+          "institutionOrCompany": "National Research Institute",
+          "demonstratedPerformance": "0.92 (dimensionless)",
+          "manufacturabilityAndReliability": "Highly complex, poor manufacturability",
+          "retrievalDate": "2026-10-09"
+        },
+        {
+          "id": "ev-1791552201106-1",
+          "title": "Analytical Physics Model: Loss & Scaling Limits in REBCO High-Temperature Superconducting Tape Magnet",
+          "category": "Publication",
+          "sourceIdentifier": "Unverified Analytical Model (Retrieval Offline)",
+          "institutionOrCompany": "Qartinia Analytical Heuristic Engine",
+          "leadContributor": "Computational Physics Model",
+          "operatingConditions": "4.2K liquid Helium cooling, 1.2kA transport current",
+          "demonstratedPerformance": "26.2 Tesla",
+          "maturityTrl": "TRL 4 (Analytical)",
+          "manufacturabilityAndReliability": "Subject to qualification under Hoop stress strain limit < 0.4%, quench protection reaction < 10ms",
+          "relevanceToGap": "Preliminary analytical estimate indicating theoretical feasibility toward 26.2 Tesla. Requires empirical validation.",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "confidenceLevel": "Analytical",
+          "comparabilityNotice": "Preliminary analytical heuristic; physical test bench conditions not empirically cross-referenced.",
+          "publicationState": "published",
+          "retrievalDate": "2026-10-09",
+          "createdAt": "2026-10-09"
+        },
+        {
+          "id": "ev-1791552201106-2",
+          "title": "Industrial Feasibility Model for REBCO High-Temperature Superconducting Tape Magnet",
+          "category": "Product Datasheet",
+          "sourceIdentifier": "Unverified Commercial Reference Estimate",
+          "institutionOrCompany": "Industrial Engineering Synthesis",
+          "leadContributor": "Analytical Benchmark Heuristic",
+          "operatingConditions": "4.2K liquid Helium cooling, 1.2kA transport current",
+          "demonstratedPerformance": "22.68 Tesla",
+          "maturityTrl": "TRL 7 (Projected)",
+          "manufacturabilityAndReliability": "Targeted for compliance with Hoop stress strain limit < 0.4%, quench protection reaction < 10ms",
+          "relevanceToGap": "Estimated commercial capability of 22.68 Tesla under matching envelope. Manufacturer verification required.",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "confidenceLevel": "Analytical",
+          "comparabilityNotice": "Estimated commercial benchmark; derating may apply under custom operating envelope.",
+          "publicationState": "published",
+          "retrievalDate": "2026-10-09",
+          "createdAt": "2026-10-09"
+        }
+      ],
+      "recommendedNextActions": [
+        "Benchmark REBCO High-Temperature Superconducting Tape Magnet parameters against verified empirical supplier datasheets under the matching operating envelope.",
+        "Open a Protected Qartinia Project Room to collaborate under mutual NDA and execute empirical test-bench validation.",
+        "Structure milestone verification gates targeting empirical validation before committing to production targets."
+      ],
+      "monitored": true,
+      "createdAt": "2026-10-09",
+      "lastEvaluatedAt": "2026-10-09"
+    },
+    {
+      "id": "frt-1791552188214",
+      "title": "Gallium Nitride Monolithic Power Stage Benchmark",
+      "domain": "Power Electronics",
+      "technologySystem": "800V GaN-on-Si Monolithic Power Stage",
+      "metricName": "Power Density",
+      "metricUnit": "kW/L",
+      "operatingEnvelope": "800V DC link, 200kHz PWM frequency, 125°C junction temperature",
+      "constraints": "Automotive AEC-Q101 qualification and CISPR 25 Class 5 EMI",
+      "analysisMode": "unverified_preliminary",
+      "comparabilityAssessment": "Preliminary analytical model. Operating conditions and measurement basis have not been verified against external empirical laboratory test data or manufacturer qualification reports. Disclosed limitation: thermal impedance, parasitics, and component tolerances may shift actual boundaries.",
+      "disclaimer": "Unverified preliminary analysis. External retrieval service is offline. Commercial and research values are analytical model estimates, not certified empirical data. Do not treat as certified commercial or research specifications.",
+      "retrievalTimestamp": "2026-10-09",
+      "positions": [
+        {
+          "position": "Customer technology",
+          "valueDisplay": "45 kW/L",
+          "meaning": "Where the company stands today under the stated operating envelope",
+          "referenceSource": "Customer Baseline (800V GaN-on-Si Monolithic Power Stage)",
+          "provenanceType": "customer_baseline",
+          "verificationStatus": "customer_provided",
+          "operatingConditions": "800V DC link, 200kHz PWM frequency, 125°C junction temperature"
+        },
+        {
+          "position": "Commercial frontier",
+          "valueDisplay": "62.6 kW/L",
+          "meaning": "Estimated industrially available performance (unverified analytical projection)",
+          "referenceSource": "Unverified Analytical Estimate (Retrieval Offline)",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "operatingConditions": "800V DC link, 200kHz PWM frequency, 125°C junction temperature",
+          "comparabilityNotice": "Preliminary estimate; measurement basis and operating conditions have not been verified against empirical datasheets."
+        },
+        {
+          "position": "Research frontier",
+          "valueDisplay": "77.4 kW/L",
+          "meaning": "Estimated research-demonstrated performance (unverified analytical projection)",
+          "referenceSource": "Unverified Analytical Projection (Retrieval Offline)",
+          "provenanceType": "model_estimate",
+          "verificationStatus": "unverified_estimate",
+          "operatingConditions": "800V DC link, 200kHz PWM frequency, 125°C junction temperature",
+          "comparabilityNotice": "Theoretical extrapolation; requires peer-reviewed empirical validation under matching operating envelope."
+        },
+        {
+          "position": "Target",
+          "valueDisplay": "85 kW/L",
+          "meaning": "The customer's ambition requiring targeted technology innovation and gap closure",
+          "referenceSource": "Customer Target Specification",
+          "provenanceType": "customer_target",
+          "verificationStatus": "customer_provided"
+        }
+      ],
+      "gapRootCauseAnalysis": "Under 800V DC link, 200kHz PWM frequency, 125°C junction temperature and constrained by Automotive AEC-Q101 qualification and CISPR 25 Class 5 EMI, advancing 800V GaN-on-Si Monolithic Power Stage from 45 kW/L toward 85 kW/L is subject to domain-specific physics boundaries and thermal/electrical trade-offs.",
+      "whatChangedRecently": "Preliminary analytical synthesis suggests ongoing movement along this frontier toward 77.4 kW/L; empirical literature retrieval is required to confirm latest publications and commercial qualification milestones.",
+      "evidenceRecords": [
+        {
+          "id": "ev-bp-eth-zvs-2026",
+          "title": "Zero-Voltage-Switching (ZVS) Active Gate-Shaping for 800V SiC Traction Inverters",
+          "category": "Publication",
+          "createdAt": "2026-10-01",
+          "maturityTrl": "TRL 6",
+          "relevanceToGap": "Directly bridges the gap from 97.4% customer baseline and 98.1% commercial frontier to the 98.7% research frontier.",
+          "leadContributor": "Prof. Dr. Johann W. Kolar",
+          "linkedFrontierId": "frt-bp-800v-sic",
+          "publicationState": "published",
+          "sourceIdentifier": "IEEE Trans. Power Electronics · Vol. 41 (2026)",
+          "operatingConditions": "800V DC link, 250 kW peak, 40–100 kHz PWM, 105°C liquid coolant",
+          "institutionOrCompany": "ETH Zurich — Power Electronics Systems Laboratory (PES)",
+          "demonstratedPerformance": "98.7% WLTP Drive-Cycle Inverter Efficiency (58% switching loss reduction)",
+          "manufacturabilityAndReliability": "Compatible with standard 1200V SiC MOSFET dies; AEC-Q101 gate driver ASIC path",
+          "retrievalDate": "2026-10-09"
+        },
+        {
+          "id": "ev-bp-fraunhofer-amb-2026",
+          "title": "Double-Sided Ag-Sintered Si3N4 AMB Power Module with <1.8 nH Commutation Loop",
+          "category": "Research Laboratory",
+          "createdAt": "2026-10-01",
+          "maturityTrl": "TRL 7",
+          "relevanceToGap": "Suppresses turn-off voltage overshoot at >60 V/ns dV/dt, enabling safe soft-switching up to 99.0% target.",
+          "leadContributor": "Dr. Martin März",
+          "linkedFrontierId": "frt-bp-800v-sic",
+          "publicationState": "published",
+          "sourceIdentifier": "Fraunhofer IISB Erlangen · Bench Validation Report 2026-04",
+          "operatingConditions": "800V DC bus, 450 A RMS phase current, ΔTj = 85 K power cycling",
+          "institutionOrCompany": "Fraunhofer Institute for Integrated Systems and Device Technology (IISB)",
+          "demonstratedPerformance": "0.09 K/W junction-to-fluid thermal resistance; >150,000 power cycles",
+          "manufacturabilityAndReliability": "AQG-324 automotive power module qualification ready; copper clip interconnect",
+          "retrievalDate": "2026-10-09"
+        },
+        {
+          "id": "ev-bp-infineon-coolsic-g2",
+          "title": "CoolSiC Automotive 1200V Gen-2 Trench MOSFET Six-Pack Module (FS03MR12A8MA2B)",
+          "category": "Product Datasheet",
+          "createdAt": "2026-10-01",
+          "maturityTrl": "TRL 9",
+          "relevanceToGap": "Defines the 98.1% Commercial Frontier reference benchmark currently available off-the-shelf.",
+          "leadContributor": "Automotive High-Power Drivetrain Division",
+          "linkedFrontierId": "frt-bp-800v-sic",
+          "publicationState": "published",
+          "sourceIdentifier": "Infineon Industrial & Automotive Reference Datasheet Rev 2.4",
+          "operatingConditions": "800V nominal battery bus, 250 kW traction inverter, Tvj,op ≤ 175°C",
+          "institutionOrCompany": "Infineon Technologies AG",
+          "demonstratedPerformance": "98.1% peak / WLTP weighted efficiency in standard hard-switched 2-level B6 topology",
+          "manufacturabilityAndReliability": "Full automotive mass-production PPAP & AEC-Q101 qualified",
+          "retrievalDate": "2026-10-09"
+        },
+        {
+          "id": "ev-bp-patent-gate-driver",
+          "title": "Closed-Loop dI/dt and dV/dt Real-Time Gate Trajectory Controller for Wide-Bandgap Half-Bridges",
+          "category": "Patent",
+          "createdAt": "2026-10-01",
+          "maturityTrl": "TRL 6",
+          "relevanceToGap": "Provides the licensable foreground IP required to push efficiency from 98.1% toward the 99.0% target.",
+          "leadContributor": "Dr. D. Bortis & Prof. J. Kolar",
+          "linkedFrontierId": "frt-bp-800v-sic",
+          "publicationState": "published",
+          "sourceIdentifier": "EP4198231A1 / WO2026041892A1",
+          "operatingConditions": "800V–920V DC bus, EMI CISPR 25 Class 5 compliant without external snubbers",
+          "institutionOrCompany": "ETH Zurich Transfer / Swiss Deep-Tech Spin-Off",
+          "demonstratedPerformance": "+0.6% systemic efficiency gain across low-torque urban WLTP operating points",
+          "manufacturabilityAndReliability": "Available for exclusive automotive field-of-use licensing via Qartinia Project Room",
+          "retrievalDate": "2026-10-09"
+        }
+      ],
+      "recommendedNextActions": [
+        "Benchmark 800V GaN-on-Si Monolithic Power Stage parameters against verified empirical supplier datasheets under the matching operating envelope.",
+        "Open a Protected Qartinia Project Room to collaborate under mutual NDA and execute empirical test-bench validation.",
+        "Structure milestone verification gates targeting empirical validation before committing to production targets."
+      ],
+      "monitored": true,
+      "createdAt": "2026-10-09",
+      "lastEvaluatedAt": "2026-10-09"
+    },
+    {
       "id": "frt-bp-800v-sic",
       "title": "800V SiC Automotive Traction Inverter — WLTP Drive-Cycle Efficiency Frontier",
       "domain": "Power Electronics & E-Mobility Drivetrain",
@@ -115,121 +369,6 @@
   ],
   "projects": [
     {
-      "id": "prj-1791536003777",
-      "code": "QRT-RM-5128",
-      "title": "Top-Secret 1200V SiC Traction Module Room",
-      "domain": "E-Mobility Traction",
-      "messages": [],
-      "createdAt": "2026-10-09",
-      "documents": [],
-      "ndaStatus": "Pending Signature",
-      "legalStage": "Stage 02 Bilateral NDA Executed",
-      "milestones": [],
-      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
-      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
-      "ipFramework": "Background IP Segregated",
-      "createdByOrg": "nexora",
-      "participants": [
-        {
-          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
-          "name": "rana riahi",
-          "role": "Industry Lead",
-          "accessScope": "Full Control",
-          "organization": "nexora"
-        },
-        {
-          "id": "part-1791536003777",
-          "name": "OEM Partner Lead",
-          "role": "University / Lab PI",
-          "accessScope": "Protected Project Boundary",
-          "organization": "Automotive OEM"
-        },
-        {
-          "id": "part-1791536004617",
-          "name": "dr.lukas.weber",
-          "role": "Hardware Reliability Lead",
-          "accessScope": "Protected Project Boundary",
-          "organization": "Siemens Energy R&D"
-        }
-      ],
-      "createdByEmail": "rana.riahi90@yahoo.fr",
-      "problemStatement": "High-density soft-switching inverter for automotive OEM",
-      "publicationState": "draft",
-      "publicationPolicy": "Strict NDA - No Public Disclosure",
-      "trainingIsolationVerified": true
-    },
-    {
-      "id": "prj-1791535924311",
-      "code": "QRT-RM-5578",
-      "title": "Top-Secret 1200V SiC Traction Module Room",
-      "domain": "E-Mobility Traction",
-      "messages": [],
-      "createdAt": "2026-10-09",
-      "documents": [],
-      "ndaStatus": "Pending Signature",
-      "legalStage": "Stage 02 Bilateral NDA Executed",
-      "milestones": [],
-      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
-      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
-      "ipFramework": "Background IP Segregated",
-      "createdByOrg": "nexora",
-      "participants": [
-        {
-          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
-          "name": "rana riahi",
-          "role": "Industry Lead",
-          "accessScope": "Full Control",
-          "organization": "nexora"
-        },
-        {
-          "id": "part-1791535924311",
-          "name": "OEM Partner Lead",
-          "role": "University / Lab PI",
-          "accessScope": "Protected Project Boundary",
-          "organization": "Automotive OEM"
-        },
-        {
-          "id": "part-1791535925181",
-          "name": "dr.lukas.weber",
-          "role": "Hardware Reliability Lead",
-          "accessScope": "Protected Project Boundary",
-          "organization": "Siemens Energy R&D"
-        }
-      ],
-      "createdByEmail": "rana.riahi90@yahoo.fr",
-      "problemStatement": "High-density soft-switching inverter for automotive OEM",
-      "publicationState": "draft",
-      "publicationPolicy": "Strict NDA - No Public Disclosure",
-      "trainingIsolationVerified": true
-    },
-    {
-      "id": "prj-1791130410031",
-      "code": "QRT-RM-6210",
-      "title": "Protected Project: Experimental Assessment of JHG Performance",
-      "domain": "Publication",
-      "messages": [],
-      "createdAt": "2026-10-04",
-      "documents": [],
-      "ndaStatus": "Pending Signature",
-      "legalStage": "Scoping & Mutual NDA",
-      "milestones": [],
-      "targetSpec": "0.92 (dimensionless)",
-      "ipFramework": "Background IP Segregated",
-      "participants": [
-        {
-          "id": "part-1791130410031",
-          "name": "Prof. B. Zhang",
-          "role": "University / Lab PI",
-          "accessScope": "Protected Project Boundary",
-          "organization": "National Research Institute"
-        }
-      ],
-      "problemStatement": "Represents the absolute ceiling for theoretical JHG performance (Operating Conditions: Extreme temperature variance within defined ou envelope)",
-      "publicationPolicy": "30-Day Pre-Publication Patent Review",
-      "originatingFrontierId": "",
-      "trainingIsolationVerified": true
-    },
-    {
       "id": "prj-1791536029026",
       "code": "QRT-RM-4502",
       "title": "Top-Secret 1200V SiC Traction Module Room",
@@ -302,6 +441,14 @@
           "timestamp": "10:31",
           "senderName": "Dr. Elena Rostova",
           "senderRole": "IP & Legal Counsel"
+        },
+        {
+          "id": "msg-1791551013207",
+          "content": "Verified test message within protected boundary.",
+          "senderOrg": "independent",
+          "timestamp": "01:03 PM",
+          "senderName": "Mohamed Rafed Riahi",
+          "senderRole": "user"
         }
       ],
       "createdAt": "2026-10-01",
@@ -335,7 +482,7 @@
           "classification": "Datasheet / Spec"
         }
       ],
-      "ndaStatus": "Executed",
+      "ndaStatus": "Pending Signature",
       "legalStage": "Protected Technical Execution",
       "milestones": [
         {
@@ -375,7 +522,9 @@
         }
       ],
       "targetSpec": "≥ 98.7% WLTP Drive-Cycle Efficiency (Phase 1) → 99.0% Target (Phase 2) at 800V / 250 kW",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
       "ipFramework": "Background IP Segregated",
+      "createdByOrg": "QRT-RM-800V",
       "participants": [
         {
           "id": "part-bp-1",
@@ -414,6 +563,7 @@
         }
       ],
       "problemStatement": "Close the 1.3% WLTP efficiency gap on the 800V / 250 kW SiC traction inverter under 105°C liquid coolant and CISPR 25 Class 5 EMI constraints by integrating active gate-shaping IP and low-inductance Ag-sintered packaging.",
+      "publicationState": "draft",
       "publicationPolicy": "30-Day Pre-Publication Patent Review",
       "originatingFrontierId": "frt-bp-800v-sic",
       "trainingIsolationVerified": true
@@ -443,6 +593,121 @@
       "problemStatement": "Closing the frontier gap on 800V Silicon Carbide (SiC) 250 kW Traction Inverter (800V DC bus (650V–920V), 250 kW peak power, 105°C water-glycol coolant, 48 kHz PWM) via Closed-Loop dI/dt and dV/dt Real-Time Gate Trajectory Controller for Wide-Bandgap Half-Bridges. Provides the licensable foreground IP required to push efficiency from 98.1% toward the 99.0% target.",
       "publicationPolicy": "30-Day Pre-Publication Patent Review",
       "originatingFrontierId": "frt-bp-800v-sic",
+      "trainingIsolationVerified": true
+    },
+    {
+      "id": "prj-1791130410031",
+      "code": "QRT-RM-6210",
+      "title": "Protected Project: Experimental Assessment of JHG Performance",
+      "domain": "Publication",
+      "messages": [],
+      "createdAt": "2026-10-04",
+      "documents": [],
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Scoping & Mutual NDA",
+      "milestones": [],
+      "targetSpec": "0.92 (dimensionless)",
+      "ipFramework": "Background IP Segregated",
+      "participants": [
+        {
+          "id": "part-1791130410031",
+          "name": "Prof. B. Zhang",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "National Research Institute"
+        }
+      ],
+      "problemStatement": "Represents the absolute ceiling for theoretical JHG performance (Operating Conditions: Extreme temperature variance within defined ou envelope)",
+      "publicationPolicy": "30-Day Pre-Publication Patent Review",
+      "originatingFrontierId": "",
+      "trainingIsolationVerified": true
+    },
+    {
+      "id": "prj-1791535924311",
+      "code": "QRT-RM-5578",
+      "title": "Top-Secret 1200V SiC Traction Module Room",
+      "domain": "E-Mobility Traction",
+      "messages": [],
+      "createdAt": "2026-10-09",
+      "documents": [],
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Stage 02 Bilateral NDA Executed",
+      "milestones": [],
+      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
+      "ipFramework": "Background IP Segregated",
+      "createdByOrg": "nexora",
+      "participants": [
+        {
+          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
+          "name": "rana riahi",
+          "role": "Industry Lead",
+          "accessScope": "Full Control",
+          "organization": "nexora"
+        },
+        {
+          "id": "part-1791535924311",
+          "name": "OEM Partner Lead",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Automotive OEM"
+        },
+        {
+          "id": "part-1791535925181",
+          "name": "dr.lukas.weber",
+          "role": "Hardware Reliability Lead",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Siemens Energy R&D"
+        }
+      ],
+      "createdByEmail": "rana.riahi90@yahoo.fr",
+      "problemStatement": "High-density soft-switching inverter for automotive OEM",
+      "publicationState": "draft",
+      "publicationPolicy": "Strict NDA - No Public Disclosure",
+      "trainingIsolationVerified": true
+    },
+    {
+      "id": "prj-1791536003777",
+      "code": "QRT-RM-5128",
+      "title": "Top-Secret 1200V SiC Traction Module Room",
+      "domain": "E-Mobility Traction",
+      "messages": [],
+      "createdAt": "2026-10-09",
+      "documents": [],
+      "ndaStatus": "Pending Signature",
+      "legalStage": "Stage 02 Bilateral NDA Executed",
+      "milestones": [],
+      "targetSpec": "1200V / 600A with <1.5 nH stray inductance",
+      "createdById": "4982b74b-290b-4094-aa44-f26ea70f518a",
+      "ipFramework": "Background IP Segregated",
+      "createdByOrg": "nexora",
+      "participants": [
+        {
+          "id": "4982b74b-290b-4094-aa44-f26ea70f518a",
+          "name": "rana riahi",
+          "role": "Industry Lead",
+          "accessScope": "Full Control",
+          "organization": "nexora"
+        },
+        {
+          "id": "part-1791536003777",
+          "name": "OEM Partner Lead",
+          "role": "University / Lab PI",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Automotive OEM"
+        },
+        {
+          "id": "part-1791536004617",
+          "name": "dr.lukas.weber",
+          "role": "Hardware Reliability Lead",
+          "accessScope": "Protected Project Boundary",
+          "organization": "Siemens Energy R&D"
+        }
+      ],
+      "createdByEmail": "rana.riahi90@yahoo.fr",
+      "problemStatement": "High-density soft-switching inverter for automotive OEM",
+      "publicationState": "draft",
+      "publicationPolicy": "Strict NDA - No Public Disclosure",
       "trainingIsolationVerified": true
     }
   ],
@@ -981,96 +1246,7 @@
   ],
   "brainstormRooms": [
     {
-      "id": "br-800v-inverter",
-      "title": "800V SiC Inverter: Eliminating Low-Torque WLTP Switching Losses",
-      "topic": "How can active gate shaping and low-inductance packaging recover +0.7% WLTP efficiency?",
-      "domain": "Power Electronics & E-Mobility Drivetrain",
-      "isPrivate": false,
-      "createdBy": "Mohamed Rafed Riahi",
-      "membersCount": 4,
-      "participants": [
-        "Mohamed Rafed Riahi",
-        "Prof. Johann Kolar",
-        "Dr. Martin März",
-        "Qartinia AI Assistant"
-      ],
-      "tags": [
-        "800V",
-        "SiC",
-        "Active Gate Driver",
-        "ZVS",
-        "WLTP"
-      ],
-      "summary": "Consensus reached on combining closed-loop active dV/dt feedback with Fraunhofer IISB 1.75 nH Cu-clip packaging to eliminate 58% of turn-on switching energy without exceeding CISPR 25 Class 5 EMI limits.",
-      "tasks": [
-        {
-          "id": "tsk-1",
-          "title": "Extract parasitic loop inductance from 3D CAD step model",
-          "assignee": "Dr. Martin März",
-          "status": "Completed",
-          "priority": "High"
-        },
-        {
-          "id": "tsk-2",
-          "title": "Run SPICE transient simulation on double-pulse gate driver testbench",
-          "assignee": "Prof. Johann Kolar",
-          "status": "In Progress",
-          "priority": "High"
-        },
-        {
-          "id": "tsk-3",
-          "title": "Draft mutual NDA and Background IP schedule for project room",
-          "assignee": "Dr. Elena Rostova",
-          "status": "Todo",
-          "priority": "Medium"
-        }
-      ],
-      "messages": [
-        {
-          "id": "bmsg-1",
-          "senderName": "Mohamed Rafed Riahi",
-          "senderRole": "Industry Lead",
-          "content": "Welcome team. Our dyno baseline is 97.4% WLTP efficiency on our 800V / 250 kW inverter. We need to reach the 98.7% research frontier to hit OEM targets.",
-          "timestamp": "09:15"
-        },
-        {
-          "id": "bmsg-2",
-          "senderName": "Prof. Johann Kolar",
-          "senderRole": "University / Lab PI",
-          "content": "Under low-torque WLTP urban cruising, hard-switching losses dominate. With closed-loop active gate trajectory shaping, we can dynamically boost gate current during switching intervals and clamp Miller plateau ringing.",
-          "timestamp": "09:22"
-        },
-        {
-          "id": "bmsg-3",
-          "senderName": "Qartinia AI Assistant",
-          "senderRole": "AI Research Assistant",
-          "isAi": true,
-          "content": "Cross-referencing the Knowledge Hub: Patent EP4198231A1 and IEEE TPEL 2026 paper show this architecture achieves +0.65% efficiency gain while holding radiated EMI below CISPR 25 Class 5. Recommend launching a SPICE simulation job in the Simulation Hub to verify junction temperatures.",
-          "timestamp": "09:24"
-        },
-        {
-          "id": "bmsg-4",
-          "senderName": "Dr. Martin März",
-          "senderRole": "Domain Specialist",
-          "content": "We have tested the Si3N4 AMB substrate with 1.75 nH stray inductance. That allows gate resistance Rg to be reduced from 4.7 Ω down to 1.8 Ω safely.",
-          "timestamp": "09:30"
-        }
-      ],
-      "createdAt": "2026-10-01"
-    },
-    {
       "id": "br-solid-state-battery",
-      "title": "Solid-State Battery: Interfacial Impedance & Pressure Uniformity",
-      "topic": "Overcoming lithium dendrite propagation at 4C fast charge using atomic layer deposition (ALD)",
-      "domain": "Energy Storage & Materials Science",
-      "isPrivate": false,
-      "createdBy": "Dr. Marie Laurent",
-      "membersCount": 3,
-      "participants": [
-        "Dr. Marie Laurent",
-        "Prof. Thomas Ebbesen",
-        "Qartinia AI Assistant"
-      ],
       "tags": [
         "Solid-State",
         "Lithium Metal",
@@ -1081,62 +1257,197 @@
         {
           "id": "tsk-ssb-1",
           "title": "Run DFT calculation on LLZO / Li interface energy barrier",
-          "assignee": "Prof. Thomas Ebbesen",
           "status": "In Progress",
+          "assignee": "Prof. Thomas Ebbesen",
           "priority": "High"
         },
         {
           "id": "tsk-ssb-2",
           "title": "Request sample ALD-coated separator from Kyocera",
-          "assignee": "Dr. Marie Laurent",
           "status": "Todo",
+          "assignee": "Dr. Marie Laurent",
           "priority": "Medium"
         }
       ],
+      "title": "Solid-State Battery: Interfacial Impedance & Pressure Uniformity",
+      "topic": "Overcoming lithium dendrite propagation at 4C fast charge using atomic layer deposition (ALD)",
+      "domain": "Energy Storage & Materials Science",
       "messages": [
         {
           "id": "bmsg-ssb-1",
-          "senderName": "Dr. Marie Laurent",
-          "senderRole": "Senior Battery Engineer",
           "content": "We are seeing interfacial impedance spike after 120 cycles at 3C charge rate. Looking for thin-film buffer layer recommendations.",
-          "timestamp": "11:00"
+          "timestamp": "11:00",
+          "senderName": "Dr. Marie Laurent",
+          "senderRole": "Senior Battery Engineer"
         },
         {
           "id": "bmsg-ssb-2",
-          "senderName": "Qartinia AI Assistant",
-          "senderRole": "AI Research Assistant",
           "isAi": true,
           "content": "Recent 2026 Nature Energy demonstration indicates 2.5 nm amorphous Al2O3 applied via low-temperature ALD lowers interfacial area specific resistance (ASR) to <7 Ω·cm² at 25°C.",
-          "timestamp": "11:02"
+          "timestamp": "11:02",
+          "senderName": "Qartinia AI Assistant",
+          "senderRole": "AI Research Assistant"
         }
       ],
-      "createdAt": "2026-10-02"
+      "createdAt": "2026-10-02",
+      "createdBy": "Dr. Marie Laurent",
+      "isPrivate": false,
+      "membersCount": 3,
+      "participants": [
+        "Dr. Marie Laurent",
+        "Prof. Thomas Ebbesen",
+        "Qartinia AI Assistant"
+      ]
+    },
+    {
+      "id": "br-800v-inverter",
+      "tags": [
+        "800V",
+        "SiC",
+        "Active Gate Driver",
+        "ZVS",
+        "WLTP"
+      ],
+      "tasks": [
+        {
+          "id": "tsk-1",
+          "title": "Extract parasitic loop inductance from 3D CAD step model",
+          "status": "Completed",
+          "assignee": "Dr. Martin März",
+          "priority": "High"
+        },
+        {
+          "id": "tsk-2",
+          "title": "Run SPICE transient simulation on double-pulse gate driver testbench",
+          "status": "In Progress",
+          "assignee": "Prof. Johann Kolar",
+          "priority": "High"
+        },
+        {
+          "id": "tsk-3",
+          "title": "Draft mutual NDA and Background IP schedule for project room",
+          "status": "Todo",
+          "assignee": "Dr. Elena Rostova",
+          "priority": "Medium"
+        }
+      ],
+      "title": "800V SiC Inverter: Eliminating Low-Torque WLTP Switching Losses",
+      "topic": "How can active gate shaping and low-inductance packaging recover +0.7% WLTP efficiency?",
+      "domain": "Power Electronics & E-Mobility Drivetrain",
+      "summary": "Consensus reached on combining closed-loop active dV/dt feedback with Fraunhofer IISB 1.75 nH Cu-clip packaging to eliminate 58% of turn-on switching energy without exceeding CISPR 25 Class 5 EMI limits.",
+      "messages": [
+        {
+          "id": "bmsg-1",
+          "content": "Welcome team. Our dyno baseline is 97.4% WLTP efficiency on our 800V / 250 kW inverter. We need to reach the 98.7% research frontier to hit OEM targets.",
+          "timestamp": "09:15",
+          "senderName": "Mohamed Rafed Riahi",
+          "senderRole": "Industry Lead"
+        },
+        {
+          "id": "bmsg-2",
+          "content": "Under low-torque WLTP urban cruising, hard-switching losses dominate. With closed-loop active gate trajectory shaping, we can dynamically boost gate current during switching intervals and clamp Miller plateau ringing.",
+          "timestamp": "09:22",
+          "senderName": "Prof. Johann Kolar",
+          "senderRole": "University / Lab PI"
+        },
+        {
+          "id": "bmsg-3",
+          "isAi": true,
+          "content": "Cross-referencing the Knowledge Hub: Patent EP4198231A1 and IEEE TPEL 2026 paper show this architecture achieves +0.65% efficiency gain while holding radiated EMI below CISPR 25 Class 5. Recommend launching a SPICE simulation job in the Simulation Hub to verify junction temperatures.",
+          "timestamp": "09:24",
+          "senderName": "Qartinia AI Assistant",
+          "senderRole": "AI Research Assistant"
+        },
+        {
+          "id": "bmsg-4",
+          "content": "We have tested the Si3N4 AMB substrate with 1.75 nH stray inductance. That allows gate resistance Rg to be reduced from 4.7 Ω down to 1.8 Ω safely.",
+          "timestamp": "09:30",
+          "senderName": "Dr. Martin März",
+          "senderRole": "Domain Specialist"
+        }
+      ],
+      "createdAt": "2026-10-01",
+      "createdBy": "Mohamed Rafed Riahi",
+      "isPrivate": false,
+      "membersCount": 4,
+      "participants": [
+        "Mohamed Rafed Riahi",
+        "Prof. Johann Kolar",
+        "Dr. Martin März",
+        "Qartinia AI Assistant"
+      ]
     }
   ],
   "simulations": [
     {
-      "id": "sim-spice-800v-double-pulse",
-      "title": "800V SiC Half-Bridge Double-Pulse & Active Gate Trajectory Transient",
-      "tool": "SPICE",
-      "domain": "Power Electronics",
+      "id": "sim-dft-castep-interface",
+      "tool": "DFT/CASTEP",
+      "title": "Density Functional Theory (DFT) Cu-AMB Ceramic Bonding Energy",
+      "domain": "Materials Science",
+      "isDemo": true,
+      "status": "Queued",
+      "parameters": {
+        "k-Point Mesh": "6 × 6 × 1 Monkhorst-Pack",
+        "Interface System": "Cu(111) / Si3N4(0001) / Ti-Active Solder",
+        "Plane-Wave Cutoff": "650 eV",
+        "Exchange-Correlation": "GGA-PBE with DFT-D3 dispersion"
+      },
+      "submittedAt": "2026-10-04 10:05",
+      "resultReport": "Job queued in Qartinia Cloud Compute cluster.",
+      "runtimeSeconds": 0,
+      "summaryMetrics": {
+        "Estimated Runtime": "~8 minutes on 32-core cloud cluster"
+      }
+    },
+    {
+      "id": "sim-tcad-sic-trench",
+      "tool": "TCAD",
+      "title": "SiC Trench Gate Oxide Electric Field Breakdown Analysis",
+      "domain": "Semiconductor Device Physics",
+      "isDemo": true,
       "status": "Completed",
       "parameters": {
-        "Bus Voltage (Vdc)": "800 V",
-        "Peak Current (Ipk)": "450 A",
-        "Stray Inductance (Lloop)": "1.8 nH",
-        "Junction Temp (Tj)": "125 °C",
-        "Gate Resistor (Rg_on)": "1.8 Ω",
-        "PWM Frequency": "48 kHz"
+        "Substrate Material": "4H-SiC",
+        "Doping Concentration": "8.2e15 cm^-3",
+        "Gate Oxide Thickness": "45 nm SiO2",
+        "Reverse Bias Voltage": "1400 V",
+        "Drift Layer Thickness": "10.5 μm"
       },
-      "runtimeSeconds": 14.2,
-      "submittedAt": "2026-10-04 09:12",
-      "completedAt": "2026-10-04 09:12",
+      "completedAt": "2026-10-04 08:31",
+      "submittedAt": "2026-10-04 08:30",
+      "resultReport": "TCAD finite-element grid demonstrates bottom-trench p-shield effectively screens gate oxide from excessive electric field under 1400V surge conditions.",
+      "runtimeSeconds": 42.8,
       "summaryMetrics": {
+        "Breakdown Voltage": "1580 V",
+        "Peak Oxide E-Field": "2.8 MV/cm (< 3.5 MV/cm limit)",
+        "Avalanche Energy (Eas)": "850 mJ"
+      }
+    },
+    {
+      "id": "sim-spice-800v-double-pulse",
+      "tool": "SPICE",
+      "title": "800V SiC Half-Bridge Double-Pulse & Active Gate Trajectory Transient",
+      "domain": "Power Electronics",
+      "isDemo": true,
+      "status": "Completed",
+      "parameters": {
+        "PWM Frequency": "48 kHz",
+        "Bus Voltage (Vdc)": "800 V",
+        "Junction Temp (Tj)": "125 °C",
+        "Peak Current (Ipk)": "450 A",
+        "Gate Resistor (Rg_on)": "1.8 Ω",
+        "Stray Inductance (Lloop)": "1.8 nH"
+      },
+      "completedAt": "2026-10-04 09:12",
+      "submittedAt": "2026-10-04 09:12",
+      "resultReport": "Simulation confirms stable switching under 800V DC link with peak overshoot restricted to 912V (24% safety margin below 1200V dielectric breakdown). Active gate current boost successfully compresses current rise time without exciting parasitic LC resonance.",
+      "runtimeSeconds": 14.2,
+      "summaryMetrics": {
+        "dV/dt Slew Rate": "44.2 V/ns",
         "Turn-on Energy (E_on)": "4.2 mJ (-58% vs baseline)",
         "Turn-off Energy (E_off)": "2.8 mJ",
-        "Peak Over-Voltage (V_ds_max)": "912 V (< 1200V rating)",
-        "dV/dt Slew Rate": "44.2 V/ns",
-        "Simulated WLTP Efficiency": "98.74 %"
+        "Simulated WLTP Efficiency": "98.74 %",
+        "Peak Over-Voltage (V_ds_max)": "912 V (< 1200V rating)"
       },
       "outputWaveformData": [
         {
@@ -1183,50 +1494,7 @@
           "time": 50,
           "value": 0
         }
-      ],
-      "resultReport": "Simulation confirms stable switching under 800V DC link with peak overshoot restricted to 912V (24% safety margin below 1200V dielectric breakdown). Active gate current boost successfully compresses current rise time without exciting parasitic LC resonance."
-    },
-    {
-      "id": "sim-tcad-sic-trench",
-      "title": "SiC Trench Gate Oxide Electric Field Breakdown Analysis",
-      "tool": "TCAD",
-      "domain": "Semiconductor Device Physics",
-      "status": "Completed",
-      "parameters": {
-        "Substrate Material": "4H-SiC",
-        "Drift Layer Thickness": "10.5 μm",
-        "Doping Concentration": "8.2e15 cm^-3",
-        "Gate Oxide Thickness": "45 nm SiO2",
-        "Reverse Bias Voltage": "1400 V"
-      },
-      "runtimeSeconds": 42.8,
-      "submittedAt": "2026-10-04 08:30",
-      "completedAt": "2026-10-04 08:31",
-      "summaryMetrics": {
-        "Peak Oxide E-Field": "2.8 MV/cm (< 3.5 MV/cm limit)",
-        "Breakdown Voltage": "1580 V",
-        "Avalanche Energy (Eas)": "850 mJ"
-      },
-      "resultReport": "TCAD finite-element grid demonstrates bottom-trench p-shield effectively screens gate oxide from excessive electric field under 1400V surge conditions."
-    },
-    {
-      "id": "sim-dft-castep-interface",
-      "title": "Density Functional Theory (DFT) Cu-AMB Ceramic Bonding Energy",
-      "tool": "DFT/CASTEP",
-      "domain": "Materials Science",
-      "status": "Queued",
-      "parameters": {
-        "Interface System": "Cu(111) / Si3N4(0001) / Ti-Active Solder",
-        "Exchange-Correlation": "GGA-PBE with DFT-D3 dispersion",
-        "Plane-Wave Cutoff": "650 eV",
-        "k-Point Mesh": "6 × 6 × 1 Monkhorst-Pack"
-      },
-      "runtimeSeconds": 0,
-      "submittedAt": "2026-10-04 10:05",
-      "summaryMetrics": {
-        "Estimated Runtime": "~8 minutes on 32-core cloud cluster"
-      },
-      "resultReport": "Job queued in Qartinia Cloud Compute cluster."
+      ]
     }
   ],
   "knowledgeItems": [

@@ -7,7 +7,7 @@ import {
   UserAccount,
 } from '../types/qartinia';
 import { getUserPermissions } from '../utils/permissions';
-import { Lock, ShieldCheck, Plus, Send, Check, FileText, Users, Flag, X, Trash2, Download, ShieldAlert } from 'lucide-react';
+import { Lock, ShieldCheck, Plus, Send, Check, FileText, Users, Flag, X, Trash2, Download, ShieldAlert, Upload, Loader2, AlertCircle } from 'lucide-react';
 
 interface ProjectsEngineViewProps {
   projects: ProtectedProjectRoom[];
@@ -47,6 +47,8 @@ interface ProjectsEngineViewProps {
     projectId: string,
     doc: Omit<ProjectDocument, 'id' | 'timestamp'>
   ) => Promise<void>;
+  onDownloadDocument?: (projectId: string, documentId: string) => Promise<void>;
+  onDeleteDocument?: (projectId: string, documentId: string) => Promise<void>;
   onSendMessage: (
     projectId: string,
     message: { senderName: string; senderOrg: string; senderRole: string; content: string }
@@ -82,6 +84,8 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
   onAddMilestone,
   onToggleMilestoneStatus,
   onAddDocument,
+  onDownloadDocument,
+  onDeleteDocument,
   onSendMessage,
   onDeleteProject,
   pendingDraftFromFrontier,
@@ -117,6 +121,13 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
   const [docTitle, setDocTitle] = useState('');
   const [docClass, setDocClass] = useState<ProjectDocument['classification']>('Mutual NDA');
   const [docAuthor, setDocAuthor] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileBase64, setFileBase64] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [docUploadError, setDocUploadError] = useState<string | null>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [ndaNotice, setNdaNotice] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const [chatSenderName, setChatSenderName] = useState(
     currentUser?.fullName || (currentUser?.email ? currentUser.email.split('@')[0] : '')
@@ -125,6 +136,76 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
     currentUser?.organizationName || 'Project Participant'
   );
   const [chatContent, setChatContent] = useState('');
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setSelectedFile(null);
+      setFileBase64(null);
+      return;
+    }
+    setSelectedFile(file);
+    setDocUploadError(null);
+    if (!docTitle.trim()) {
+      setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFileBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownloadDoc = async (doc: ProjectDocument) => {
+    if (!selectedProject || !onDownloadDocument) return;
+    setDownloadingDocId(doc.id);
+    try {
+      await onDownloadDocument(selectedProject.id, doc.id);
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`);
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
+  const handleDeleteDoc = async (docId: string) => {
+    if (!selectedProject || !onDeleteDocument) return;
+    if (!window.confirm('Are you sure you want to delete this document from the protected project vault?')) return;
+    try {
+      await onDeleteDocument(selectedProject.id, docId);
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
+  const handleNdaToggle = () => {
+    if (!selectedProject) return;
+    if (selectedProject.ndaStatus === 'Executed') {
+      onUpdateProjectStageOrGovernance(selectedProject.id, {
+        ndaStatus: 'Pending Signature',
+      });
+      setNdaNotice(null);
+    } else {
+      const hasMutualNda = selectedProject.documents?.some(
+        (d) => d.classification === 'Mutual NDA' && (Boolean(d.storagePath) || d.title.toLowerCase().includes('nda') || d.title.toLowerCase().includes('executed'))
+      );
+      if (!hasMutualNda) {
+        setNdaNotice('To execute NDA, upload a signed Mutual NDA document into the Protected Room Documents vault below. Unverified execution claims are disallowed.');
+        return;
+      }
+      setNdaNotice(null);
+      onUpdateProjectStageOrGovernance(selectedProject.id, {
+        ndaStatus: 'Executed',
+      });
+    }
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -208,14 +289,35 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
 
   const handleAddDocumentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProject || !docTitle.trim()) return;
-    await onAddDocument(selectedProject.id, {
-      title: docTitle.trim(),
-      classification: docClass,
-      uploadedBy: docAuthor.trim() || 'Project Lead',
-    });
-    setDocTitle('');
-    setDocAuthor('');
+    if (!selectedProject) return;
+    if (!selectedFile || !fileBase64) {
+      setDocUploadError('Please select a file to upload. Simulated records without real storage are disallowed.');
+      return;
+    }
+    setIsUploadingDoc(true);
+    setDocUploadError(null);
+    try {
+      await onAddDocument(selectedProject.id, {
+        title: docTitle.trim() || selectedFile.name,
+        classification: docClass,
+        uploadedBy: currentUser?.fullName || docAuthor.trim() || 'Project Member',
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        mimeType: selectedFile.type || 'application/octet-stream',
+        fileBase64,
+      });
+      setDocTitle('');
+      setDocAuthor('');
+      setSelectedFile(null);
+      setFileBase64(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err: any) {
+      setDocUploadError(err.message || 'Failed to upload document to secure vault');
+    } finally {
+      setIsUploadingDoc(false);
+    }
   };
 
   const handleSendChatSubmit = async (e: React.FormEvent) => {
@@ -350,17 +452,13 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        onUpdateProjectStageOrGovernance(selectedProject.id, {
-                          ndaStatus:
-                            selectedProject.ndaStatus === 'Executed' ? 'Pending Signature' : 'Executed',
-                        })
-                      }
+                      onClick={handleNdaToggle}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
                         selectedProject.ndaStatus === 'Executed'
                           ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                           : 'bg-amber-50 border-amber-200 text-amber-800'
                       }`}
+                      title={selectedProject.ndaStatus === 'Executed' ? 'NDA Executed (Verified by Executed Document in Vault)' : 'Click to execute NDA (Requires signed NDA document in vault)'}
                     >
                       NDA: {selectedProject.ndaStatus}
                     </button>
@@ -388,6 +486,22 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
                     )}
                   </div>
                 </div>
+
+                {ndaNotice && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{ndaNotice}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNdaNotice(null)}
+                      className="p-1 text-amber-700 hover:text-amber-900 rounded cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Structured Legal Stages Selector (Reduces friction around NDA, IP, publication rights & handover) */}
                 <div>
@@ -618,43 +732,140 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 {/* Segregated Document Vault */}
                 <div className="md:col-span-5 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-[#0F2537]">
-                    <FileText className="w-4 h-4 text-[#108548]" />
-                    <span>Protected Room Documents ({selectedProject.documents.length})</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[#0F2537]">
+                      <FileText className="w-4 h-4 text-[#108548]" />
+                      <span>Protected Vault Documents ({selectedProject.documents.length})</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-[#108548] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Private Vault
+                    </span>
                   </div>
 
                   {selectedProject.documents.length === 0 ? (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 py-3 text-center border border-dashed border-slate-200 rounded-lg">
                       No documents logged in this project room yet.
                     </p>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto pr-1">
                       {selectedProject.documents.map((d) => (
-                        <div key={d.id} className="py-2.5 first:pt-0 last:pb-0 text-xs">
-                          <div className="font-semibold text-[#0F2537]">{d.title}</div>
-                          <div className="text-slate-500">
-                            {d.classification} · {d.uploadedBy} · <span className="font-mono">{d.timestamp}</span>
+                        <div key={d.id} className="py-2.5 first:pt-0 last:pb-0 text-xs flex items-center justify-between gap-2 group">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-[#0F2537] truncate flex items-center gap-1.5">
+                              <span className="truncate">{d.title}</span>
+                              {d.fileSize ? (
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                  ({formatFileSize(d.fileSize)})
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                              <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-medium border ${
+                                d.classification === 'Mutual NDA'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : d.classification === 'IP Term Sheet'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : d.classification === 'Simulation / Test Data'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {d.classification}
+                              </span>
+                              <span>·</span>
+                              <span className="truncate">{d.uploadedBy}</span>
+                              <span>·</span>
+                              <span className="font-mono text-[10px] shrink-0">{d.timestamp}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDoc(d)}
+                              disabled={downloadingDocId === d.id}
+                              className="p-1.5 text-slate-500 hover:text-[#0F2537] hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                              title="Download via secure short-lived signed URL"
+                            >
+                              {downloadingDocId === d.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-700" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            {permissions.canEditProjectGovernance && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDoc(d.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer transition-colors"
+                                title="Delete document from project vault"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <form onSubmit={handleAddDocumentSubmit} className="pt-3 border-t border-slate-200 space-y-2">
-                    <div className="text-xs font-semibold text-slate-700">Register Room Document</div>
+                  <form onSubmit={handleAddDocumentSubmit} className="pt-3 border-t border-slate-200 space-y-3">
+                    <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Secure File Upload</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Encrypted & Isolated</span>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="project-room-file-input"
+                    />
+
+                    {selectedFile ? (
+                      <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="w-4 h-4 text-[#108548] shrink-0" />
+                          <div className="truncate font-medium text-[#0F2537]">{selectedFile.name}</div>
+                          <span className="text-slate-400 font-mono text-[11px] shrink-0">
+                            ({formatFileSize(selectedFile.size)})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setFileBase64(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          className="text-slate-400 hover:text-red-600 p-1 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor="project-room-file-input"
+                        className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-lg hover:border-slate-300 hover:bg-slate-50 cursor-pointer transition-colors text-center"
+                      >
+                        <Upload className="w-4 h-4 text-slate-400 mb-1" />
+                        <span className="text-xs font-semibold text-slate-700">Choose file to upload</span>
+                        <span className="text-[10px] text-slate-400">PDF, CSV, ZIP, JSON, PNG (up to 50MB)</span>
+                      </label>
+                    )}
+
                     <input
                       type="text"
-                      required
                       value={docTitle}
                       onChange={(e) => setDocTitle(e.target.value)}
-                      placeholder="Document or dataset title"
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded"
+                      placeholder="Document title (optional, defaults to filename)"
+                      className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-[#0F2537]"
                     />
+
                     <div className="flex items-center gap-2">
                       <select
                         value={docClass}
                         onChange={(e) => setDocClass(e.target.value as ProjectDocument['classification'])}
-                        className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded"
+                        className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#0F2537]"
                       >
                         <option value="Mutual NDA">Mutual NDA</option>
                         <option value="IP Term Sheet">IP Term Sheet</option>
@@ -663,11 +874,29 @@ export const ProjectsEngineView: React.FC<ProjectsEngineViewProps> = ({
                       </select>
                       <button
                         type="submit"
-                        className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0F2537] rounded hover:bg-[#16344D] cursor-pointer"
+                        disabled={isUploadingDoc || !selectedFile}
+                        className="px-4 py-1.5 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] disabled:opacity-50 flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
-                        Log File
+                        {isUploadingDoc ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload</span>
+                          </>
+                        )}
                       </button>
                     </div>
+
+                    {docUploadError && (
+                      <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{docUploadError}</span>
+                      </div>
+                    )}
                   </form>
                 </div>
 

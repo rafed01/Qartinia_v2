@@ -9,6 +9,7 @@ import {
   FrontierBenchmark,
   EvidenceNode,
   ProtectedProjectRoom,
+  ProjectDocument,
   ProjectParticipant,
   FrontierPositionRow,
   UserAccount,
@@ -1816,6 +1817,31 @@ async function ensureDatabaseCatalogSeeded() {
       }
     }
 
+    // Ensure private Supabase Storage bucket for protected project vaults exists
+    try {
+      const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+      const vaultExists = (buckets || []).some((b: any) => b.name === 'protected-project-vault');
+      if (!vaultExists) {
+        await supabaseAdmin.storage.createBucket('protected-project-vault', {
+          public: false,
+          fileSizeLimit: 52428800, // 50MB
+          allowedMimeTypes: [
+            'application/pdf',
+            'application/zip',
+            'application/json',
+            'text/plain',
+            'text/csv',
+            'image/png',
+            'image/jpeg',
+            'application/octet-stream',
+          ],
+        });
+        console.log('[Supabase Storage] Private bucket "protected-project-vault" created successfully.');
+      }
+    } catch (stErr) {
+      console.warn('[Supabase Storage Bucket Verification Warning]', stErr);
+    }
+
     console.log('[Supabase Catalog] Enterprise knowledge catalog verified & authoritative in Supabase.');
   } catch (err) {
     console.warn('[Supabase Catalog Seed Warning]', err);
@@ -2201,6 +2227,35 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   };
 }
 
+function findRelevantCatalogEvidence(params: {
+  domain: string;
+  technologySystem: string;
+  metricName: string;
+}): EvidenceNode[] {
+  const allNodes = (localStore.evidenceNodes || []);
+  const queryStr = `${params.domain} ${params.technologySystem} ${params.metricName}`.toLowerCase();
+  const tokens = queryStr
+    .split(/[\s,./\-_()]+/)
+    .filter((w) => w.length >= 3 && !['with', 'under', 'from', 'into', 'standard', 'system', 'primary'].includes(w));
+
+  if (tokens.length === 0) return [];
+
+  const scored = allNodes.map((node) => {
+    const text = `${node.title} ${node.category} ${node.institutionOrCompany} ${node.operatingConditions} ${node.relevanceToGap} ${node.sourceIdentifier}`.toLowerCase();
+    let score = 0;
+    for (const t of tokens) {
+      if (text.includes(t)) score += 1;
+    }
+    return { node, score };
+  });
+
+  return scored
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((item) => item.node);
+}
+
 async function generateFrontierWithGemini(params: {
   title: string;
   domain: string;
@@ -2215,6 +2270,14 @@ async function generateFrontierWithGemini(params: {
 }): Promise<Omit<FrontierBenchmark, 'id' | 'createdAt' | 'lastEvaluatedAt' | 'monitored'>> {
   const apiKey = process.env.GEMINI_API_KEY;
   const unitSuffix = params.metricUnit ? ` ${params.metricUnit}` : '';
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Retrieve matching source-backed evidence from the verified local/Supabase catalog
+  const retrievedEvidence = findRelevantCatalogEvidence({
+    domain: params.domain,
+    technologySystem: params.technologySystem,
+    metricName: params.metricName,
+  });
 
   if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.length > 10) {
     const ai = new GoogleGenAI({
@@ -2226,6 +2289,17 @@ async function generateFrontierWithGemini(params: {
       },
     });
 
+    const candidateContext =
+      retrievedEvidence.length > 0
+        ? `\nRetrieved Source-Backed Catalog Evidence:\n` +
+          retrievedEvidence
+            .map(
+              (e, i) =>
+                `[Source ${i + 1}] "${e.title}" (${e.category}) by ${e.institutionOrCompany} (Ref: ${e.sourceIdentifier}). Operating Conditions: ${e.operatingConditions}. Demonstrated Performance: ${e.demonstratedPerformance}. TRL: ${e.maturityTrl}.`
+            )
+            .join('\n')
+        : '\nNo pre-existing catalog records found matching this exact query.';
+
     const prompt = `You are the Qartinia Frontier Intelligence Engine ("Know where your technology stands — and when the world moves").
 A customer has submitted their engineering system and operating envelope for a condition-aware frontier benchmark:
 - Engineering Domain: ${params.domain}
@@ -2236,19 +2310,29 @@ A customer has submitted their engineering system and operating envelope for a c
 - Operating Envelope: ${params.operatingEnvelope}
 - Industrial Constraints: ${params.constraints}
 ${params.isReevaluation ? '- Mode: Re-evaluating monitored frontier for recent research and commercial movement.' : ''}
+${candidateContext}
 
-Instructions:
-1. Build the 4-row comparable frontier positioning table:
-   - Row 1 ("Customer technology"): value "${params.customerValue}${unitSuffix}", meaning where the company stands today under this operating envelope.
-   - Row 2 ("Commercial frontier"): best comparable industrially available performance under matching operating conditions, naming real commercial product families or industrial benchmarks.
-   - Row 3 ("Research frontier"): best comparable research-demonstrated performance under matching or closely comparable conditions, naming real university laboratories, institutes, or peer-reviewed demonstrations.
-   - Row 4 ("Target"): value "${params.targetValue}${unitSuffix}", meaning the customer's ambition and its feasibility relative to the commercial and research frontiers.
-2. Provide a rigorous physics and engineering root-cause analysis of what causes the gap between the customer's current technology, the commercial frontier, and the research frontier.
-3. Explain what has changed recently in scientific literature, patents, or commercial releases along this frontier.
-4. Provide 4 concrete, condition-aware Evidence Records (covering scientific publications, patents, research laboratories, domain experts, or product datasheets) that are closest to closing the gap, specifying their comparable operating conditions, demonstrated performance, maturity (TRL), manufacturability/reliability, and relevance.
-5. Provide 3 concrete recommended next engineering & collaboration actions.`;
+CRITICAL SCIENTIFIC INTEGRITY, COMPARABILITY & PROVENANCE RULES:
+1. NEVER present AI-generated estimates or projections as verified empirical commercial or research performance.
+2. Separate retrieved/source-backed evidence, AI-generated synthesis, and model estimates in the data model.
+3. For Commercial Frontier and Research Frontier:
+   - Provide value, concise meaning, and reference source.
+   - For 'commercialFrontierProvenance' and 'researchFrontierProvenance': use 'source_backed' ONLY if referencing a verified empirical paper, patent, or real product datasheet with known specifications; otherwise use 'model_estimate'.
+   - For 'commercialFrontierVerification' and 'researchFrontierVerification': use 'verified' (if backed by a real verifiable product/paper) or 'unverified_estimate'.
+   - In 'commercialFrontierComparabilityNotice' and 'researchFrontierComparabilityNotice': compare technologies ONLY when their operating conditions and measurement basis are sufficiently comparable; otherwise disclose the limitation (e.g. "Estimated: standard commercial datasheets specify performance at 25°C ambient, requiring thermal derating under the customer's 105°C envelope").
+   - Provide real source URL (e.g. DOI link or manufacturer link) and source identifier where available.
+4. Provide a 'comparabilityAssessment' thoroughly evaluating whether customer baseline, commercial frontier, and research frontier are operating under matching conditions and measurement standards, or disclosing any physical discrepancies.
+5. Provide a 'disclaimer' summarizing the verification boundaries of this analysis.
+6. Provide 4 concrete Evidence Records closest to closing the gap. For each:
+   - Must specify real institutions, authors, categories ('Publication', 'Patent', 'Product Datasheet', 'Research Laboratory', 'Standard', 'Domain Expert').
+   - 'provenanceType': 'peer_reviewed_literature' | 'patent_specification' | 'verified_empirical' | 'model_estimate' | 'ai_synthesis'.
+   - 'verificationStatus': 'verified' | 'in_review' | 'unverified_estimate'.
+   - 'sourceUrl' and 'sourceIdentifier' where available.
+   - 'comparabilityNotice': Disclose how its test conditions relate to the customer's operating envelope.
+   - NEVER invent fake DOIs or fake citations. If an empirical paper is not known with certainty, classify it honestly as 'model_estimate' with 'unverified_estimate'.
+7. Provide physics root-cause gap analysis, recent frontier movement, and 3 recommended next actions.`;
 
-    const candidateModels = ['gemini-2.5-flash', 'gemini-2.5-pro'];
+    const candidateModels = ['gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
     let rawText: string | undefined;
 
     for (const modelName of candidateModels) {
@@ -2261,15 +2345,30 @@ Instructions:
             responseSchema: {
               type: Type.OBJECT,
               properties: {
+                analysisMode: { type: Type.STRING },
                 commercialFrontierValue: { type: Type.STRING },
                 commercialFrontierMeaning: { type: Type.STRING },
                 commercialFrontierReference: { type: Type.STRING },
+                commercialFrontierProvenance: { type: Type.STRING },
+                commercialFrontierVerification: { type: Type.STRING },
+                commercialFrontierSourceUrl: { type: Type.STRING },
+                commercialFrontierSourceIdentifier: { type: Type.STRING },
+                commercialFrontierConditions: { type: Type.STRING },
+                commercialFrontierComparabilityNotice: { type: Type.STRING },
                 researchFrontierValue: { type: Type.STRING },
                 researchFrontierMeaning: { type: Type.STRING },
                 researchFrontierReference: { type: Type.STRING },
+                researchFrontierProvenance: { type: Type.STRING },
+                researchFrontierVerification: { type: Type.STRING },
+                researchFrontierSourceUrl: { type: Type.STRING },
+                researchFrontierSourceIdentifier: { type: Type.STRING },
+                researchFrontierConditions: { type: Type.STRING },
+                researchFrontierComparabilityNotice: { type: Type.STRING },
                 targetFeasibilityMeaning: { type: Type.STRING },
                 gapRootCauseAnalysis: { type: Type.STRING },
                 whatChangedRecently: { type: Type.STRING },
+                comparabilityAssessment: { type: Type.STRING },
+                disclaimer: { type: Type.STRING },
                 recommendedNextActions: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
@@ -2282,6 +2381,7 @@ Instructions:
                       title: { type: Type.STRING },
                       category: { type: Type.STRING },
                       sourceIdentifier: { type: Type.STRING },
+                      sourceUrl: { type: Type.STRING },
                       institutionOrCompany: { type: Type.STRING },
                       leadContributor: { type: Type.STRING },
                       operatingConditions: { type: Type.STRING },
@@ -2293,6 +2393,7 @@ Instructions:
                       verificationStatus: { type: Type.STRING },
                       confidenceLevel: { type: Type.STRING },
                       doiOrPatentRef: { type: Type.STRING },
+                      comparabilityNotice: { type: Type.STRING },
                     },
                     required: [
                       'title',
@@ -2313,12 +2414,14 @@ Instructions:
                 'commercialFrontierValue',
                 'commercialFrontierMeaning',
                 'commercialFrontierReference',
+                'commercialFrontierProvenance',
                 'researchFrontierValue',
                 'researchFrontierMeaning',
                 'researchFrontierReference',
-                'targetFeasibilityMeaning',
+                'researchFrontierProvenance',
                 'gapRootCauseAnalysis',
                 'whatChangedRecently',
+                'comparabilityAssessment',
                 'recommendedNextActions',
                 'evidenceRecords',
               ],
@@ -2335,106 +2438,228 @@ Instructions:
     }
 
     if (rawText) {
-      const parsed = JSON.parse(rawText);
-      const positions: FrontierPositionRow[] = [
-        {
-          position: 'Customer technology',
-          valueDisplay: `${params.customerValue}${unitSuffix}`,
-          meaning: 'Where the company stands today under the stated operating envelope',
-          referenceSource: `Customer Baseline (${params.technologySystem})`,
-        },
-        {
-          position: 'Commercial frontier',
-          valueDisplay: parsed.commercialFrontierValue,
-          meaning: parsed.commercialFrontierMeaning,
-          referenceSource: parsed.commercialFrontierReference,
-        },
-        {
-          position: 'Research frontier',
-          valueDisplay: parsed.researchFrontierValue,
-          meaning: parsed.researchFrontierMeaning,
-          referenceSource: parsed.researchFrontierReference,
-        },
-        {
-          position: 'Target',
-          valueDisplay: `${params.targetValue}${unitSuffix}`,
-          meaning: parsed.targetFeasibilityMeaning,
-          referenceSource: 'Customer Target Specification',
-        },
-      ];
+      try {
+        const parsed = JSON.parse(rawText);
+        const positions: FrontierPositionRow[] = [
+          {
+            position: 'Customer technology',
+            valueDisplay: `${params.customerValue}${unitSuffix}`,
+            meaning: 'Where the company stands today under the stated operating envelope',
+            referenceSource: `Customer Baseline (${params.technologySystem})`,
+            provenanceType: 'customer_baseline',
+            verificationStatus: 'customer_provided',
+            operatingConditions: params.operatingEnvelope,
+          },
+          {
+            position: 'Commercial frontier',
+            valueDisplay: parsed.commercialFrontierValue,
+            meaning: parsed.commercialFrontierMeaning,
+            referenceSource: parsed.commercialFrontierReference,
+            provenanceType:
+              parsed.commercialFrontierProvenance === 'source_backed'
+                ? 'source_backed'
+                : 'model_estimate',
+            verificationStatus:
+              parsed.commercialFrontierVerification === 'verified'
+                ? 'verified'
+                : 'unverified_estimate',
+            sourceUrl: parsed.commercialFrontierSourceUrl || undefined,
+            sourceIdentifier:
+              parsed.commercialFrontierSourceIdentifier || parsed.commercialFrontierReference,
+            retrievalDate: todayStr,
+            operatingConditions:
+              parsed.commercialFrontierConditions || params.operatingEnvelope,
+            comparabilityNotice:
+              parsed.commercialFrontierComparabilityNotice ||
+              'Commercial performance under comparable industrial envelope.',
+          },
+          {
+            position: 'Research frontier',
+            valueDisplay: parsed.researchFrontierValue,
+            meaning: parsed.researchFrontierMeaning,
+            referenceSource: parsed.researchFrontierReference,
+            provenanceType:
+              parsed.researchFrontierProvenance === 'source_backed'
+                ? 'source_backed'
+                : 'model_estimate',
+            verificationStatus:
+              parsed.researchFrontierVerification === 'verified'
+                ? 'verified'
+                : 'unverified_estimate',
+            sourceUrl: parsed.researchFrontierSourceUrl || undefined,
+            sourceIdentifier:
+              parsed.researchFrontierSourceIdentifier || parsed.researchFrontierReference,
+            retrievalDate: todayStr,
+            operatingConditions:
+              parsed.researchFrontierConditions || params.operatingEnvelope,
+            comparabilityNotice:
+              parsed.researchFrontierComparabilityNotice ||
+              'Research validation under laboratory operating conditions.',
+          },
+          {
+            position: 'Target',
+            valueDisplay: `${params.targetValue}${unitSuffix}`,
+            meaning: parsed.targetFeasibilityMeaning,
+            referenceSource: 'Customer Target Specification',
+            provenanceType: 'customer_target',
+            verificationStatus: 'customer_provided',
+          },
+        ];
 
-      const validCategories = [
-        'Publication',
-        'Patent',
-        'Product Datasheet',
-        'Standard',
-        'Research Laboratory',
-        'Domain Expert',
-      ];
+        const validCategories = [
+          'Publication',
+          'Patent',
+          'Product Datasheet',
+          'Standard',
+          'Research Laboratory',
+          'Domain Expert',
+        ];
 
-      const evidenceRecords: EvidenceNode[] = (parsed.evidenceRecords || []).map(
-        (ev: any, idx: number) => ({
-          id: `ev-${Date.now()}-${idx}`,
-          title: ev.title,
-          category: validCategories.includes(ev.category) ? ev.category : 'Publication',
-          sourceIdentifier: ev.sourceIdentifier,
-          institutionOrCompany: ev.institutionOrCompany,
-          leadContributor: ev.leadContributor,
-          operatingConditions: ev.operatingConditions,
-          demonstratedPerformance: ev.demonstratedPerformance,
-          maturityTrl: ev.maturityTrl,
-          manufacturabilityAndReliability: ev.manufacturabilityAndReliability,
-          relevanceToGap: ev.relevanceToGap,
-          provenanceType: [
-            'verified_empirical',
-            'peer_reviewed_literature',
-            'patent_specification',
-            'ai_synthesis',
-            'model_estimate',
-          ].includes(ev.provenanceType)
-            ? ev.provenanceType
-            : ev.category === 'Product Datasheet'
-            ? 'verified_empirical'
-            : ev.category === 'Patent'
-            ? 'patent_specification'
-            : 'peer_reviewed_literature',
-          verificationStatus:
-            ev.verificationStatus || (ev.category === 'Product Datasheet' ? 'verified' : 'in_review'),
-          confidenceLevel: ev.confidenceLevel || 'High',
-          doiOrPatentRef: ev.doiOrPatentRef || ev.sourceIdentifier,
-          publicationState: 'published',
-          createdAt: new Date().toISOString().split('T')[0],
-        })
-      );
+        const evidenceRecords: EvidenceNode[] = (parsed.evidenceRecords || []).map(
+          (ev: any, idx: number) => ({
+            id: `ev-${Date.now()}-${idx}`,
+            title: ev.title,
+            category: validCategories.includes(ev.category) ? ev.category : 'Publication',
+            sourceIdentifier: ev.sourceIdentifier,
+            sourceUrl: ev.sourceUrl || (ev.doiOrPatentRef?.startsWith('http') ? ev.doiOrPatentRef : undefined),
+            institutionOrCompany: ev.institutionOrCompany,
+            leadContributor: ev.leadContributor,
+            operatingConditions: ev.operatingConditions,
+            demonstratedPerformance: ev.demonstratedPerformance,
+            maturityTrl: ev.maturityTrl,
+            manufacturabilityAndReliability: ev.manufacturabilityAndReliability,
+            relevanceToGap: ev.relevanceToGap,
+            provenanceType: [
+              'verified_empirical',
+              'peer_reviewed_literature',
+              'patent_specification',
+              'ai_synthesis',
+              'model_estimate',
+            ].includes(ev.provenanceType)
+              ? ev.provenanceType
+              : ev.category === 'Product Datasheet'
+              ? 'verified_empirical'
+              : ev.category === 'Patent'
+              ? 'patent_specification'
+              : 'peer_reviewed_literature',
+            verificationStatus: [
+              'verified',
+              'in_review',
+              'unverified_estimate',
+            ].includes(ev.verificationStatus)
+              ? ev.verificationStatus
+              : ev.category === 'Product Datasheet'
+              ? 'verified'
+              : 'in_review',
+            confidenceLevel: ev.confidenceLevel || 'High',
+            doiOrPatentRef: ev.doiOrPatentRef || ev.sourceIdentifier,
+            retrievalDate: todayStr,
+            comparabilityNotice:
+              ev.comparabilityNotice || 'Evaluated under stated operating envelope parameters.',
+            publicationState: 'published',
+            createdAt: todayStr,
+          })
+        );
 
-      return {
-        title: params.title,
-        domain: params.domain,
-        technologySystem: params.technologySystem,
-        metricName: params.metricName,
-        metricUnit: params.metricUnit,
-        operatingEnvelope: params.operatingEnvelope,
-        constraints: params.constraints,
-        positions,
-        gapRootCauseAnalysis: parsed.gapRootCauseAnalysis,
-        whatChangedRecently: parsed.whatChangedRecently,
-        evidenceRecords,
-        recommendedNextActions: parsed.recommendedNextActions || [],
-      };
+        return {
+          title: params.title,
+          domain: params.domain,
+          technologySystem: params.technologySystem,
+          metricName: params.metricName,
+          metricUnit: params.metricUnit,
+          operatingEnvelope: params.operatingEnvelope,
+          constraints: params.constraints,
+          positions,
+          gapRootCauseAnalysis: parsed.gapRootCauseAnalysis,
+          whatChangedRecently: parsed.whatChangedRecently,
+          comparabilityAssessment:
+            parsed.comparabilityAssessment ||
+            'Comparative evaluation conducted across stated operating envelope. Measurement differences and condition boundaries disclosed.',
+          disclaimer:
+            parsed.disclaimer ||
+            (parsed.commercialFrontierProvenance === 'source_backed' &&
+            parsed.researchFrontierProvenance === 'source_backed'
+              ? 'Empirically grounded analysis referencing peer-reviewed literature and commercial references.'
+              : 'Contains AI synthesis and model estimates alongside empirical references. Unverified estimates must be validated before industrial commitment.'),
+          analysisMode:
+            retrievedEvidence.length > 0
+              ? 'grounded_retrieval'
+              : (parsed.analysisMode === 'grounded_retrieval' ? 'grounded_retrieval' : 'ai_synthesis'),
+          retrievalTimestamp: todayStr,
+          evidenceRecords,
+          recommendedNextActions: parsed.recommendedNextActions || [],
+        };
+      } catch (parseErr) {
+        console.warn('[Qartinia Frontier] Failed to parse model output JSON:', parseErr);
+      }
     }
   }
 
-  // Condition-aware engineering synthesis fallback if Gemini endpoint is temporarily 503
+  // Condition-aware engineering synthesis fallback if retrieval / Gemini endpoint is offline
+  // STRICT RULE: Never invent fake citations or assign fabricated DOIs.
+  // Clearly label as unverified preliminary analysis rather than inventing sources.
   const numCurrent = parseFloat(params.customerValue.replace(/[^0-9.-]/g, ''));
   const numTarget = parseFloat(params.targetValue.replace(/[^0-9.-]/g, ''));
   const hasNumeric = !isNaN(numCurrent) && !isNaN(numTarget);
   const delta = hasNumeric ? numTarget - numCurrent : 0;
   const commVal = hasNumeric
     ? `${Number((numCurrent + delta * 0.44).toFixed(2))}${unitSuffix}`
-    : `Commercial Best (${params.metricName})`;
+    : `Preliminary Commercial Estimate (${params.metricName})`;
   const resVal = hasNumeric
     ? `${Number((numCurrent + delta * 0.81).toFixed(2))}${unitSuffix}`
-    : `Research Demonstrated (${params.metricName})`;
+    : `Preliminary Research Projection (${params.metricName})`;
+
+  // Include any real matching records from our database with retrievalDate
+  const matchingDbEvidence = retrievedEvidence.map((node) => ({
+    ...node,
+    retrievalDate: todayStr,
+  }));
+
+  // Build remaining evidence as explicitly labeled analytical model estimates
+  const modelEvidence: EvidenceNode[] = [
+    {
+      id: `ev-${Date.now()}-1`,
+      title: `Analytical Physics Model: Loss & Scaling Limits in ${params.technologySystem}`,
+      category: 'Publication',
+      sourceIdentifier: 'Unverified Analytical Model (Retrieval Offline)',
+      institutionOrCompany: 'Qartinia Analytical Heuristic Engine',
+      leadContributor: 'Computational Physics Model',
+      operatingConditions: params.operatingEnvelope,
+      demonstratedPerformance: resVal,
+      maturityTrl: 'TRL 4 (Analytical)',
+      manufacturabilityAndReliability: `Subject to qualification under ${params.constraints}`,
+      relevanceToGap: `Preliminary analytical estimate indicating theoretical feasibility toward ${resVal}. Requires empirical validation.`,
+      provenanceType: 'model_estimate',
+      verificationStatus: 'unverified_estimate',
+      confidenceLevel: 'Analytical',
+      comparabilityNotice: 'Preliminary analytical heuristic; physical test bench conditions not empirically cross-referenced.',
+      publicationState: 'published',
+      retrievalDate: todayStr,
+      createdAt: todayStr,
+    },
+    {
+      id: `ev-${Date.now()}-2`,
+      title: `Industrial Feasibility Model for ${params.technologySystem}`,
+      category: 'Product Datasheet',
+      sourceIdentifier: 'Unverified Commercial Reference Estimate',
+      institutionOrCompany: 'Industrial Engineering Synthesis',
+      leadContributor: 'Analytical Benchmark Heuristic',
+      operatingConditions: params.operatingEnvelope,
+      demonstratedPerformance: commVal,
+      maturityTrl: 'TRL 7 (Projected)',
+      manufacturabilityAndReliability: `Targeted for compliance with ${params.constraints}`,
+      relevanceToGap: `Estimated commercial capability of ${commVal} under matching envelope. Manufacturer verification required.`,
+      provenanceType: 'model_estimate',
+      verificationStatus: 'unverified_estimate',
+      confidenceLevel: 'Analytical',
+      comparabilityNotice: 'Estimated commercial benchmark; derating may apply under custom operating envelope.',
+      publicationState: 'published',
+      retrievalDate: todayStr,
+      createdAt: todayStr,
+    },
+  ];
+
+  const fallbackEvidence = [...matchingDbEvidence, ...modelEvidence].slice(0, 4);
 
   return {
     title: params.title,
@@ -2444,77 +2669,68 @@ Instructions:
     metricUnit: params.metricUnit,
     operatingEnvelope: params.operatingEnvelope,
     constraints: params.constraints,
+    analysisMode: 'unverified_preliminary',
+    comparabilityAssessment:
+      'Preliminary analytical model. Operating conditions and measurement basis have not been verified against external empirical laboratory test data or manufacturer qualification reports. Disclosed limitation: thermal impedance, parasitics, and component tolerances may shift actual boundaries.',
+    disclaimer:
+      'Unverified preliminary analysis. External retrieval service is offline. Commercial and research values are analytical model estimates, not certified empirical data. Do not treat as certified commercial or research specifications.',
+    retrievalTimestamp: todayStr,
     positions: [
       {
         position: 'Customer technology',
         valueDisplay: `${params.customerValue}${unitSuffix}`,
         meaning: 'Where the company stands today under the stated operating envelope',
         referenceSource: `Customer Baseline (${params.technologySystem})`,
+        provenanceType: 'customer_baseline',
+        verificationStatus: 'customer_provided',
+        operatingConditions: params.operatingEnvelope,
       },
       {
         position: 'Commercial frontier',
         valueDisplay: commVal,
-        meaning: 'Best comparable industrially available performance under matching operating conditions',
-        referenceSource: `Infineon CoolSiC / Wolfspeed / STMicroelectronics Gen-4 Industrial Reference`,
+        meaning: 'Estimated industrially available performance (unverified analytical projection)',
+        referenceSource: 'Unverified Analytical Estimate (Retrieval Offline)',
+        provenanceType: 'model_estimate',
+        verificationStatus: 'unverified_estimate',
+        operatingConditions: params.operatingEnvelope,
+        comparabilityNotice:
+          'Preliminary estimate; measurement basis and operating conditions have not been verified against empirical datasheets.',
       },
       {
         position: 'Research frontier',
         valueDisplay: resVal,
-        meaning: 'Best comparable research-demonstrated performance under laboratory validation',
-        referenceSource: `ETH Zurich Power Electronics Systems Lab / Fraunhofer IAF Demonstration`,
+        meaning: 'Estimated research-demonstrated performance (unverified analytical projection)',
+        referenceSource: 'Unverified Analytical Projection (Retrieval Offline)',
+        provenanceType: 'model_estimate',
+        verificationStatus: 'unverified_estimate',
+        operatingConditions: params.operatingEnvelope,
+        comparabilityNotice:
+          'Theoretical extrapolation; requires peer-reviewed empirical validation under matching operating envelope.',
       },
       {
         position: 'Target',
         valueDisplay: `${params.targetValue}${unitSuffix}`,
-        meaning: "The customer's ambition requiring soft-switching topology and gate-driver optimization",
+        meaning: "The customer's ambition requiring targeted technology innovation and gap closure",
         referenceSource: 'Customer Target Specification',
+        provenanceType: 'customer_target',
+        verificationStatus: 'customer_provided',
       },
     ],
-    gapRootCauseAnalysis: `Under ${params.operatingEnvelope} and constrained by ${params.constraints}, advancing ${params.technologySystem} from ${params.customerValue}${unitSuffix} toward ${params.targetValue}${unitSuffix} is bounded by hard-switching turn-on/turn-off dV/dt losses, parasitic commutation loop inductance, and junction-to-coolant thermal impedance.`,
-    whatChangedRecently: `Recent laboratory demonstrations and patent filings in ${params.domain} have shifted the research frontier to ${resVal} via zero-voltage-switching (ZVS) active gate shaping and double-side sintered Ag-AMB substrates.`,
-    evidenceRecords: [
-      {
-        id: `ev-${Date.now()}-1`,
-        title: `Ultra-Low-Loss Soft-Switching & Active Gate Driver Architecture for ${params.technologySystem}`,
-        category: 'Publication',
-        sourceIdentifier: `IEEE Transactions on Power Electronics · 2026`,
-        institutionOrCompany: `ETH Zurich Power Electronics Systems Lab (PES)`,
-        leadContributor: 'Prof. Dr. Johann Kolar',
-        operatingConditions: params.operatingEnvelope,
-        demonstratedPerformance: resVal,
-        maturityTrl: 'TRL 6',
-        manufacturabilityAndReliability: `Compatible with ${params.constraints}`,
-        relevanceToGap: `Eliminates 58% of switching energy dissipation, directly closing the gap from ${params.customerValue}${unitSuffix} to ${resVal}.`,
-        publicationState: 'published',
-        createdAt: new Date().toISOString().split('T')[0],
-      },
-      {
-        id: `ev-${Date.now()}-2`,
-        title: `Trench-Assisted SiC Power Module with Low-Inductance Copper Clip Interconnect`,
-        category: 'Product Datasheet',
-        sourceIdentifier: `Commercial Reference Spec · 2026`,
-        institutionOrCompany: `Fraunhofer IISB & Industrial Semiconductor Partner`,
-        leadContributor: 'Dr. Martin März',
-        operatingConditions: params.operatingEnvelope,
-        demonstratedPerformance: commVal,
-        maturityTrl: 'TRL 8',
-        manufacturabilityAndReliability: `AEC-Q101 & AQG-324 Qualified (${params.constraints})`,
-        relevanceToGap: `Establishes the commercially available ${commVal} benchmark with <2.5 nH stray inductance.`,
-        publicationState: 'published',
-        createdAt: new Date().toISOString().split('T')[0],
-      },
-    ],
+    gapRootCauseAnalysis: `Under ${params.operatingEnvelope} and constrained by ${params.constraints}, advancing ${params.technologySystem} from ${params.customerValue}${unitSuffix} toward ${params.targetValue}${unitSuffix} is subject to domain-specific physics boundaries and thermal/electrical trade-offs.`,
+    whatChangedRecently: `Preliminary analytical synthesis suggests ongoing movement along this frontier toward ${resVal}; empirical literature retrieval is required to confirm latest publications and commercial qualification milestones.`,
+    evidenceRecords: fallbackEvidence,
     recommendedNextActions: [
-      `Benchmark ${params.technologySystem} switching and conduction loss breakdown against the ${commVal} commercial frontier.`,
-      `Open a Protected Qartinia Project Room with ETH Zurich PES / Fraunhofer IISB to evaluate active gate-shaping IP under mutual NDA.`,
-      `Structure a 2-milestone verification plan targeting ${resVal} in bench testing prior to full ${params.targetValue}${unitSuffix} qualification.`,
+      `Benchmark ${params.technologySystem} parameters against verified empirical supplier datasheets under the matching operating envelope.`,
+      `Open a Protected Qartinia Project Room to collaborate under mutual NDA and execute empirical test-bench validation.`,
+      `Structure milestone verification gates targeting empirical validation before committing to production targets.`,
     ],
   };
 }
 
 async function startServer() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(authenticateToken);
 
   // Bootstrap & verify authoritative Supabase catalog persistence
@@ -4285,8 +4501,8 @@ async function startServer() {
     }
   });
 
-  // 14. POST /api/frontier/analyze — Compute Live Qartinia Frontier Benchmark + Sync to `public.catalog` & `public.catalog_relationships`
-  app.post('/api/frontier/analyze', requireAuth, async (req, res) => {
+  // 14. POST /api/frontier/analyze & POST /api/frontier/evaluate — Compute Live Qartinia Frontier Benchmark + Sync
+  const handleFrontierAnalyze = async (req: express.Request, res: express.Response) => {
     try {
       const {
         title,
@@ -4352,12 +4568,10 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to compute frontier benchmark.' });
     }
-  });
+  };
 
-  app.post('/api/frontier/evaluate', requireAuth, async (req, res) => {
-    req.url = '/api/frontier/analyze';
-    (app as any)._router.handle(req, res);
-  });
+  app.post('/api/frontier/analyze', requireAuth, handleFrontierAnalyze);
+  app.post('/api/frontier/evaluate', requireAuth, handleFrontierAnalyze);
 
   // 14b. POST /api/frontier/:id/evidence — Save Evidence Linked to Frontier
   app.post('/api/frontier/:id/evidence', requireAuth, async (req, res) => {
@@ -4798,7 +5012,12 @@ async function startServer() {
             p.createdByOrg?.toLowerCase().includes(q) ||
             p.legalStage?.toLowerCase().includes(q)
           ) {
-            projects.push(p);
+            // Strictly exclude private project files, messages and technical discussions from public catalog/search
+            projects.push({
+              ...p,
+              documents: [],
+              messages: [],
+            });
           }
         } else if (kind === 'knowledge') {
           const k = mapCatalogRowToKnowledge(row);
@@ -5450,6 +5669,19 @@ async function startServer() {
     res.json({ ok: true, projects: filtered });
   });
 
+  // GET /api/projects/:id — Individual project room with strict authorization
+  app.get('/api/projects/:id', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project room not found.' });
+    }
+    if (!userHasProjectAccess(project, actor)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have access to this protected project room.' });
+    }
+    res.json({ ok: true, project });
+  });
+
   // GET /api/frontiers
   app.get('/api/frontiers', async (_req, res) => {
     const frontiers = await fetchSupabaseFrontiers();
@@ -5562,7 +5794,19 @@ async function startServer() {
 
     const { legalStage, ndaStatus, ipFramework, publicationPolicy, title, problemStatement, targetSpec } = req.body;
     if (legalStage) project.legalStage = legalStage;
-    if (ndaStatus) project.ndaStatus = ndaStatus;
+    if (ndaStatus) {
+      if (ndaStatus === 'Executed') {
+        const hasMutualNda = project.documents?.some(
+          (d) => d.classification === 'Mutual NDA' && (Boolean(d.storagePath) || d.title.toLowerCase().includes('nda') || d.title.toLowerCase().includes('executed'))
+        );
+        if (!hasMutualNda) {
+          return res.status(400).json({
+            error: 'Cannot claim legal NDA execution without a verified executed Mutual NDA agreement uploaded into the project vault.',
+          });
+        }
+      }
+      project.ndaStatus = ndaStatus;
+    }
     if (ipFramework) project.ipFramework = ipFramework;
     if (publicationPolicy) project.publicationPolicy = publicationPolicy;
     if (title) project.title = title;
@@ -5731,6 +5975,7 @@ async function startServer() {
     res.json({ ok: true, project });
   });
 
+  // POST /api/projects/:id/documents — Store document metadata and persistent file in private Supabase Storage
   app.post('/api/projects/:id/documents', requireAuth, async (req, res) => {
     const actor = req.user!;
     const project = await getSupabaseProjectById(req.params.id);
@@ -5740,21 +5985,171 @@ async function startServer() {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to upload documents to this project.' });
     }
 
-    const { title, classification } = req.body;
-    project.documents.push({
-      id: `doc-${Date.now()}`,
-      title,
+    const { title, classification, fileBase64, fileName, mimeType, fileSize } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Document title is required.' });
+    }
+
+    if (!fileBase64) {
+      return res.status(400).json({
+        error: 'File upload payload is required. Simulated file metadata registration without actual file storage is disallowed.',
+      });
+    }
+
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: 'Supabase storage is not configured.' });
+    }
+
+    const docId = `doc-${Date.now()}`;
+    let storagePath: string | undefined = undefined;
+
+    try {
+      const cleanBase64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64;
+      const fileBuffer = Buffer.from(cleanBase64, 'base64');
+      const safeName = (fileName || title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const destPath = `${project.id}/${docId}_${safeName}`;
+
+      const { data: uploadRes, error: uploadErr } = await supabaseAdmin.storage
+        .from('protected-project-vault')
+        .upload(destPath, fileBuffer, {
+          contentType: mimeType || 'application/octet-stream',
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error('[Supabase Storage Upload Error]', uploadErr);
+        return res.status(500).json({ error: `Storage upload failed: ${uploadErr.message}` });
+      }
+      storagePath = destPath;
+    } catch (err: any) {
+      console.error('[Supabase Storage Buffer Error]', err);
+      return res.status(500).json({ error: `File storage failed: ${err.message}` });
+    }
+
+    const newDoc: ProjectDocument = {
+      id: docId,
+      title: title.trim(),
       classification: classification || 'Mutual NDA',
       uploadedBy: actor.fullName,
+      uploadedById: actor.id,
       timestamp: new Date().toISOString().split('T')[0],
-    });
+      storagePath,
+      fileName: fileName || `${title}.pdf`,
+      fileSize: typeof fileSize === 'number' ? fileSize : (fileBase64 ? Math.round((fileBase64.length * 3) / 4) : undefined),
+      mimeType: mimeType || 'application/pdf',
+    };
 
+    project.documents.push(newDoc);
     await syncProjectToCatalog(project);
 
     const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
     if (idx !== -1) localStore.projects[idx] = project;
     else localStore.projects.push(project);
     saveLocalStore(localStore);
+
+    await logSupabaseActivity(actor.id, 'project_document_uploaded', 'project_room', project.id, {
+      documentId: newDoc.id,
+      documentTitle: newDoc.title,
+      classification: newDoc.classification,
+      hasStorageFile: Boolean(storagePath),
+    });
+
+    res.json({ ok: true, project, document: newDoc });
+  });
+
+  // GET /api/projects/:id/documents/:docId/download — Secure download with short-lived signed URL
+  app.get('/api/projects/:id/documents/:docId/download', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    // Strict authorization: only authorized project participants or admins can download project documents
+    if (!userHasProjectAccess(project, actor)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to download documents from this project.' });
+    }
+
+    const doc = project.documents.find((d) => d.id === req.params.docId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Project document not found.' });
+    }
+
+    if (!doc.storagePath) {
+      // Document is registered as a legal metadata record or simulated template
+      return res.json({
+        ok: true,
+        document: doc,
+        downloadMode: 'metadata_summary',
+        message: 'This document is registered in the IP ledger without an uploaded binary payload.',
+      });
+    }
+
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: 'Supabase storage is not configured.' });
+    }
+
+    try {
+      // Generate short-lived signed URL (valid for 60 seconds)
+      const { data: signedData, error: signErr } = await supabaseAdmin.storage
+        .from('protected-project-vault')
+        .createSignedUrl(doc.storagePath, 60, {
+          download: doc.fileName || doc.title,
+        });
+
+      if (signErr || !signedData?.signedUrl) {
+        return res.status(500).json({ error: `Failed to generate download URL: ${signErr?.message || 'Unknown error'}` });
+      }
+
+      await logSupabaseActivity(actor.id, 'project_document_downloaded', 'project_room', project.id, {
+        documentId: doc.id,
+        documentTitle: doc.title,
+      });
+
+      res.json({
+        ok: true,
+        document: doc,
+        downloadUrl: signedData.signedUrl,
+        expiresInSeconds: 60,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to generate secure download link.' });
+    }
+  });
+
+  // DELETE /api/projects/:id/documents/:docId — Delete document from storage and project metadata
+  app.delete('/api/projects/:id/documents/:docId', requireAuth, async (req, res) => {
+    const actor = req.user!;
+    const project = await getSupabaseProjectById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+    if (!userCanModifyProject(project, actor)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to delete documents in this project.' });
+    }
+
+    const docIndex = project.documents.findIndex((d) => d.id === req.params.docId);
+    if (docIndex === -1) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    const doc = project.documents[docIndex];
+    if (doc.storagePath && supabaseAdmin) {
+      try {
+        await supabaseAdmin.storage.from('protected-project-vault').remove([doc.storagePath]);
+      } catch (rmErr) {
+        console.warn('[Supabase Storage Remove Warning]', rmErr);
+      }
+    }
+
+    project.documents.splice(docIndex, 1);
+    await syncProjectToCatalog(project);
+
+    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
+    if (idx !== -1) localStore.projects[idx] = project;
+    saveLocalStore(localStore);
+
+    await logSupabaseActivity(actor.id, 'project_document_deleted', 'project_room', project.id, {
+      documentId: doc.id,
+      documentTitle: doc.title,
+    });
 
     res.json({ ok: true, project });
   });
@@ -5769,12 +6164,16 @@ async function startServer() {
     }
 
     const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content cannot be empty.' });
+    }
+
     project.messages.push({
       id: `msg-${Date.now()}`,
       senderName: actor.fullName,
       senderOrg: actor.organizationName,
       senderRole: actor.role,
-      content,
+      content: content.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
 
@@ -5784,6 +6183,10 @@ async function startServer() {
     if (idx !== -1) localStore.projects[idx] = project;
     else localStore.projects.push(project);
     saveLocalStore(localStore);
+
+    await logSupabaseActivity(actor.id, 'project_message_posted', 'project_room', project.id, {
+      messageCount: project.messages.length,
+    });
 
     res.json({ ok: true, project });
   });

@@ -10,9 +10,13 @@ import {
   Trash2,
   Download,
   ShieldAlert,
+  ShieldCheck,
   Edit3,
   X,
   Sparkles,
+  ExternalLink,
+  Info,
+  Calendar,
 } from 'lucide-react';
 
 interface FrontierEngineViewProps {
@@ -445,11 +449,59 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
             <div className="space-y-6">
               {/* Frontier Header Card */}
               <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+                {/* Analysis Mode & Verification Boundary Banner */}
+                {selectedFrontier.analysisMode === 'grounded_retrieval' ? (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-xs text-emerald-950">
+                    <ShieldCheck className="w-5 h-5 text-[#108548] shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-[#108548] flex items-center gap-2">
+                        <span>GROUNDED CATALOG & LITERATURE EVIDENCE ANALYSIS</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-200 text-emerald-900 font-mono font-bold">
+                          Source-Backed
+                        </span>
+                      </div>
+                      <p className="text-emerald-800 mt-0.5 leading-relaxed">
+                        This benchmark is directly backed by verified empirical catalog records, peer-reviewed literature, and validated supplier datasheets under comparable operating conditions.
+                      </p>
+                    </div>
+                  </div>
+                ) : selectedFrontier.analysisMode === 'ai_synthesis' ? (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-950">
+                    <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-amber-900 flex items-center gap-2">
+                        <span>AI ENGINEERING SYNTHESIS & MODEL ESTIMATE</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-amber-200 text-amber-900 font-mono font-bold">
+                          AI Synthesis
+                        </span>
+                      </div>
+                      <p className="text-amber-800 mt-0.5 leading-relaxed">
+                        This benchmark combines retrieved empirical references with AI synthesis and model estimates. Unverified estimates are explicitly marked and must be validated before industrial commitment.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3 text-xs text-orange-950">
+                    <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-orange-900 flex items-center gap-2">
+                        <span>UNVERIFIED PRELIMINARY ANALYSIS (RETRIEVAL OFFLINE)</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-orange-200 text-orange-900 font-mono font-bold">
+                          Unverified Estimate
+                        </span>
+                      </div>
+                      <p className="text-orange-800 mt-0.5 leading-relaxed">
+                        External literature retrieval service was unavailable. Commercial and research values are analytical model estimates, not certified empirical specifications.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-200">
                   <div>
-                    <div className="text-xs text-slate-500 mb-1">
+                    <div className="text-xs text-slate-500 mb-1 flex items-center gap-2">
                       <span>{selectedFrontier.domain}</span>
-                      <span> · Monitored Frontier · Last Evaluated: </span>
+                      <span>· Monitored Frontier · Last Evaluated: </span>
                       <span className="font-mono tabular-nums">{selectedFrontier.lastEvaluatedAt}</span>
                     </div>
                     <h2 className="text-2xl font-bold text-[#0F2537]">{selectedFrontier.title}</h2>
@@ -515,42 +567,142 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                   </div>
                 </div>
 
-                {/* Condition-Aware Frontier Comparison Table (Exact Structure from Page 2 of BP) */}
+                {/* Condition-Aware Frontier Comparison Table */}
                 <div>
                   <h3 className="text-xs font-bold tracking-wider text-[#108548] mb-2.5">
                     CONDITION-AWARE FRONTIER POSITIONING ({selectedFrontier.metricName})
                   </h3>
                   <div className="overflow-x-auto border border-slate-300 rounded-lg">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                    <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-[#F2F4F8] border-b border-slate-300 text-[#0F2537]">
-                          <th className="py-2.5 px-4 font-bold border-r border-slate-300">Position</th>
-                          <th className="py-2.5 px-4 font-bold border-r border-slate-300">
+                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Position</th>
+                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">
                             {selectedFrontier.metricName}
                           </th>
-                          <th className="py-2.5 px-4 font-bold border-r border-slate-300">Meaning & Context</th>
-                          <th className="py-2.5 px-4 font-bold">Evidence / Reference</th>
+                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Meaning & Context</th>
+                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Provenance & Verification</th>
+                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Evidence / Source</th>
+                          <th className="py-2.5 px-3 font-bold">Envelope & Comparability Notice</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {selectedFrontier.positions.map((row) => (
-                          <tr key={row.position} className="hover:bg-slate-50/80">
-                            <td className="py-3 px-4 font-semibold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
-                              {row.position}
-                            </td>
-                            <td className="py-3 px-4 font-mono tabular-nums font-bold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
-                              {row.valueDisplay}
-                            </td>
-                            <td className="py-3 px-4 text-slate-700 border-r border-slate-200">
-                              {row.meaning}
-                            </td>
-                            <td className="py-3 px-4 text-xs text-slate-600 font-mono">
-                              {row.referenceSource}
-                            </td>
-                          </tr>
-                        ))}
+                        {selectedFrontier.positions.map((row) => {
+                          const isVerified = row.verificationStatus === 'verified' || row.provenanceType === 'source_backed';
+                          const isEstimate = row.verificationStatus === 'unverified_estimate' || row.provenanceType === 'model_estimate';
+
+                          return (
+                            <tr key={row.position} className="hover:bg-slate-50/80 align-top">
+                              <td className="py-3 px-3 font-semibold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
+                                <div>{row.position}</div>
+                              </td>
+                              <td className="py-3 px-3 font-mono tabular-nums font-bold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
+                                {row.valueDisplay}
+                              </td>
+                              <td className="py-3 px-3 text-slate-700 border-r border-slate-200">
+                                {row.meaning}
+                              </td>
+                              <td className="py-3 px-3 border-r border-slate-200 whitespace-nowrap space-y-1">
+                                <div>
+                                  {row.provenanceType === 'source_backed' ? (
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      Source-Backed
+                                    </span>
+                                  ) : row.provenanceType === 'ai_synthesis' ? (
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                      AI Synthesis
+                                    </span>
+                                  ) : row.provenanceType === 'model_estimate' ? (
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                                      Model Estimate
+                                    </span>
+                                  ) : row.provenanceType === 'customer_baseline' ? (
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                      Customer Baseline
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                      Customer Target
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px]">
+                                  {isVerified ? (
+                                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                                      <Check className="w-3 h-3 text-emerald-600" /> Empirical Verified
+                                    </span>
+                                  ) : isEstimate ? (
+                                    <span className="text-orange-700 font-medium flex items-center gap-1">
+                                      <ShieldAlert className="w-3 h-3 text-orange-600" /> Unverified Estimate
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">Customer Defined</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 text-xs text-slate-600 font-mono border-r border-slate-200 space-y-1">
+                                <div className="font-semibold text-slate-800">{row.referenceSource}</div>
+                                {row.sourceIdentifier && (
+                                  <div className="text-[10px] text-slate-500">Ref: {row.sourceIdentifier}</div>
+                                )}
+                                {row.sourceUrl && (
+                                  <a
+                                    href={row.sourceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 mt-0.5 font-sans"
+                                  >
+                                    <ExternalLink className="w-3 h-3" /> View Source Document
+                                  </a>
+                                )}
+                                {row.retrievalDate && (
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <Calendar className="w-2.5 h-2.5" /> Date: {row.retrievalDate}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-xs text-slate-700 space-y-1">
+                                {row.operatingConditions && (
+                                  <div className="font-medium text-[#0F2537]">
+                                    Conditions: {row.operatingConditions}
+                                  </div>
+                                )}
+                                {row.comparabilityNotice && (
+                                  <div className="text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200">
+                                    <strong className="text-slate-800">Comparability Disclosures: </strong>
+                                    {row.comparabilityNotice}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Comparability Assessment & Verification Boundary Callouts */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="p-4 rounded-lg bg-blue-50/70 border border-blue-200 text-xs">
+                    <div className="font-bold text-[#0F2537] mb-1 flex items-center gap-1.5">
+                      <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Condition & Measurement Comparability Assessment</span>
+                    </div>
+                    <p className="text-slate-700 leading-relaxed">
+                      {selectedFrontier.comparabilityAssessment ||
+                        'Evaluated across stated operating envelope. Operating condition boundaries, thermal limits, and measurement differences disclosed.'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-amber-50/70 border border-amber-200 text-xs">
+                    <div className="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Scientific Integrity & Verification Boundary</span>
+                    </div>
+                    <p className="text-amber-900 leading-relaxed">
+                      {selectedFrontier.disclaimer ||
+                        'Contains empirical literature references alongside AI synthesis. Model estimates are never presented as certified empirical commercial performance.'}
+                    </p>
                   </div>
                 </div>
 
@@ -597,67 +749,137 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                   </h3>
                 </div>
 
-                {selectedFrontier.evidenceRecords.map((ev) => (
-                  <article
-                    key={ev.id}
-                    className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors space-y-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                      <div>
-                        <strong className="text-[#108548]">{ev.category}</strong>
-                        <span> · {ev.institutionOrCompany} · </span>
-                        <span className="font-mono">{ev.sourceIdentifier}</span>
-                      </div>
-                      <span className="font-mono tabular-nums font-semibold text-[#0F2537]">
-                        {ev.maturityTrl} · {ev.demonstratedPerformance}
-                      </span>
-                    </div>
+                {selectedFrontier.evidenceRecords.map((ev) => {
+                  const isVerifiedEv = ev.verificationStatus === 'verified' || ev.provenanceType === 'verified_empirical' || ev.provenanceType === 'peer_reviewed_literature';
+                  const isEstimateEv = ev.verificationStatus === 'unverified_estimate' || ev.provenanceType === 'model_estimate';
 
-                    <h4 className="text-base font-bold text-[#0F2537]">{ev.title}</h4>
+                  return (
+                    <article
+                      key={ev.id}
+                      className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors space-y-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <strong className="text-[#108548]">{ev.category}</strong>
+                          <span>· {ev.institutionOrCompany} · </span>
+                          <span className="font-mono">{ev.sourceIdentifier}</span>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF9F6] p-3.5 rounded-lg border border-slate-200">
-                      <div>
-                        <span className="text-slate-500 block">Comparable Operating Conditions:</span>
-                        <span className="font-medium text-[#0F2537]">{ev.operatingConditions}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block">Manufacturability & Reliability:</span>
-                        <span className="font-medium text-[#0F2537]">
-                          {ev.manufacturabilityAndReliability}
-                        </span>
-                      </div>
-                    </div>
+                          {/* Provenance Badge */}
+                          {ev.provenanceType === 'verified_empirical' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Verified Empirical
+                            </span>
+                          ) : ev.provenanceType === 'peer_reviewed_literature' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Peer-Reviewed Lit
+                            </span>
+                          ) : ev.provenanceType === 'patent_specification' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                              Patent Spec
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                              Model Estimate
+                            </span>
+                          )}
 
-                    <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                      <strong className="text-[#0F2537]">Relevance to Gap: </strong>
-                      {ev.relevanceToGap}
-                    </p>
+                          {/* Verification Badge */}
+                          {isVerifiedEv ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" /> Verified Record
+                            </span>
+                          ) : isEstimateEv ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-300 flex items-center gap-1">
+                              <ShieldAlert className="w-3 h-3 text-orange-600" /> Unverified Estimate
+                            </span>
+                          ) : null}
+                        </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-xs text-slate-600">
-                        Lead Researcher / Contact: <strong className="text-[#0F2537]">{ev.leadContributor}</strong>
+                        <div className="flex items-center gap-3 font-mono text-xs">
+                          {ev.retrievalDate && (
+                            <span className="text-slate-400 text-[11px]">Date: {ev.retrievalDate}</span>
+                          )}
+                          <span className="tabular-nums font-semibold text-[#0F2537]">
+                            {ev.maturityTrl} · {ev.demonstratedPerformance}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSaveEvidence(ev)}
-                          className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-[#0F2537] border border-slate-200 rounded-md hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
-                        >
-                          <BookmarkPlus className="w-3.5 h-3.5" />
-                          <span>Save to Evidence Graph</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onLaunchProjectFromFrontier(selectedFrontier, ev)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0F2537] hover:bg-[#16344D] rounded-md flex items-center gap-1 cursor-pointer"
-                        >
-                          <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
-                          <span>Start Protected Project with Partner</span>
-                        </button>
+
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="text-base font-bold text-[#0F2537]">{ev.title}</h4>
+                        {ev.sourceUrl && (
+                          <a
+                            href={ev.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md flex items-center gap-1 shrink-0"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Source Doc</span>
+                          </a>
+                        )}
                       </div>
-                    </div>
-                  </article>
-                ))}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF9F6] p-3.5 rounded-lg border border-slate-200">
+                        <div>
+                          <span className="text-slate-500 block">Comparable Operating Conditions:</span>
+                          <span className="font-medium text-[#0F2537]">{ev.operatingConditions}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Manufacturability & Reliability:</span>
+                          <span className="font-medium text-[#0F2537]">
+                            {ev.manufacturabilityAndReliability}
+                          </span>
+                        </div>
+                      </div>
+
+                      {ev.comparabilityNotice && (
+                        <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
+                          <strong className="text-[#0F2537]">Envelope Comparability Disclosure: </strong>
+                          {ev.comparabilityNotice}
+                        </div>
+                      )}
+
+                      <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                        <strong className="text-[#0F2537]">Relevance to Gap: </strong>
+                        {ev.relevanceToGap}
+                      </p>
+
+                      {isEstimateEv && (
+                        <div className="p-2.5 bg-orange-50 border border-orange-200 rounded text-xs text-orange-900 flex items-center gap-2">
+                          <ShieldAlert className="w-4 h-4 text-orange-600 shrink-0" />
+                          <span>
+                            <strong>Unverified Estimate Notice:</strong> This evidence record is an analytical estimate. Physical test bench validation is required before committing to production targets.
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-xs text-slate-600">
+                          Lead Researcher / Contact: <strong className="text-[#0F2537]">{ev.leadContributor}</strong>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEvidence(ev)}
+                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-[#0F2537] border border-slate-200 rounded-md hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                          >
+                            <BookmarkPlus className="w-3.5 h-3.5" />
+                            <span>Save to Evidence Graph</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onLaunchProjectFromFrontier(selectedFrontier, ev)}
+                            className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0F2537] hover:bg-[#16344D] rounded-md flex items-center gap-1 cursor-pointer"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
+                            <span>Start Protected Project with Partner</span>
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           ) : (

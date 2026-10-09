@@ -41,9 +41,12 @@ export interface EvidenceNode {
   linkedFrontierId?: string;
   publicationState?: 'draft' | 'published' | 'archived' | 'in_review';
   provenanceType?: EvidenceProvenanceType;
-  verificationStatus?: 'verified' | 'in_review' | 'synthetic_hypothesis' | 'model_estimate';
+  verificationStatus?: 'verified' | 'in_review' | 'synthetic_hypothesis' | 'model_estimate' | 'unverified_estimate';
   confidenceLevel?: 'High' | 'Medium' | 'Analytical';
   doiOrPatentRef?: string;
+  sourceUrl?: string;
+  retrievalDate?: string;
+  comparabilityNotice?: string;
   conditionAwareMetrics?: Record<string, string | number>;
   createdAt: string;
 }
@@ -68,13 +71,38 @@ export interface CatalogBookmark {
   createdAt: string;
 }
 
+export type PositionProvenanceType =
+  | 'customer_baseline'
+  | 'customer_target'
+  | 'source_backed'
+  | 'ai_synthesis'
+  | 'model_estimate';
+
+export type PositionVerificationStatus =
+  | 'verified'
+  | 'in_review'
+  | 'unverified_estimate'
+  | 'customer_provided';
+
 export interface FrontierPositionRow {
   position: 'Customer technology' | 'Commercial frontier' | 'Research frontier' | 'Target';
   valueDisplay: string;
   numericValue?: number;
   meaning: string;
   referenceSource: string;
+  provenanceType?: PositionProvenanceType;
+  verificationStatus?: PositionVerificationStatus;
+  sourceUrl?: string;
+  sourceIdentifier?: string;
+  retrievalDate?: string;
+  operatingConditions?: string;
+  comparabilityNotice?: string;
 }
+
+export type FrontierAnalysisMode =
+  | 'grounded_retrieval'
+  | 'ai_synthesis'
+  | 'unverified_preliminary';
 
 export interface FrontierBenchmark {
   id: string;
@@ -95,6 +123,10 @@ export interface FrontierBenchmark {
   updatedAt?: string;
   createdAt: string;
   lastEvaluatedAt: string;
+  analysisMode?: FrontierAnalysisMode;
+  comparabilityAssessment?: string;
+  disclaimer?: string;
+  retrievalTimestamp?: string;
 }
 
 export type LegalStage =
@@ -124,7 +156,13 @@ export interface ProjectDocument {
   title: string;
   classification: 'Mutual NDA' | 'IP Term Sheet' | 'Simulation / Test Data' | 'Datasheet / Spec';
   uploadedBy: string;
+  uploadedById?: string;
   timestamp: string;
+  storagePath?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  fileBase64?: string;
 }
 
 export interface ProjectMessage {

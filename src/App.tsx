@@ -710,9 +710,42 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(doc),
     });
-    if (res.ok) {
-      await fetchState();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to upload document');
     }
+    await fetchState();
+  };
+
+  const handleDownloadDocument = async (projectId: string, documentId: string) => {
+    const res = await apiFetch(`/api/projects/${projectId}/documents/${documentId}/download`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to download document');
+    }
+    if (data.downloadUrl) {
+      const link = document.createElement('a');
+      link.href = data.downloadUrl;
+      link.download = data.document?.fileName || data.document?.title || 'document';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert(data.message || 'Document metadata registered in ledger.');
+    }
+  };
+
+  const handleDeleteDocument = async (projectId: string, documentId: string) => {
+    const res = await apiFetch(`/api/projects/${projectId}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to delete document');
+    }
+    await fetchState();
   };
 
   const handleSendMessage = async (
@@ -1025,6 +1058,8 @@ export default function App() {
             onAddMilestone={handleAddMilestone}
             onToggleMilestoneStatus={handleToggleMilestoneStatus}
             onAddDocument={handleAddDocument}
+            onDownloadDocument={handleDownloadDocument}
+            onDeleteDocument={handleDeleteDocument}
             onSendMessage={handleSendMessage}
             onDeleteProject={handleDeleteProject}
             pendingDraftFromFrontier={pendingDraftFromFrontier}
