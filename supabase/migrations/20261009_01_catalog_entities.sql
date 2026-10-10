@@ -49,7 +49,21 @@ CREATE INDEX IF NOT EXISTS idx_catalog_updated_at ON public.catalog(updated_at D
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.catalog ENABLE ROW LEVEL SECURITY;
 
--- Safely Repeatable Policy Cleanup
+-- RLS Policy Preservation & Controlled Replacement Rationale:
+-- Existing permissive or legacy catalog policies are selectively replaced to harden security:
+-- 1. "Public published catalog items are readable by all":
+--    REPLACED BY: "Catalog select policy"
+--    WHY: Legacy policy allowed reading any published catalog row without type filtering. Private project-room metadata and direct messages must never be exposed in public catalog reads even if marked published.
+-- 2. "Authenticated users can insert catalog items":
+--    REPLACED BY: "Catalog insert policy"
+--    WHY: Legacy policy allowed authenticated users to set created_by = NULL or assign records to arbitrary users. Replacement requires created_by = auth.uid() for ordinary users.
+-- 3. "Creators or Admins can update catalog items":
+--    REPLACED BY: "Catalog update policy"
+--    WHY: Legacy policy lacked organization membership role checks. Replacement verifies org membership ('owner', 'admin') or platform_admin role.
+-- 4. "Creators or Admins can delete catalog items":
+--    REPLACED BY: "Catalog delete policy"
+--    WHY: Legacy policy lacked org role checks. Replacement restricts deletes to record creator, org owner/admin, or platform_admin.
+
 DROP POLICY IF EXISTS "Public published catalog items are readable by all" ON public.catalog;
 DROP POLICY IF EXISTS "Catalog select policy" ON public.catalog;
 DROP POLICY IF EXISTS "Authenticated users can insert catalog items" ON public.catalog;
