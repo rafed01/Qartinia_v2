@@ -266,4 +266,46 @@ describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
     const isLeader = await isAuthorizedOrgLeaderOrAdmin(userOrgA_Participant, 'org-a-id');
     assert.equal(isLeader, false);
   });
+
+  it('enforces organization isolation: notifications targeted at Org A are filtered out for Org B users', () => {
+    const orgANotif: NotificationItem = {
+      id: 'notif-org-a',
+      type: 'general',
+      title: 'Org A Policy Notice',
+      message: 'Confidential internal update for Org A',
+      recipientOrg: 'Org A',
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+    };
+
+    // User in Org A receives Org A notification
+    const orgAResult = filterNotificationsForActor([orgANotif], userOrgA_Participant, undefined);
+    assert.equal(orgAResult.length, 1, 'Member of Org A must receive Org A notification');
+
+    // User in Org B does NOT receive Org A notification
+    const orgBResult = filterNotificationsForActor([orgANotif], userOrgB, undefined);
+    assert.equal(orgBResult.length, 0, 'Member of Org B must NOT receive Org A notification');
+  });
+
+  it('enforces cross-user read protection: User A cannot see User B private notifications', () => {
+    const userBNotif: NotificationItem = {
+      id: 'notif-user-b-private',
+      type: 'general',
+      title: 'Private Security Alert for User B',
+      message: 'Your password was updated',
+      recipientUserId: userOrgB.id,
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+    };
+
+    // User B receives their own private notification
+    const userBResult = filterNotificationsForActor([userBNotif], userOrgB, undefined);
+    assert.equal(userBResult.length, 1, 'User B must receive their own private notification');
+
+    // User A does NOT receive User B private notification
+    const userAResult = filterNotificationsForActor([userBNotif], userOrgA_Participant, undefined);
+    assert.equal(userAResult.length, 0, 'User A must NOT receive User B private notification');
+  });
 });

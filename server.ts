@@ -251,26 +251,69 @@ interface SSEClientConnection {
 const sseClients = new Set<SSEClientConnection>();
 
 function broadcastSSE(event: string, data: any) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  const isNotificationEvent =
+    event === 'notification' ||
+    event === 'notification_read' ||
+    event === 'notification_mark_all_read';
+
   sseClients.forEach((client) => {
     try {
-      if (event === 'notification' && data?.notification) {
-        if (data.targetUserIds) {
-          const targetSet = data.targetUserIds instanceof Set ? data.targetUserIds : new Set(data.targetUserIds);
-          const clientUserId = client.user.id;
-          const clientProfileId = client.user.profile?.id;
-          const matchesUser = (clientUserId && targetSet.has(clientUserId)) || (clientProfileId && targetSet.has(clientProfileId));
-          if (!matchesUser) return;
-        } else if (data.notification.recipientUserId) {
-          const clientUserId = client.user.id;
-          const clientProfileId = client.user.profile?.id;
-          const matches = data.notification.recipientUserId === clientUserId || data.notification.recipientUserId === clientProfileId;
-          if (!matches) return;
+      if (isNotificationEvent) {
+        const clientUserId = client.user.id;
+        const clientProfileId = client.user.profile?.id;
+
+        const clientUuids = new Set<string>();
+        if (clientUserId) {
+          clientUuids.add(clientUserId);
+          const resolved = resolveValidUuid(clientUserId);
+          if (resolved) clientUuids.add(resolved);
+        }
+        if (clientProfileId) {
+          clientUuids.add(clientProfileId);
+          const resolved = resolveValidUuid(clientProfileId);
+          if (resolved) clientUuids.add(resolved);
         }
 
-        const allowed = filterNotificationsForActor([data.notification], client.user);
-        if (allowed.length === 0) return;
+        let isIntendedRecipient = false;
+
+        if (data?.targetUserIds) {
+          const targetArray = Array.from(data.targetUserIds instanceof Set ? data.targetUserIds : data.targetUserIds);
+          for (const targetId of targetArray) {
+            const cleanTargetId = String(targetId);
+            if (clientUuids.has(cleanTargetId)) {
+              isIntendedRecipient = true;
+              break;
+            }
+            const resolvedTarget = resolveValidUuid(cleanTargetId);
+            if (resolvedTarget && clientUuids.has(resolvedTarget)) {
+              isIntendedRecipient = true;
+              break;
+            }
+          }
+        } else if (data?.notification?.recipientUserId) {
+          const recId = String(data.notification.recipientUserId);
+          if (clientUuids.has(recId) || (resolveValidUuid(recId) && clientUuids.has(resolveValidUuid(recId)!))) {
+            isIntendedRecipient = true;
+          }
+        } else if (data?.recipientUserId) {
+          const recId = String(data.recipientUserId);
+          if (clientUuids.has(recId) || (resolveValidUuid(recId) && clientUuids.has(resolveValidUuid(recId)!))) {
+            isIntendedRecipient = true;
+          }
+        }
+
+        // Never broadcast private notification payload, unread count, or event to unrelated users
+        if (!isIntendedRecipient) {
+          return;
+        }
+
+        if (data?.notification) {
+          const allowed = filterNotificationsForActor([data.notification], client.user);
+          if (allowed.length === 0) return;
+        }
       }
+
+      const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
       client.res.write(payload);
     } catch {
       sseClients.delete(client);
@@ -341,72 +384,138 @@ export async function createAndBroadcastNotification(
   const targetUserIds = new Set<string>();
 
   if (notifData.recipientUserId) {
-    const validUuid = resolveValidActorUuid(notifData.recipientUserId);
-    if (validUuid) targetUserIds.add(validUuid);
-  }
-
-  if (notifData.recipientEmail) {
-    try {
-      const { data: profs } = await supabaseAdmin
+    const cleanId = notifData.recipientUserId.trim();
+    const validUuid = resolveValidUuid(cleanId);
+    if (validUuid) {
+      targetUserIds.add(validUuid);
+    } else {
+      const { data: profs, error: profErr } = await supabaseAdmin
         .from('profiles')
         .select('id')
-        .ilike('email', notifData.recipientEmail.trim());
+        .eq('id', cleanId);
+      if (profErr) {
+        throw new Error(`Failed to resolve profile for recipient ID "${cleanId}": ${profErr.message}`);
+      }
       if (profs && profs.length > 0) {
         profs.forEach((p) => {
           if (p.id) targetUserIds.add(p.id);
         });
+      } else {
+        targetUserIds.add(cleanId);
       }
-    } catch {
-      // ignore profile search failure
+    }
+  }
+
+  if (notifData.recipientEmail) {
+    const cleanEmail = notifData.recipientEmail.trim();
+    const { data: profs, error: profErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .ilike('email', cleanEmail);
+
+    if (profErr) {
+      throw new Error(`Failed to resolve profile for email "${notifData.recipientEmail}": ${profErr.message}`);
+    }
+    if (profs && profs.length > 0) {
+      profs.forEach((p) => {
+        if (p.id) targetUserIds.add(p.id);
+      });
+    } else {
+      throw new Error(`Failed to resolve profile for email "${notifData.recipientEmail}": User profile not found.`);
     }
   }
 
   const projectId = notifData.metadata?.projectId || (notifData.linkSection === 'projects' ? notifData.linkId : null);
   if (projectId) {
-    try {
-      const proj = await getSupabaseProjectById(projectId);
-      if (proj) {
-        if (proj.createdById) {
-          const creatorUuid = resolveValidActorUuid(proj.createdById);
-          if (creatorUuid) targetUserIds.add(creatorUuid);
-        }
-        if (Array.isArray(proj.participants)) {
-          for (const p of proj.participants as any[]) {
-            if (p.userId) {
-              const partUuid = resolveValidActorUuid(p.userId);
-              if (partUuid) targetUserIds.add(partUuid);
-            } else if (p.email) {
-              const { data: profs } = await supabaseAdmin
-                .from('profiles')
-                .select('id')
-                .ilike('email', p.email.trim());
-              if (profs) {
-                profs.forEach((pr) => {
-                  if (pr.id) targetUserIds.add(pr.id);
-                });
-              }
-            }
+    const proj = await getSupabaseProjectById(projectId);
+    if (!proj) {
+      throw new Error(`Failed to resolve project "${projectId}" for notification delivery.`);
+    }
+
+    if (proj.createdById) {
+      const creatorUuid = resolveValidUuid(proj.createdById) || proj.createdById;
+      if (creatorUuid) targetUserIds.add(creatorUuid);
+    }
+
+    if (Array.isArray(proj.participants)) {
+      for (const p of proj.participants as any[]) {
+        if (p.userId) {
+          const partUuid = resolveValidUuid(p.userId) || p.userId;
+          if (partUuid) targetUserIds.add(partUuid);
+        } else if (p.email) {
+          const { data: profs, error: pProfErr } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .ilike('email', String(p.email).trim());
+          if (pProfErr) {
+            throw new Error(`Failed to resolve project participant email "${p.email}": ${pProfErr.message}`);
+          }
+          if (profs && profs.length > 0) {
+            profs.forEach((pr) => {
+              if (pr.id) targetUserIds.add(pr.id);
+            });
           }
         }
       }
-    } catch {
-      // ignore project resolution failure
     }
   }
 
-  if (notifData.recipientOrg && targetUserIds.size === 0) {
-    try {
-      const { data: orgMembers } = await supabaseAdmin
-        .from('organization_members')
-        .select('user_id')
-        .eq('status', 'active');
-      if (orgMembers && orgMembers.length > 0) {
-        orgMembers.forEach((m) => {
-          if (m.user_id) targetUserIds.add(m.user_id);
-        });
+  if (notifData.recipientOrg) {
+    const cleanOrg = notifData.recipientOrg.trim();
+    const { data: orgRows, error: orgErr } = await supabaseAdmin
+      .from('organizations')
+      .select('id, name')
+      .or(`id.eq.${cleanOrg},name.ilike.${cleanOrg}`);
+
+    if (orgErr) {
+      throw new Error(`Failed to resolve organization "${cleanOrg}": ${orgErr.message}`);
+    }
+
+    if (!orgRows || orgRows.length === 0) {
+      throw new Error(`Failed to resolve organization "${cleanOrg}": Organization not found.`);
+    }
+
+    const orgId = orgRows[0].id;
+    const { data: orgMembers, error: memErr } = await supabaseAdmin
+      .from('organization_members')
+      .select('user_id, status')
+      .eq('organization_id', orgId);
+
+    if (memErr) {
+      throw new Error(`Failed to query organization members for organization "${cleanOrg}": ${memErr.message}`);
+    }
+
+    if (!orgMembers || orgMembers.length === 0) {
+      throw new Error(`Failed to resolve active organization members for organization "${cleanOrg}": No members found.`);
+    }
+
+    let activeCount = 0;
+    orgMembers.forEach((m) => {
+      const isActive = !m.status || m.status === 'active' || m.status === 'approved' || m.status === 'invited';
+      if (m.user_id && isActive) {
+        targetUserIds.add(m.user_id);
+        activeCount++;
       }
-    } catch {
-      // ignore
+    });
+
+    if (activeCount === 0) {
+      throw new Error(`Failed to resolve active organization members for organization "${cleanOrg}".`);
+    }
+  }
+
+  if (targetUserIds.size === 0 && (notifData.type === 'general' || notifData.linkSection === 'community')) {
+    const { data: allProfs, error: allProfErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id');
+
+    if (allProfErr) {
+      throw new Error(`Failed to resolve platform profiles for broadcast notification: ${allProfErr.message}`);
+    }
+
+    if (allProfs && allProfs.length > 0) {
+      allProfs.forEach((pr) => {
+        if (pr.id) targetUserIds.add(pr.id);
+      });
     }
   }
 
@@ -5009,16 +5118,14 @@ async function startServer() {
         });
       }
 
-      broadcastSSE('notification', {
-        notification: {
-          id: `notif-${Date.now()}`,
-          type: 'general',
-          title: 'New Community Discussion',
-          message: `${newPost.authorName} shared a technical update: "${content.slice(0, 60)}..."`,
-          linkSection: 'community',
-          timestamp: 'Just now',
-          read: false,
-        },
+      await createAndBroadcastNotification({
+        type: 'general',
+        title: 'New Community Discussion',
+        message: `${newPost.authorName} shared a technical update: "${content.slice(0, 60)}..."`,
+        linkSection: 'community',
+        linkId: newPost.id,
+        timestamp: 'Just now',
+        read: false,
       });
 
       res.json({ ok: true, post: newPost });
