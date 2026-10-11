@@ -442,10 +442,9 @@ export function filterNotificationsForActor(
   return allNotifs.filter((n) => {
     const projectId = n.metadata?.projectId || (n.linkSection === 'projects' ? n.linkId : null);
     if (projectId && !isAdmin) {
-      if (accessibleProjects) {
-        const hasAccess = accessibleProjects.some((p) => p.id === projectId);
-        if (!hasAccess) return false;
-      }
+      if (!accessibleProjects) return false;
+      const hasAccess = accessibleProjects.some((p) => p.id === projectId);
+      if (!hasAccess) return false;
     }
 
     // Direct recipient targeting
@@ -460,19 +459,13 @@ export function filterNotificationsForActor(
       ((actor.organizationName && n.recipientOrg.toLowerCase() === actor.organizationName.toLowerCase()) ||
         (actor.organizationId && n.recipientOrg === actor.organizationId))
     ) {
-      if (projectId && !isAdmin && accessibleProjects) {
-        return accessibleProjects.some((p) => p.id === projectId);
-      }
       return true;
     }
     if (isAdmin && !n.recipientUserId && !n.recipientEmail) {
       return true;
     }
     if (!n.recipientUserId && !n.recipientEmail && !n.recipientOrg) {
-      if (projectId && !isAdmin && accessibleProjects) {
-        return accessibleProjects.some((p) => p.id === projectId);
-      }
-      return !projectId || isAdmin;
+      return true;
     }
     return false;
   });

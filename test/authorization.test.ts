@@ -163,7 +163,7 @@ describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
 
     const notifs = [projectNotification];
 
-    // Participant Alice receives the notification
+    // Participant Alice receives the notification when accessibleProjects contains sampleProject
     const participantNotifs = filterNotificationsForActor(notifs, userOrgA_Participant, [sampleProject]);
     assert.equal(participantNotifs.length, 1);
 
@@ -175,9 +175,91 @@ describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
     const externalNotifs = filterNotificationsForActor(notifs, userOrgB, []);
     assert.equal(externalNotifs.length, 0);
 
-    // Admin receives notification
-    const adminNotifs = filterNotificationsForActor(notifs, adminUser, [sampleProject]);
+    // Admin receives notification even without accessibleProjects
+    const adminNotifs = filterNotificationsForActor(notifs, adminUser, undefined);
     assert.equal(adminNotifs.length, 1);
+  });
+
+  it('strictly denies project-related notifications to non-admins when accessibleProjects is undefined or missing the project ID, even if addressed to recipient ID or email', () => {
+    const directRecipientProjectNotif: NotificationItem = {
+      id: 'notif-direct-01',
+      type: 'project_added',
+      title: 'Direct Project Update',
+      message: 'Confidential project update',
+      linkSection: 'projects',
+      linkId: 'prj-test-01',
+      recipientUserId: userOrgA_Participant.id,
+      recipientEmail: userOrgA_Participant.email,
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+      metadata: { projectId: 'prj-test-01' },
+    };
+
+    const notifs = [directRecipientProjectNotif];
+
+    // 1. When accessibleProjects is undefined, non-admin recipient is denied access
+    const undefinedProjectsNotifs = filterNotificationsForActor(notifs, userOrgA_Participant, undefined);
+    assert.equal(undefinedProjectsNotifs.length, 0, 'Must deny access when accessibleProjects is undefined');
+
+    // 2. When accessibleProjects does not contain the project ID, non-admin recipient is denied access
+    const wrongProjectNotifs = filterNotificationsForActor(notifs, userOrgA_Participant, []);
+    assert.equal(wrongProjectNotifs.length, 0, 'Must deny access when accessibleProjects does not contain the project');
+
+    // 3. When accessibleProjects contains the project ID, non-admin recipient receives the notification
+    const authorizedNotifs = filterNotificationsForActor(notifs, userOrgA_Participant, [sampleProject]);
+    assert.equal(authorizedNotifs.length, 1, 'Must grant access when actor is authorized for the project and recipient matches');
+
+    // 4. Admin receives direct project notification addressed to admin even when accessibleProjects is undefined
+    const adminDirectNotif: NotificationItem = {
+      ...directRecipientProjectNotif,
+      recipientUserId: adminUser.id,
+      recipientEmail: adminUser.email,
+    };
+    const adminDirectNotifs = filterNotificationsForActor([adminDirectNotif], adminUser, undefined);
+    assert.equal(adminDirectNotifs.length, 1, 'Admin receives direct project notification addressed to admin even when accessibleProjects is undefined');
+
+    // 5. Admin receives broadcast project notification even when accessibleProjects is undefined
+    const adminBroadcastNotif: NotificationItem = {
+      id: 'notif-admin-bc',
+      type: 'project_added',
+      title: 'Broadcast Project Update',
+      message: 'Broadcasting project update',
+      linkSection: 'projects',
+      linkId: 'prj-test-01',
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+      metadata: { projectId: 'prj-test-01' },
+    };
+    const adminBroadcastResult = filterNotificationsForActor([adminBroadcastNotif], adminUser, undefined);
+    assert.equal(adminBroadcastResult.length, 1, 'Admin receives broadcast project notification even when accessibleProjects is undefined');
+  });
+
+  it('preserves existing direct recipient behavior for non-project notifications when accessibleProjects is undefined', () => {
+    const nonProjectNotif: NotificationItem = {
+      id: 'notif-general-01',
+      type: 'general',
+      title: 'System Maintenance',
+      message: 'Maintenance scheduled',
+      linkSection: 'dashboard',
+      linkId: 'maint-1',
+      recipientUserId: userOrgA_Participant.id,
+      recipientEmail: userOrgA_Participant.email,
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+    };
+
+    const notifs = [nonProjectNotif];
+
+    // Direct recipient receives non-project notification when accessibleProjects is undefined
+    const result = filterNotificationsForActor(notifs, userOrgA_Participant, undefined);
+    assert.equal(result.length, 1, 'Non-project notifications must work for direct recipients even when accessibleProjects is undefined');
+
+    // Unrelated user does not receive direct non-project notification
+    const wrongUserResult = filterNotificationsForActor(notifs, userOrgA_NonParticipant, undefined);
+    assert.equal(wrongUserResult.length, 0, 'Unrelated user must not receive direct non-project notification');
   });
 
   it('denies organization management to ordinary non-owner/non-admin users without stored permissions', async () => {
