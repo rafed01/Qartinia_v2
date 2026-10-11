@@ -255,6 +255,19 @@ function broadcastSSE(event: string, data: any) {
   sseClients.forEach((client) => {
     try {
       if (event === 'notification' && data?.notification) {
+        if (data.targetUserIds) {
+          const targetSet = data.targetUserIds instanceof Set ? data.targetUserIds : new Set(data.targetUserIds);
+          const clientUserId = client.user.id;
+          const clientProfileId = client.user.profile?.id;
+          const matchesUser = (clientUserId && targetSet.has(clientUserId)) || (clientProfileId && targetSet.has(clientProfileId));
+          if (!matchesUser) return;
+        } else if (data.notification.recipientUserId) {
+          const clientUserId = client.user.id;
+          const clientProfileId = client.user.profile?.id;
+          const matches = data.notification.recipientUserId === clientUserId || data.notification.recipientUserId === clientProfileId;
+          if (!matches) return;
+        }
+
         const allowed = filterNotificationsForActor([data.notification], client.user);
         if (allowed.length === 0) return;
       }
@@ -381,13 +394,25 @@ export async function createAndBroadcastNotification(
     }
   }
 
-  if (targetUserIds.size === 0) {
-    const fallbackUuid = resolveValidActorUuid();
-    if (fallbackUuid) targetUserIds.add(fallbackUuid);
+  if (notifData.recipientOrg && targetUserIds.size === 0) {
+    try {
+      const { data: orgMembers } = await supabaseAdmin
+        .from('organization_members')
+        .select('user_id')
+        .eq('status', 'active');
+      if (orgMembers && orgMembers.length > 0) {
+        orgMembers.forEach((m) => {
+          if (m.user_id) targetUserIds.add(m.user_id);
+        });
+      }
+    } catch {
+      // ignore
+    }
   }
 
+  // Strictly enforce that recipient user IDs must be resolved. Do not fallback to default user or admin.
   if (targetUserIds.size === 0) {
-    throw new Error('Failed to resolve valid target user for notification persistence.');
+    throw new Error('Failed to resolve target recipient user ID for notification.');
   }
 
   const rowsToInsert = Array.from(targetUserIds).map((uid) => ({
@@ -397,6 +422,7 @@ export async function createAndBroadcastNotification(
     entity_id: newNotif.id,
     metadata: {
       ...newNotif,
+      recipientUserId: uid,
     },
   }));
 
@@ -406,9 +432,10 @@ export async function createAndBroadcastNotification(
     throw new Error(`Failed to persist notification to Supabase: ${error.message}`);
   }
 
-  // Broadcast real-time SSE event to all connected UI clients
+  // Broadcast real-time SSE event strictly to intended recipient connections
   broadcastSSE('notification', {
     notification: newNotif,
+    targetUserIds: Array.from(targetUserIds),
   });
 
   return newNotif;
@@ -5413,9 +5440,15 @@ async function startServer() {
         return res.status(500).json({ error: 'Supabase client is not initialized.' });
       }
 
+      const validUuid = resolveValidActorUuid(actor.id);
+      if (!validUuid) {
+        return res.status(400).json({ error: 'Invalid user session.' });
+      }
+
       const { data: acts, error: fetchErr } = await supabaseAdmin
         .from('user_activity')
         .select('id, metadata')
+        .eq('user_id', validUuid)
         .eq('entity_type', 'notification')
         .eq('entity_id', req.params.id);
 
@@ -5423,26 +5456,30 @@ async function startServer() {
         return res.status(500).json({ error: `Failed to find notification: ${fetchErr.message}` });
       }
 
-      if (acts && acts[0]) {
-        const { error: updateErr } = await supabaseAdmin
-          .from('user_activity')
-          .update({
-            metadata: {
-              ...acts[0].metadata,
-              read: true,
-            },
-          })
-          .eq('id', acts[0].id);
+      if (!acts || acts.length === 0) {
+        return res.status(404).json({ error: 'Notification not found or access denied.' });
+      }
 
-        if (updateErr) {
-          return res.status(500).json({ error: `Failed to mark notification as read: ${updateErr.message}` });
-        }
+      const { error: updateErr } = await supabaseAdmin
+        .from('user_activity')
+        .update({
+          metadata: {
+            ...acts[0].metadata,
+            read: true,
+          },
+        })
+        .eq('id', acts[0].id)
+        .eq('user_id', validUuid);
+
+      if (updateErr) {
+        return res.status(500).json({ error: `Failed to mark notification as read: ${updateErr.message}` });
       }
 
       const currentList = await fetchSupabaseNotifications(actor);
       broadcastSSE('notification_read', {
         id: req.params.id,
         unreadCount: currentList.filter((n) => !n.read).length,
+        targetUserIds: [validUuid],
       });
       res.json({ ok: true, notifications: currentList });
     } catch (err: any) {
@@ -5479,7 +5516,8 @@ async function startServer() {
                   read: true,
                 },
               })
-              .eq('id', act.id);
+              .eq('id', act.id)
+              .eq('user_id', validUuid);
 
             if (updateErr) {
               return res.status(500).json({ error: `Failed to mark notification as read: ${updateErr.message}` });
@@ -5488,7 +5526,7 @@ async function startServer() {
         }
       }
 
-      broadcastSSE('notification_mark_all_read', { unreadCount: 0 });
+      broadcastSSE('notification_mark_all_read', { unreadCount: 0, targetUserIds: [resolveValidActorUuid(actor.id)!] });
       const currentList = await fetchSupabaseNotifications(actor);
       res.json({ ok: true, notifications: currentList });
     } catch (err: any) {
@@ -5503,9 +5541,26 @@ async function startServer() {
         return res.status(500).json({ error: 'Supabase client is not initialized.' });
       }
 
+      const validUuid = resolveValidActorUuid(actor.id);
+      if (!validUuid) {
+        return res.status(400).json({ error: 'Invalid user session.' });
+      }
+
+      const { data: acts } = await supabaseAdmin
+        .from('user_activity')
+        .select('id')
+        .eq('user_id', validUuid)
+        .eq('entity_type', 'notification')
+        .eq('entity_id', req.params.id);
+
+      if (!acts || acts.length === 0) {
+        return res.status(404).json({ error: 'Notification not found or access denied.' });
+      }
+
       const { error: delErr } = await supabaseAdmin
         .from('user_activity')
         .delete()
+        .eq('user_id', validUuid)
         .eq('entity_type', 'notification')
         .eq('entity_id', req.params.id);
 

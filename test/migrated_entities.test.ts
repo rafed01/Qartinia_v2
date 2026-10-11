@@ -148,5 +148,22 @@ describe('Migrated Supabase Entities Data Layer Test', () => {
     const projResAllowed = filterNotificationsForActor([projectNotif], targetActor, [sampleProject]);
     assert.equal(projResAllowed.length, 1);
   });
+  it('createAndBroadcastNotification throws explicit error when recipient user ID cannot be resolved', async () => {
+    const invalidNotif = {
+      type: 'request_status_updated' as const,
+      title: 'Unresolvable Recipient',
+      message: 'Testing unresolvable recipient error',
+    };
+
+    await assert.rejects(
+      async () => {
+        await createAndBroadcastNotification(invalidNotif);
+      },
+      {
+        name: 'Error',
+        message: /Failed to resolve target recipient user ID for notification/,
+      }
+    );
+  });
 });
 
