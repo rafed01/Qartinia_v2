@@ -241,22 +241,6 @@ export const requireAdmin: express.RequestHandler = (req, res, next) => {
   next();
 };
 
-interface LocalStore {
-  frontiers: FrontierBenchmark[];
-  projects: ProtectedProjectRoom[];
-  evidenceNodes: EvidenceNode[];
-  suppliers: SupplierItem[];
-  labs: LabItem[];
-  experts: ExpertItem[];
-  brainstormRooms: BrainstormRoom[];
-  simulations: SimulationJob[];
-  knowledgeItems: KnowledgeItem[];
-  notifications: NotificationItem[];
-  enterpriseMembers: EnterpriseMember[];
-  customRequests: SupabaseAccessRequest[];
-  customAccounts: UserAccount[];
-  currentUserId: string | null;
-}
 
 // Active Server-Sent Events client connections with user identity
 interface SSEClientConnection {
@@ -323,33 +307,16 @@ export async function isAuthorizedOrgLeaderOrAdmin(
   return false;
 }
 
-let localStore: LocalStore = {
-  frontiers: [],
-  projects: [],
-  evidenceNodes: [],
-  suppliers: [],
-  labs: [],
-  experts: [],
-  brainstormRooms: [],
-  simulations: [],
-  knowledgeItems: [],
-  notifications: [],
-  enterpriseMembers: [],
-  customRequests: [],
-  customAccounts: [],
-  currentUserId: null,
-};
-
-function saveLocalStore(_store: LocalStore) {
-  // Persistence is handled authoritatively via Supabase. No local disk file writes.
-}
-
-function createAndBroadcastNotification(
+export async function createAndBroadcastNotification(
   notifData: Omit<NotificationItem, 'id' | 'createdAt' | 'timestamp' | 'read'> & {
     read?: boolean;
     timestamp?: string;
   }
-): NotificationItem {
+): Promise<NotificationItem> {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase client is not initialized for notification persistence.');
+  }
+
   const newNotif: NotificationItem = {
     id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     createdAt: new Date().toISOString(),
@@ -358,42 +325,90 @@ function createAndBroadcastNotification(
     ...notifData,
   };
 
-  if (!Array.isArray(localStore.notifications)) {
-    localStore.notifications = [];
-  }
-  localStore.notifications.unshift(newNotif);
-  if (localStore.notifications.length > 60) {
-    localStore.notifications = localStore.notifications.slice(0, 60);
+  const targetUserIds = new Set<string>();
+
+  if (notifData.recipientUserId) {
+    const validUuid = resolveValidActorUuid(notifData.recipientUserId);
+    if (validUuid) targetUserIds.add(validUuid);
   }
 
-  // Authoritatively record persistent notification to Supabase `public.user_activity`
-  if (supabaseAdmin) {
-    const validRecipientUuid = resolveValidActorUuid(notifData.recipientUserId);
-    if (validRecipientUuid) {
-      Promise.resolve(
-        supabaseAdmin
-          .from('user_activity')
-          .insert({
-            user_id: validRecipientUuid,
-            action: 'notification_created',
-            entity_type: 'notification',
-            entity_id: newNotif.id,
-            metadata: {
-              ...newNotif,
-            },
-          })
-      )
-        .then(({ error }: any) => {
-          if (error) console.warn('[Supabase Notification Insert Warning]', error.message);
-        })
-        .catch((err: any) => console.warn('[Supabase Notification Insert Error]', err));
+  if (notifData.recipientEmail) {
+    try {
+      const { data: profs } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .ilike('email', notifData.recipientEmail.trim());
+      if (profs && profs.length > 0) {
+        profs.forEach((p) => {
+          if (p.id) targetUserIds.add(p.id);
+        });
+      }
+    } catch {
+      // ignore profile search failure
     }
+  }
+
+  const projectId = notifData.metadata?.projectId || (notifData.linkSection === 'projects' ? notifData.linkId : null);
+  if (projectId) {
+    try {
+      const proj = await getSupabaseProjectById(projectId);
+      if (proj) {
+        if (proj.createdById) {
+          const creatorUuid = resolveValidActorUuid(proj.createdById);
+          if (creatorUuid) targetUserIds.add(creatorUuid);
+        }
+        if (Array.isArray(proj.participants)) {
+          for (const p of proj.participants as any[]) {
+            if (p.userId) {
+              const partUuid = resolveValidActorUuid(p.userId);
+              if (partUuid) targetUserIds.add(partUuid);
+            } else if (p.email) {
+              const { data: profs } = await supabaseAdmin
+                .from('profiles')
+                .select('id')
+                .ilike('email', p.email.trim());
+              if (profs) {
+                profs.forEach((pr) => {
+                  if (pr.id) targetUserIds.add(pr.id);
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore project resolution failure
+    }
+  }
+
+  if (targetUserIds.size === 0) {
+    const fallbackUuid = resolveValidActorUuid();
+    if (fallbackUuid) targetUserIds.add(fallbackUuid);
+  }
+
+  if (targetUserIds.size === 0) {
+    throw new Error('Failed to resolve valid target user for notification persistence.');
+  }
+
+  const rowsToInsert = Array.from(targetUserIds).map((uid) => ({
+    user_id: uid,
+    action: 'notification_created',
+    entity_type: 'notification',
+    entity_id: newNotif.id,
+    metadata: {
+      ...newNotif,
+    },
+  }));
+
+  const { error } = await supabaseAdmin.from('user_activity').insert(rowsToInsert);
+
+  if (error) {
+    throw new Error(`Failed to persist notification to Supabase: ${error.message}`);
   }
 
   // Broadcast real-time SSE event to all connected UI clients
   broadcastSSE('notification', {
     notification: newNotif,
-    unreadCount: localStore.notifications.filter((n) => !n.read).length,
   });
 
   return newNotif;
@@ -442,51 +457,43 @@ export async function fetchSupabaseNotifications(
   actor?: AuthenticatedUser | null,
   accessibleProjects?: ProtectedProjectRoom[]
 ): Promise<NotificationItem[]> {
-  if (!supabaseAdmin || !actor) {
-    return filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
+  if (!actor) return [];
+  if (!supabaseAdmin) {
+    throw new Error('Supabase client is not initialized for notification query.');
   }
-  try {
-    const validUuid = resolveValidActorUuid(actor.id);
-    let dbNotifs: NotificationItem[] = [];
-    if (validUuid) {
-      const { data, error } = await supabaseAdmin
-        .from('user_activity')
-        .select('*')
-        .eq('user_id', validUuid)
-        .eq('entity_type', 'notification')
-        .order('created_at', { ascending: false })
-        .limit(60);
-      if (!error && data && data.length > 0) {
-        dbNotifs = data.map((row: any) => ({
-          id: row.entity_id || row.id,
-          recipientUserId: row.user_id,
-          type: (row.metadata?.type as any) || 'general',
-          title: row.metadata?.title || 'Notification',
-          message: row.metadata?.message || '',
-          linkSection: row.metadata?.linkSection,
-          linkId: row.metadata?.linkId,
-          read: Boolean(row.metadata?.read),
-          timestamp: row.metadata?.timestamp || 'Recently',
-          createdAt: row.created_at || new Date().toISOString(),
-          metadata: row.metadata?.metadata || {},
-        }));
-      }
-    }
 
-    // Merge with in-memory / localStore notifications scoped for actor
-    const localScoped = filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
-    const seenIds = new Set(dbNotifs.map((n) => n.id));
-    for (const ln of localScoped) {
-      if (!seenIds.has(ln.id)) {
-        dbNotifs.push(ln);
-      }
-    }
-    dbNotifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return filterNotificationsForActor(dbNotifs, actor, accessibleProjects).slice(0, 60);
-  } catch (err) {
-    console.warn('[fetchSupabaseNotifications]', err);
-    return filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
+  const validUuid = resolveValidActorUuid(actor.id);
+  if (!validUuid) {
+    return [];
   }
+
+  const { data, error } = await supabaseAdmin
+    .from('user_activity')
+    .select('*')
+    .eq('user_id', validUuid)
+    .eq('entity_type', 'notification')
+    .order('created_at', { ascending: false })
+    .limit(60);
+
+  if (error) {
+    throw new Error(`Failed to fetch notifications from Supabase: ${error.message}`);
+  }
+
+  const dbNotifs: NotificationItem[] = (data || []).map((row: any) => ({
+    id: row.entity_id || row.id,
+    recipientUserId: row.user_id,
+    type: (row.metadata?.type as any) || 'general',
+    title: row.metadata?.title || 'Notification',
+    message: row.metadata?.message || '',
+    linkSection: row.metadata?.linkSection,
+    linkId: row.metadata?.linkId,
+    read: Boolean(row.metadata?.read),
+    timestamp: row.metadata?.timestamp || 'Recently',
+    createdAt: row.created_at || new Date().toISOString(),
+    metadata: row.metadata?.metadata || {},
+  }));
+
+  return filterNotificationsForActor(dbNotifs, actor, accessibleProjects);
 }
 
 
@@ -3642,7 +3649,7 @@ async function startServer() {
       if (updatedReq) {
         const typeLabel = (updatedReq.requestType || 'request').replace(/_/g, ' ');
         const formattedStatus = pgStatus.toUpperCase().replace(/_/g, ' ');
-        createAndBroadcastNotification({
+        await createAndBroadcastNotification({
           type: 'request_status_updated',
           title: `${typeLabel.toUpperCase()} ${formattedStatus}`,
           message: `Your ${typeLabel} "${updatedReq.proposalBrief?.split('.')[0] || updatedReq.name}" has been marked as ${formattedStatus}.${
@@ -5381,109 +5388,136 @@ async function startServer() {
   });
 
   app.get('/api/notifications', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    let userProjects: ProtectedProjectRoom[] = [];
     try {
-      userProjects = await fetchSupabaseProjects();
-    } catch (err) {
-      console.warn('[Notifications Project Load Warning]', err);
-    }
-    const accessibleProjects = actor.role === 'admin' || actor.role === 'platform_admin'
-      ? userProjects
-      : userProjects.filter((p) => userHasProjectAccess(p, actor));
+      const actor = req.user!;
+      const userProjects = await fetchSupabaseProjects();
+      const accessibleProjects = actor.role === 'admin' || actor.role === 'platform_admin'
+        ? userProjects
+        : userProjects.filter((p) => userHasProjectAccess(p, actor));
 
-    const list = await fetchSupabaseNotifications(actor, accessibleProjects);
-    res.json({
-      ok: true,
-      notifications: list,
-      unreadCount: list.filter((n) => !n.read).length,
-    });
+      const list = await fetchSupabaseNotifications(actor, accessibleProjects);
+      res.json({
+        ok: true,
+        notifications: list,
+        unreadCount: list.filter((n) => !n.read).length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch notifications.' });
+    }
   });
 
   app.patch('/api/notifications/:id/read', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    if (supabaseAdmin) {
-      try {
-        const { data: acts } = await supabaseAdmin
-          .from('user_activity')
-          .select('id, metadata')
-          .eq('entity_type', 'notification')
-          .eq('entity_id', req.params.id);
-        if (acts && acts[0]) {
-          await supabaseAdmin
-            .from('user_activity')
-            .update({
-              metadata: {
-                ...acts[0].metadata,
-                read: true,
-              },
-            })
-            .eq('id', acts[0].id);
-        }
-      } catch (dbErr) {
-        console.warn('[Supabase Notification Read Error]', dbErr);
+    try {
+      const actor = req.user!;
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not initialized.' });
       }
-    }
 
-    const currentList = await fetchSupabaseNotifications(actor);
-    broadcastSSE('notification_read', {
-      id: req.params.id,
-      unreadCount: currentList.filter((n) => !n.read).length,
-    });
-    res.json({ ok: true, notifications: currentList });
+      const { data: acts, error: fetchErr } = await supabaseAdmin
+        .from('user_activity')
+        .select('id, metadata')
+        .eq('entity_type', 'notification')
+        .eq('entity_id', req.params.id);
+
+      if (fetchErr) {
+        return res.status(500).json({ error: `Failed to find notification: ${fetchErr.message}` });
+      }
+
+      if (acts && acts[0]) {
+        const { error: updateErr } = await supabaseAdmin
+          .from('user_activity')
+          .update({
+            metadata: {
+              ...acts[0].metadata,
+              read: true,
+            },
+          })
+          .eq('id', acts[0].id);
+
+        if (updateErr) {
+          return res.status(500).json({ error: `Failed to mark notification as read: ${updateErr.message}` });
+        }
+      }
+
+      const currentList = await fetchSupabaseNotifications(actor);
+      broadcastSSE('notification_read', {
+        id: req.params.id,
+        unreadCount: currentList.filter((n) => !n.read).length,
+      });
+      res.json({ ok: true, notifications: currentList });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to mark notification as read.' });
+    }
   });
 
   app.post('/api/notifications/mark-all-read', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    if (supabaseAdmin) {
-      try {
-        const validUuid = resolveValidActorUuid(actor.id);
-        if (validUuid) {
-          const { data: acts } = await supabaseAdmin
-            .from('user_activity')
-            .select('id, metadata')
-            .eq('user_id', validUuid)
-            .eq('entity_type', 'notification');
-          if (acts && acts.length > 0) {
-            for (const act of acts) {
-              await supabaseAdmin
-                .from('user_activity')
-                .update({
-                  metadata: {
-                    ...act.metadata,
-                    read: true,
-                  },
-                })
-                .eq('id', act.id);
+    try {
+      const actor = req.user!;
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not initialized.' });
+      }
+
+      const validUuid = resolveValidActorUuid(actor.id);
+      if (validUuid) {
+        const { data: acts, error: fetchErr } = await supabaseAdmin
+          .from('user_activity')
+          .select('id, metadata')
+          .eq('user_id', validUuid)
+          .eq('entity_type', 'notification');
+
+        if (fetchErr) {
+          return res.status(500).json({ error: `Failed to fetch notifications: ${fetchErr.message}` });
+        }
+
+        if (acts && acts.length > 0) {
+          for (const act of acts) {
+            const { error: updateErr } = await supabaseAdmin
+              .from('user_activity')
+              .update({
+                metadata: {
+                  ...act.metadata,
+                  read: true,
+                },
+              })
+              .eq('id', act.id);
+
+            if (updateErr) {
+              return res.status(500).json({ error: `Failed to mark notification as read: ${updateErr.message}` });
             }
           }
         }
-      } catch (dbErr) {
-        console.warn('[Supabase Notification Mark All Read Error]', dbErr);
       }
-    }
 
-    broadcastSSE('notification_mark_all_read', { unreadCount: 0 });
-    const currentList = await fetchSupabaseNotifications(actor);
-    res.json({ ok: true, notifications: currentList });
+      broadcastSSE('notification_mark_all_read', { unreadCount: 0 });
+      const currentList = await fetchSupabaseNotifications(actor);
+      res.json({ ok: true, notifications: currentList });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to mark all notifications as read.' });
+    }
   });
 
   app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    if (supabaseAdmin) {
-      try {
-        await supabaseAdmin
-          .from('user_activity')
-          .delete()
-          .eq('entity_type', 'notification')
-          .eq('entity_id', req.params.id);
-      } catch (dbErr) {
-        console.warn('[Supabase Notification Delete Error]', dbErr);
+    try {
+      const actor = req.user!;
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: 'Supabase client is not initialized.' });
       }
-    }
 
-    const currentList = await fetchSupabaseNotifications(actor);
-    res.json({ ok: true, notifications: currentList });
+      const { error: delErr } = await supabaseAdmin
+        .from('user_activity')
+        .delete()
+        .eq('entity_type', 'notification')
+        .eq('entity_id', req.params.id);
+
+      if (delErr) {
+        return res.status(500).json({ error: `Failed to delete notification: ${delErr.message}` });
+      }
+
+      const currentList = await fetchSupabaseNotifications(actor);
+      res.json({ ok: true, notifications: currentList });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to delete notification.' });
+    }
   });
 
   // 18. POST / PATCH / DELETE /api/projects — Protected Project Rooms Synced with `public.catalog` & `public.catalog_relationships`
@@ -5664,120 +5698,132 @@ async function startServer() {
   });
 
   app.post('/api/projects/:id/participants', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const project = await getSupabaseProjectById(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project room not found.' });
+    try {
+      const actor = req.user!;
+      const project = await getSupabaseProjectById(req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project room not found.' });
 
-    if (!userCanModifyProject(project, actor)) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to add participants to this project.' });
-    }
+      if (!userCanModifyProject(project, actor)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to add participants to this project.' });
+      }
 
-    const { name, organization, role, accessScope, id, userId, email } = req.body;
-    const newParticipant = {
-      id: id || userId || `part-${Date.now()}`,
-      userId: userId || id,
-      email,
-      name,
-      organization,
-      role: role || 'Domain Specialist',
-      accessScope: accessScope || 'Protected Project Boundary',
-    };
-    project.participants.push(newParticipant);
+      const { name, organization, role, accessScope, id, userId, email } = req.body;
+      const newParticipant = {
+        id: id || userId || `part-${Date.now()}`,
+        userId: userId || id,
+        email,
+        name,
+        organization,
+        role: role || 'Domain Specialist',
+        accessScope: accessScope || 'Protected Project Boundary',
+      };
+      project.participants.push(newParticipant);
 
-    await syncProjectToCatalog(project);
-
-    // Notify user added to project
-    createAndBroadcastNotification({
-      type: 'project_added',
-      title: `Added to Project: ${project.code}`,
-      message: `You were added as "${newParticipant.role}" to protected project "${project.title}" (${project.code}) under Stage 01 Mutual NDA.`,
-      recipientOrg: organization,
-      linkSection: 'projects',
-      linkId: project.id,
-      metadata: {
-        projectId: project.id,
-        projectTitle: project.title,
-        projectCode: project.code,
-        actorName: name,
-        actorOrg: organization,
-      },
-    });
-
-    res.json({ ok: true, project });
-  });
-
-  app.post('/api/projects/:id/milestones', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const project = await getSupabaseProjectById(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project room not found.' });
-
-    if (!userCanModifyProject(project, actor)) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to add milestones to this project.' });
-    }
-
-    const { title, dueDate, deliverable } = req.body;
-    const newMilestone = {
-      id: `ms-${Date.now()}`,
-      title,
-      dueDate: dueDate || 'TBD',
-      deliverable: deliverable || '',
-      status: 'Pending' as const,
-    };
-    project.milestones.push(newMilestone);
-
-    await syncProjectToCatalog(project);
-
-    // Broadcast milestone creation notification to collaborators
-    createAndBroadcastNotification({
-      type: 'milestone_created',
-      title: `New Milestone in ${project.code}`,
-      message: `Collaborator posted new milestone: "${title}" (Due: ${newMilestone.dueDate}) for project "${project.title}".`,
-      linkSection: 'projects',
-      linkId: project.id,
-      metadata: {
-        projectId: project.id,
-        projectTitle: project.title,
-        projectCode: project.code,
-        milestoneId: newMilestone.id,
-        milestoneTitle: title,
-      },
-    });
-
-    res.json({ ok: true, project });
-  });
-
-  app.patch('/api/projects/:id/milestones/:msId', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const project = await getSupabaseProjectById(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Project room not found.' });
-
-    if (!userCanModifyProject(project, actor)) {
-      return res.status(403).json({ error: 'Forbidden: You do not have permission to update milestones in this project.' });
-    }
-
-    const ms = project.milestones.find((m) => m.id === req.params.msId);
-    if (ms && req.body.status) {
-      ms.status = req.body.status;
       await syncProjectToCatalog(project);
 
-      // Broadcast milestone status update notification
-      createAndBroadcastNotification({
-        type: 'milestone_updated',
-        title: `Milestone ${req.body.status}: ${project.code}`,
-        message: `Milestone "${ms.title}" in project "${project.title}" has been verified as "${req.body.status}".`,
+      // Notify user added to project
+      await createAndBroadcastNotification({
+        type: 'project_added',
+        title: `Added to Project: ${project.code}`,
+        message: `You were added as "${newParticipant.role}" to protected project "${project.title}" (${project.code}) under Stage 01 Mutual NDA.`,
+        recipientOrg: organization,
         linkSection: 'projects',
         linkId: project.id,
         metadata: {
           projectId: project.id,
           projectTitle: project.title,
           projectCode: project.code,
-          milestoneId: ms.id,
-          milestoneTitle: ms.title,
-          milestoneStatus: req.body.status,
+          actorName: name,
+          actorOrg: organization,
         },
       });
+
+      res.json({ ok: true, project });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to add participant to project.' });
     }
-    res.json({ ok: true, project });
+  });
+
+  app.post('/api/projects/:id/milestones', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const project = await getSupabaseProjectById(req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+      if (!userCanModifyProject(project, actor)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to add milestones to this project.' });
+      }
+
+      const { title, dueDate, deliverable } = req.body;
+      const newMilestone = {
+        id: `ms-${Date.now()}`,
+        title,
+        dueDate: dueDate || 'TBD',
+        deliverable: deliverable || '',
+        status: 'Pending' as const,
+      };
+      project.milestones.push(newMilestone);
+
+      await syncProjectToCatalog(project);
+
+      // Broadcast milestone creation notification to collaborators
+      await createAndBroadcastNotification({
+        type: 'milestone_created',
+        title: `New Milestone in ${project.code}`,
+        message: `Collaborator posted new milestone: "${title}" (Due: ${newMilestone.dueDate}) for project "${project.title}".`,
+        linkSection: 'projects',
+        linkId: project.id,
+        metadata: {
+          projectId: project.id,
+          projectTitle: project.title,
+          projectCode: project.code,
+          milestoneId: newMilestone.id,
+          milestoneTitle: title,
+        },
+      });
+
+      res.json({ ok: true, project });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to add milestone to project.' });
+    }
+  });
+
+  app.patch('/api/projects/:id/milestones/:msId', requireAuth, async (req, res) => {
+    try {
+      const actor = req.user!;
+      const project = await getSupabaseProjectById(req.params.id);
+      if (!project) return res.status(404).json({ error: 'Project room not found.' });
+
+      if (!userCanModifyProject(project, actor)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to update milestones in this project.' });
+      }
+
+      const ms = project.milestones.find((m) => m.id === req.params.msId);
+      if (ms && req.body.status) {
+        ms.status = req.body.status;
+        await syncProjectToCatalog(project);
+
+        // Broadcast milestone status update notification
+        await createAndBroadcastNotification({
+          type: 'milestone_updated',
+          title: `Milestone ${req.body.status}: ${project.code}`,
+          message: `Milestone "${ms.title}" in project "${project.title}" has been verified as "${req.body.status}".`,
+          linkSection: 'projects',
+          linkId: project.id,
+          metadata: {
+            projectId: project.id,
+            projectTitle: project.title,
+            projectCode: project.code,
+            milestoneId: ms.id,
+            milestoneTitle: ms.title,
+            milestoneStatus: req.body.status,
+          },
+        });
+      }
+      res.json({ ok: true, project });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to update milestone.' });
+    }
   });
 
   // POST /api/projects/:id/documents — Store document metadata and persistent file in private Supabase Storage
@@ -6017,7 +6063,7 @@ async function startServer() {
 
     await syncFrontierToCatalog(frontier);
 
-    const notif = createAndBroadcastNotification({
+    const notif = await createAndBroadcastNotification({
       type: 'request_status_updated',
       title: 'Frontier Benchmark Updated',
       message: `Administrator revised technical specifications and benchmark criteria for "${frontier.title}".`,
@@ -6065,47 +6111,47 @@ async function startServer() {
   });
 
   app.post('/api/enterprise/members/invite', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const { organizationId, organizationName, fullName, email, role, title, department, permissions } = req.body;
-    if (!email || !fullName) {
-      return res.status(400).json({ error: 'Full name and email are required for membership invitation.' });
-    }
+    try {
+      const actor = req.user!;
+      const { organizationId, organizationName, fullName, email, role, title, department, permissions } = req.body;
+      if (!email || !fullName) {
+        return res.status(400).json({ error: 'Full name and email are required for membership invitation.' });
+      }
 
-    const targetOrgId = organizationId || actor.organizationId;
-    const targetOrgName = organizationName || actor.organizationName || 'Qartinia Deep-Tech';
+      const targetOrgId = organizationId || actor.organizationId;
+      const targetOrgName = organizationName || actor.organizationName || 'Qartinia Deep-Tech';
 
-    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, targetOrgId);
+      const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, targetOrgId);
 
-    if (!isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
-    }
+      if (!isOrgLeader) {
+        return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
+      }
 
-    const memberRole = role || 'employee';
-    const defaultPermissions =
-      memberRole === 'owner' || memberRole === 'admin'
-        ? ['manage_organization', 'invite_members', 'modify_permissions', 'approve_requests', 'delete_projects', 'edit_frontier', 'manage_projects']
-        : ['manage_projects'];
+      const memberRole = role || 'employee';
+      const defaultPermissions =
+        memberRole === 'owner' || memberRole === 'admin'
+          ? ['manage_organization', 'invite_members', 'modify_permissions', 'approve_requests', 'delete_projects', 'edit_frontier', 'manage_projects']
+          : ['manage_projects'];
 
-    const newMember: EnterpriseMember = {
-      id: `mem-${Date.now()}`,
-      organizationId: targetOrgId || 'org-qartinia-tech',
-      organizationName: targetOrgName,
-      userId: `usr-inv-${Date.now()}`,
-      fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      role: memberRole,
-      title: title?.trim() || 'Technical Staff / Engineer',
-      department: department?.trim() || 'R&D Engineering',
-      approvalStatus: 'approved',
-      joinedAt: new Date().toISOString().split('T')[0],
-      permissions: Array.isArray(permissions) ? permissions : defaultPermissions,
-      status: 'invited',
-      invitedBy: actor.fullName,
-      lastActive: 'Pending activation',
-    };
+      const newMember: EnterpriseMember = {
+        id: `mem-${Date.now()}`,
+        organizationId: targetOrgId || 'org-qartinia-tech',
+        organizationName: targetOrgName,
+        userId: `usr-inv-${Date.now()}`,
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        role: memberRole,
+        title: title?.trim() || 'Technical Staff / Engineer',
+        department: department?.trim() || 'R&D Engineering',
+        approvalStatus: 'approved',
+        joinedAt: new Date().toISOString().split('T')[0],
+        permissions: Array.isArray(permissions) ? permissions : defaultPermissions,
+        status: 'invited',
+        invitedBy: actor.fullName,
+        lastActive: 'Pending activation',
+      };
 
-    if (supabaseAdmin) {
-      try {
+      if (supabaseAdmin) {
         const cleanEmail = newMember.email;
         const { data: profs } = await supabaseAdmin.from('profiles').select('id').ilike('email', cleanEmail);
         let targetUserId = profs && profs[0] ? profs[0].id : null;
@@ -6145,59 +6191,59 @@ async function startServer() {
           status: 'invited',
           permissions: newMember.permissions,
         });
-      } catch (err) {
-        console.warn('[Supabase Invite Sync Warning]', err);
       }
+
+      const notif = await createAndBroadcastNotification({
+        type: 'project_added',
+        title: 'New Member Invited to Organization',
+        message: `${newMember.fullName} (${newMember.email}) has been invited as ${newMember.role.toUpperCase()} to ${newMember.organizationName}.`,
+        linkSection: 'dashboard',
+        linkId: newMember.id,
+        metadata: {
+          memberId: newMember.id,
+          email: newMember.email,
+          role: newMember.role,
+          organizationName: newMember.organizationName,
+        },
+      });
+
+      const state = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, member: newMember, members: state.enterpriseMembers || [], notification: notif, state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to invite member to organization.' });
     }
-
-    const notif = createAndBroadcastNotification({
-      type: 'project_added',
-      title: 'New Member Invited to Organization',
-      message: `${newMember.fullName} (${newMember.email}) has been invited as ${newMember.role.toUpperCase()} to ${newMember.organizationName}.`,
-      linkSection: 'dashboard',
-      linkId: newMember.id,
-      metadata: {
-        memberId: newMember.id,
-        email: newMember.email,
-        role: newMember.role,
-        organizationName: newMember.organizationName,
-      },
-    });
-
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, member: newMember, members: state.enterpriseMembers || [], notification: notif, state });
   });
 
   app.patch('/api/enterprise/members/:id', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const { id } = req.params;
-    const { role, permissions, title, department, status, approvalStatus, fullName } = req.body;
+    try {
+      const actor = req.user!;
+      const { id } = req.params;
+      const { role, permissions, title, department, status, approvalStatus, fullName } = req.body;
 
-    const state = await fetchFullWorkspaceState(actor.id);
-    const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
-    if (!member) {
-      return res.status(404).json({ error: 'Organization member not found.' });
-    }
+      const state = await fetchFullWorkspaceState(actor.id);
+      const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
+      if (!member) {
+        return res.status(404).json({ error: 'Organization member not found.' });
+      }
 
-    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
+      const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
 
-    if (!isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
-    }
+      if (!isOrgLeader) {
+        return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
+      }
 
-    const updatedMember = {
-      ...member,
-      role: role || member.role,
-      permissions: permissions || member.permissions,
-      title: title || member.title,
-      department: department || member.department,
-      status: status || member.status,
-      approvalStatus: approvalStatus || member.approvalStatus,
-      fullName: fullName || member.fullName,
-    };
+      const updatedMember = {
+        ...member,
+        role: role || member.role,
+        permissions: permissions || member.permissions,
+        title: title || member.title,
+        department: department || member.department,
+        status: status || member.status,
+        approvalStatus: approvalStatus || member.approvalStatus,
+        fullName: fullName || member.fullName,
+      };
 
-    if (supabaseAdmin) {
-      try {
+      if (supabaseAdmin) {
         await supabaseAdmin
           .from('organization_members')
           .update({
@@ -6221,65 +6267,65 @@ async function startServer() {
             })
             .ilike('email', updatedMember.email);
         }
-      } catch (err) {
-        console.warn('[Supabase Member Patch Warning]', err);
       }
+
+      const notif = await createAndBroadcastNotification({
+        type: 'request_status_updated',
+        title: 'Member Permissions / Role Updated',
+        message: `Permissions updated for ${updatedMember.fullName} (${updatedMember.role.toUpperCase()}) in ${updatedMember.organizationName}.`,
+        linkSection: 'dashboard',
+        linkId: updatedMember.id,
+        metadata: {
+          memberId: updatedMember.id,
+          email: updatedMember.email,
+          role: updatedMember.role,
+          permissions: updatedMember.permissions,
+        },
+      });
+
+      const updatedState = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, member: updatedMember, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to update organization member.' });
     }
-
-    const notif = createAndBroadcastNotification({
-      type: 'request_status_updated',
-      title: 'Member Permissions / Role Updated',
-      message: `Permissions updated for ${updatedMember.fullName} (${updatedMember.role.toUpperCase()}) in ${updatedMember.organizationName}.`,
-      linkSection: 'dashboard',
-      linkId: updatedMember.id,
-      metadata: {
-        memberId: updatedMember.id,
-        email: updatedMember.email,
-        role: updatedMember.role,
-        permissions: updatedMember.permissions,
-      },
-    });
-
-    const updatedState = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, member: updatedMember, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
   });
 
   app.delete('/api/enterprise/members/:id', requireAuth, async (req, res) => {
-    const actor = req.user!;
-    const { id } = req.params;
+    try {
+      const actor = req.user!;
+      const { id } = req.params;
 
-    const state = await fetchFullWorkspaceState(actor.id);
-    const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
-    if (!member) {
-      return res.status(404).json({ error: 'Organization member not found.' });
-    }
+      const state = await fetchFullWorkspaceState(actor.id);
+      const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
+      if (!member) {
+        return res.status(404).json({ error: 'Organization member not found.' });
+      }
 
-    const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
+      const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
 
-    if (!isOrgLeader) {
-      return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
-    }
+      if (!isOrgLeader) {
+        return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
+      }
 
-    if (supabaseAdmin) {
-      try {
+      if (supabaseAdmin) {
         await supabaseAdmin
           .from('organization_members')
           .delete()
           .or(`id.eq.${member.id},user_id.eq.${member.userId}`);
-      } catch (err) {
-        console.warn('[Supabase Member Delete Warning]', err);
       }
+
+      const notif = await createAndBroadcastNotification({
+        type: 'request_status_updated',
+        title: 'Member Removed from Organization',
+        message: `${member.fullName} has been removed from ${member.organizationName}.`,
+        linkSection: 'dashboard',
+      });
+
+      const updatedState = await fetchFullWorkspaceState(actor.id);
+      res.json({ ok: true, removed: member, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to remove member from organization.' });
     }
-
-    const notif = createAndBroadcastNotification({
-      type: 'request_status_updated',
-      title: 'Member Removed from Organization',
-      message: `${member.fullName} has been removed from ${member.organizationName}.`,
-      linkSection: 'dashboard',
-    });
-
-    const updatedState = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, removed: member, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
   });
 
   // --------------------------------------------------------------------------
