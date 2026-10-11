@@ -1,23 +1,11 @@
-const TOKEN_KEY = 'qartinia_session_token';
+let activeSessionToken: string | null = null;
 
 export function getSessionToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return activeSessionToken;
 }
 
 export function setSessionToken(token: string | null): void {
-  try {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
-    }
-  } catch {
-    // localStorage might be unavailable or restricted
-  }
+  activeSessionToken = token;
 }
 
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {

@@ -49,7 +49,6 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const STORE_PATH = path.resolve(__dirname, '.qartinia-store.json');
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -324,57 +323,26 @@ export async function isAuthorizedOrgLeaderOrAdmin(
   return false;
 }
 
-function loadLocalStore(): LocalStore {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const parsed = JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8'));
-      return {
-        frontiers: Array.isArray(parsed.frontiers) ? parsed.frontiers : [],
-        projects: Array.isArray(parsed.projects) ? parsed.projects : [],
-        evidenceNodes: Array.isArray(parsed.evidenceNodes) ? parsed.evidenceNodes : [],
-        suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : [],
-        labs: Array.isArray(parsed.labs) ? parsed.labs : [],
-        experts: Array.isArray(parsed.experts) ? parsed.experts : [],
-        brainstormRooms: Array.isArray(parsed.brainstormRooms) ? parsed.brainstormRooms : [],
-        simulations: Array.isArray(parsed.simulations) ? parsed.simulations : [],
-        knowledgeItems: Array.isArray(parsed.knowledgeItems) ? parsed.knowledgeItems : [],
-        notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
-        enterpriseMembers: Array.isArray(parsed.enterpriseMembers) ? parsed.enterpriseMembers : [],
-        customRequests: Array.isArray(parsed.customRequests) ? parsed.customRequests : [],
-        customAccounts: Array.isArray(parsed.customAccounts) ? parsed.customAccounts : [],
-        currentUserId: parsed.currentUserId || null,
-      };
-    }
-  } catch (err) {
-    console.warn('[Qartinia Store] Local store load warning:', err);
-  }
-  return {
-    frontiers: [],
-    projects: [],
-    evidenceNodes: [],
-    suppliers: [],
-    labs: [],
-    experts: [],
-    brainstormRooms: [],
-    simulations: [],
-    knowledgeItems: [],
-    notifications: [],
-    enterpriseMembers: [],
-    customRequests: [],
-    customAccounts: [],
-    currentUserId: null,
-  };
-}
+let localStore: LocalStore = {
+  frontiers: [],
+  projects: [],
+  evidenceNodes: [],
+  suppliers: [],
+  labs: [],
+  experts: [],
+  brainstormRooms: [],
+  simulations: [],
+  knowledgeItems: [],
+  notifications: [],
+  enterpriseMembers: [],
+  customRequests: [],
+  customAccounts: [],
+  currentUserId: null,
+};
 
-function saveLocalStore(store: LocalStore) {
-  try {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[Qartinia Store] Local store save warning:', err);
-  }
+function saveLocalStore(_store: LocalStore) {
+  // Persistence is handled authoritatively via Supabase. No local disk file writes.
 }
-
-let localStore: LocalStore = loadLocalStore();
 
 function createAndBroadcastNotification(
   notifData: Omit<NotificationItem, 'id' | 'createdAt' | 'timestamp' | 'read'> & {
@@ -397,7 +365,6 @@ function createAndBroadcastNotification(
   if (localStore.notifications.length > 60) {
     localStore.notifications = localStore.notifications.slice(0, 60);
   }
-  saveLocalStore(localStore);
 
   // Authoritatively record persistent notification to Supabase `public.user_activity`
   if (supabaseAdmin) {
@@ -1271,7 +1238,7 @@ async function fetchSupabaseExperts(): Promise<ExpertItem[]> {
 }
 
 async function fetchSupabaseKnowledge(): Promise<KnowledgeItem[]> {
-  if (!supabaseAdmin) return localStore.knowledgeItems || [];
+  if (!supabaseAdmin) return [];
   try {
     const { data, error } = await supabaseAdmin
       .from('catalog')
@@ -1279,30 +1246,19 @@ async function fetchSupabaseKnowledge(): Promise<KnowledgeItem[]> {
       .eq('type', 'knowledge')
       .order('updated_at', { ascending: false });
     if (error || !data) {
-      return localStore.knowledgeItems || [];
+      return [];
     }
-    const mapped = data.map(mapCatalogRowToKnowledge);
-    localStore.knowledgeItems = mapped;
-    return mapped;
+    return data.map(mapCatalogRowToKnowledge);
   } catch (err) {
     console.warn('[fetchSupabaseKnowledge]', err);
-    return localStore.knowledgeItems || [];
+    return [];
   }
 }
 
 async function fetchSupabaseBrainstormRooms(actor?: AuthenticatedUser | null): Promise<BrainstormRoom[]> {
   const isPlatformAdmin = actor && (actor.role === 'admin' || actor.role === 'platform_admin');
   if (!supabaseAdmin) {
-    return (localStore.brainstormRooms || []).filter((r) => {
-      if (!r.isPrivate) return true;
-      if (!actor) return false;
-      if (isPlatformAdmin) return true;
-      const isCreator = r.createdBy === actor.fullName || r.createdBy === actor.email;
-      const isParticipant = (r.participants || []).some(
-        (p) => p.toLowerCase() === actor.fullName.toLowerCase() || p.toLowerCase() === actor.email.toLowerCase()
-      );
-      return isCreator || isParticipant;
-    });
+    return [];
   }
   try {
     const { data, error } = await supabaseAdmin
@@ -1311,7 +1267,7 @@ async function fetchSupabaseBrainstormRooms(actor?: AuthenticatedUser | null): P
       .eq('type', 'project_room')
       .order('updated_at', { ascending: false });
     if (error || !data) {
-      return localStore.brainstormRooms || [];
+      return [];
     }
     const rooms: BrainstormRoom[] = [];
     for (const row of data) {
@@ -1330,19 +1286,15 @@ async function fetchSupabaseBrainstormRooms(actor?: AuthenticatedUser | null): P
         }
       }
     }
-    if (rooms.length > 0) {
-      localStore.brainstormRooms = rooms;
-      return rooms;
-    }
-    return localStore.brainstormRooms || [];
+    return rooms;
   } catch (err) {
     console.warn('[fetchSupabaseBrainstormRooms]', err);
-    return localStore.brainstormRooms || [];
+    return [];
   }
 }
 
 async function fetchSupabaseSimulations(): Promise<SimulationJob[]> {
-  if (!supabaseAdmin) return localStore.simulations || [];
+  if (!supabaseAdmin) return [];
   try {
     const { data, error } = await supabaseAdmin
       .from('catalog')
@@ -1350,7 +1302,7 @@ async function fetchSupabaseSimulations(): Promise<SimulationJob[]> {
       .eq('type', 'frontier')
       .order('updated_at', { ascending: false });
     if (error || !data) {
-      return localStore.simulations || [];
+      return [];
     }
     const sims: SimulationJob[] = [];
     for (const row of data) {
@@ -1364,14 +1316,10 @@ async function fetchSupabaseSimulations(): Promise<SimulationJob[]> {
         } as any);
       }
     }
-    if (sims.length > 0) {
-      localStore.simulations = sims;
-      return sims;
-    }
-    return localStore.simulations || [];
+    return sims;
   } catch (err) {
     console.warn('[fetchSupabaseSimulations]', err);
-    return localStore.simulations || [];
+    return [];
   }
 }
 
@@ -1732,88 +1680,11 @@ async function ensureDatabaseCatalogSeeded() {
       dynamicAdminUuid = admin.id;
     }
 
-    const { data: existing, error } = await supabaseAdmin.from('catalog').select('id, type');
-    if (error) {
-      console.warn('[Supabase Catalog Pre-check]', error);
-      return;
-    }
-
-    const existingIds = new Set((existing || []).map((e) => e.id));
-
-    for (const sup of INITIAL_SUPPLIERS) {
-      if (!existingIds.has(sup.id)) {
-        await syncSupplierToCatalog(sup);
-      }
-    }
-
-    for (const lab of INITIAL_LABS) {
-      if (!existingIds.has(lab.id)) {
-        await syncLabToCatalog(lab);
-      }
-    }
-
-    for (const exp of INITIAL_EXPERTS) {
-      if (!existingIds.has(exp.id)) {
-        await syncExpertToCatalog(exp);
-      }
-    }
-
-    for (const ki of INITIAL_KNOWLEDGE_ITEMS) {
-      if (!existingIds.has(ki.id)) {
-        await syncKnowledgeToCatalog(ki);
-      }
-    }
-
     // Enforce privacy: Ensure all protected project rooms in Supabase are marked as 'draft'
     await supabaseAdmin
       .from('catalog')
       .update({ publication_state: 'draft' })
       .eq('type', 'project_room');
-
-    // Authoritative seeding of Frontiers, Evidence, and Protected Projects into Supabase
-    if (Array.isArray(localStore.frontiers)) {
-      for (const f of localStore.frontiers) {
-        if (!existingIds.has(f.id)) {
-          await syncFrontierToCatalog(f);
-        }
-      }
-    }
-
-    if (Array.isArray(localStore.evidenceNodes)) {
-      for (const ev of localStore.evidenceNodes) {
-        if (!existingIds.has(ev.id)) {
-          await syncEvidenceToCatalog(ev);
-        }
-      }
-    }
-
-    if (Array.isArray(localStore.projects)) {
-      for (const prj of localStore.projects) {
-        if (!existingIds.has(prj.id)) {
-          await syncProjectToCatalog(prj);
-        }
-      }
-    }
-
-    // Seed Brainstorm Rooms into Supabase catalog if not yet present
-    const seedRooms = (localStore.brainstormRooms && localStore.brainstormRooms.length > 0)
-      ? localStore.brainstormRooms
-      : INITIAL_BRAINSTORM_ROOMS;
-    for (const room of seedRooms) {
-      if (!existingIds.has(room.id)) {
-        await syncBrainstormRoomToCatalog(room);
-      }
-    }
-
-    // Seed Initial Simulations into Supabase catalog if not yet present (clearly marked as simulated / demo)
-    const seedSims = (localStore.simulations && localStore.simulations.length > 0)
-      ? localStore.simulations
-      : INITIAL_SIMULATIONS;
-    for (const sim of seedSims) {
-      if (!existingIds.has(sim.id)) {
-        await syncSimulationToCatalog({ ...sim, isDemo: true });
-      }
-    }
 
     // Ensure private Supabase Storage bucket for protected project vaults exists
     try {
@@ -1842,7 +1713,7 @@ async function ensureDatabaseCatalogSeeded() {
 
     console.log('[Supabase Catalog] Enterprise knowledge catalog verified & authoritative in Supabase.');
   } catch (err) {
-    console.warn('[Supabase Catalog Seed Warning]', err);
+    console.warn('[Supabase Catalog Verification Warning]', err);
   }
 }
 
@@ -1899,6 +1770,10 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   let dbSuppliers: SupplierItem[] = [];
   let dbLabs: LabItem[] = [];
   let dbExperts: ExpertItem[] = [];
+  let dbKnowledge: KnowledgeItem[] = [];
+  let dbRooms: BrainstormRoom[] = [];
+  let dbSims: SimulationJob[] = [];
+  let dbPosts: SocialPost[] = [];
   let catalogRows: any[] = [];
   let relationshipRows: any[] = [];
 
@@ -1976,18 +1851,6 @@ async function fetchFullWorkspaceState(userId?: string | null) {
       };
     });
 
-    // Merge localStore enterpriseMembers ONLY for matching Supabase records
-    if (Array.isArray(localStore.enterpriseMembers)) {
-      localStore.enterpriseMembers.forEach((lm) => {
-        const idx = enterpriseMembers.findIndex(
-          (m) => m.id === lm.id || (m.email && lm.email && m.email.toLowerCase() === lm.email.toLowerCase() && m.organizationId === lm.organizationId)
-        );
-        if (idx !== -1) {
-          enterpriseMembers[idx] = { ...enterpriseMembers[idx], ...lm };
-        }
-      });
-    }
-
     requests = requestRows.map((r: any) => ({
       id: r.id,
       name: r.name || r.email || '',
@@ -2004,16 +1867,6 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         ? String(r.updated_at).slice(0, 10)
         : '',
     }));
-
-    // Merge localStore customRequests ONLY for matching Supabase records
-    if (Array.isArray(localStore.customRequests)) {
-      localStore.customRequests.forEach((cr) => {
-        const idx = requests.findIndex((r) => r.id === cr.id);
-        if (idx !== -1) {
-          requests[idx] = { ...requests[idx], ...cr };
-        }
-      });
-    }
 
     bookmarks = bookmarkRows.map((bm: any) => ({
       id: bm.id,
@@ -2080,10 +1933,10 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     dbSuppliers = [];
     dbLabs = [];
     dbExperts = [];
-    const dbKnowledge: KnowledgeItem[] = [];
-    const dbRooms: BrainstormRoom[] = [];
-    const dbSims: SimulationJob[] = [];
-    const dbPosts: SocialPost[] = [];
+    dbKnowledge = [];
+    dbRooms = [];
+    dbSims = [];
+    dbPosts = [];
 
     for (const c of catalogRows) {
       const kind = c.metadata?.qartinia_kind || c.type;
@@ -2136,17 +1989,9 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         dbPosts.push(c.metadata.qartinia_payload as SocialPost);
       }
     }
-
-    if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
-    if (dbRooms.length > 0) localStore.brainstormRooms = dbRooms;
-    if (dbSims.length > 0) localStore.simulations = dbSims;
   }
 
   const currentUser = userId ? accounts.find((a) => a.id === userId) || null : null;
-
-  if (enterpriseMembers.length === 0) {
-    enterpriseMembers = localStore.enterpriseMembers || [];
-  }
 
   const frontiers = dbFrontiers;
   const evidenceNodes = dbEvidence;
@@ -2193,11 +2038,10 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   const suppliers = dbSuppliers;
   const labs = dbLabs;
   const experts = dbExperts;
-  const knowledgeItems = localStore.knowledgeItems && localStore.knowledgeItems.length > 0 ? localStore.knowledgeItems : INITIAL_KNOWLEDGE_ITEMS;
+  const knowledgeItems = dbKnowledge;
 
   // Filter brainstorm rooms according to privacy and actor permissions
-  const allRooms = (localStore.brainstormRooms && localStore.brainstormRooms.length > 0) ? localStore.brainstormRooms : INITIAL_BRAINSTORM_ROOMS;
-  const brainstormRooms = allRooms.filter((r) => {
+  const brainstormRooms = dbRooms.filter((r) => {
     if (!r.isPrivate) return true;
     if (!currentUser) return false;
     if (isStateAdmin) return true;
@@ -2208,7 +2052,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     return isCreator || isParticipant;
   });
 
-  const simulations = (localStore.simulations && localStore.simulations.length > 0) ? localStore.simulations : INITIAL_SIMULATIONS;
+  const simulations = dbSims;
 
   // Fetch scoped notifications for current user from Supabase and in-memory store
   const notifications = await fetchSupabaseNotifications(currentUser as any, projects);
@@ -2268,12 +2112,24 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   };
 }
 
-function findRelevantCatalogEvidence(params: {
+async function findRelevantCatalogEvidence(params: {
   domain: string;
   technologySystem: string;
   metricName: string;
-}): EvidenceNode[] {
-  const allNodes = (localStore.evidenceNodes || []);
+}): Promise<EvidenceNode[]> {
+  let allNodes: EvidenceNode[] = [];
+  if (supabaseAdmin) {
+    try {
+      const { data } = await supabaseAdmin.from('catalog').select('*').eq('type', 'evidence');
+      if (data && data.length > 0) {
+        allNodes = data
+          .map((row) => row.metadata?.qartinia_payload as EvidenceNode)
+          .filter(Boolean);
+      }
+    } catch (err) {
+      console.warn('[findRelevantCatalogEvidence Error]', err);
+    }
+  }
   const queryStr = `${params.domain} ${params.technologySystem} ${params.metricName}`.toLowerCase();
   const tokens = queryStr
     .split(/[\s,./\-_()]+/)
@@ -2314,7 +2170,7 @@ async function generateFrontierWithGemini(params: {
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Retrieve matching source-backed evidence from the verified local/Supabase catalog
-  const retrievedEvidence = findRelevantCatalogEvidence({
+  const retrievedEvidence = await findRelevantCatalogEvidence({
     domain: params.domain,
     technologySystem: params.technologySystem,
     metricName: params.metricName,
@@ -3739,9 +3595,8 @@ async function startServer() {
       const actorUuid = actor.id;
 
       const { data: dbReq } = await (supabaseAdmin?.from('requests').select('*').eq('id', req.params.id).single() || { data: null });
-      const localReq = localStore.customRequests?.find((r) => r.id === req.params.id);
       const reqOwnerId = dbReq?.requester_id || dbReq?.user_id;
-      const reqOwnerEmail = dbReq?.email || localReq?.email;
+      const reqOwnerEmail = dbReq?.email;
 
       const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
       const isOwner = (reqOwnerId && reqOwnerId === actor.id) || (reqOwnerEmail && reqOwnerEmail.toLowerCase() === actor.email.toLowerCase());
@@ -3754,55 +3609,30 @@ async function startServer() {
         return res.status(403).json({ error: 'Forbidden: Requester cannot self-approve requests.' });
       }
 
-      // Update in localStore
-      if (!Array.isArray(localStore.customRequests)) {
-        localStore.customRequests = [];
-      }
-      const existingIdx = localStore.customRequests.findIndex((r) => r.id === req.params.id);
-      if (existingIdx !== -1) {
-        localStore.customRequests[existingIdx].status = pgStatus;
-        localStore.customRequests[existingIdx].decisionNotes =
-          decisionNotes || `Status updated to ${pgStatus} by verified reviewer.`;
-        saveLocalStore(localStore);
-      } else {
-        localStore.customRequests.push({
-          id: req.params.id,
-          name: dbReq?.name || 'Partner',
-          email: dbReq?.email || '',
-          organization: dbReq?.organization || '',
-          requestType: (dbReq?.request_type as any) || 'collaboration_proposal',
-          status: pgStatus,
-          proposalBrief: dbReq?.proposal_brief || '',
-          decisionNotes: decisionNotes || `Status updated to ${pgStatus}.`,
-          createdAt: new Date().toISOString().split('T')[0],
-        });
-        saveLocalStore(localStore);
-      }
-
       if (supabaseAdmin) {
-        try {
-          await supabaseAdmin
-            .from('requests')
-            .update({
-              status: pgStatus,
-              decided_by: actorUuid,
-              decided_at: new Date().toISOString(),
-              decision_notes:
-                decisionNotes || `Transitioned to ${pgStatus} by verified technical reviewer`,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', req.params.id);
+        const { error: updateErr } = await supabaseAdmin
+          .from('requests')
+          .update({
+            status: pgStatus,
+            decided_by: actorUuid,
+            decided_at: new Date().toISOString(),
+            decision_notes:
+              decisionNotes || `Transitioned to ${pgStatus} by verified technical reviewer`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', req.params.id);
 
-          await logSupabaseActivity(
-            actorUuid,
-            `request_status_${pgStatus}`,
-            'request',
-            req.params.id,
-            { status: pgStatus }
-          );
-        } catch (dbErr) {
-          console.warn('[Supabase Request Status Update Warning]', dbErr);
+        if (updateErr) {
+          throw new Error(`Failed to update request in database: ${updateErr.message}`);
         }
+
+        await logSupabaseActivity(
+          actorUuid,
+          `request_status_${pgStatus}`,
+          'request',
+          req.params.id,
+          { status: pgStatus }
+        );
       }
 
       const state = await fetchFullWorkspaceState(actor.id);
@@ -3845,9 +3675,8 @@ async function startServer() {
       const actor = req.user!;
 
       const { data: dbReq } = await (supabaseAdmin?.from('requests').select('*').eq('id', id).single() || { data: null });
-      const localReq = localStore.customRequests?.find((r) => r.id === id);
       const reqOwnerId = dbReq?.requester_id || dbReq?.user_id;
-      const reqOwnerEmail = dbReq?.email || localReq?.email;
+      const reqOwnerEmail = dbReq?.email;
 
       const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
       const isOwner = (reqOwnerId && reqOwnerId === actor.id) || (reqOwnerEmail && reqOwnerEmail.toLowerCase() === actor.email.toLowerCase());
@@ -3856,16 +3685,10 @@ async function startServer() {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this request.' });
       }
 
-      if (Array.isArray(localStore.customRequests)) {
-        localStore.customRequests = localStore.customRequests.filter((r) => r.id !== id);
-        saveLocalStore(localStore);
-      }
-
       if (supabaseAdmin) {
-        try {
-          await supabaseAdmin.from('requests').delete().eq('id', id);
-        } catch (dbErr) {
-          console.warn('[Supabase Request Delete Warning]', dbErr);
+        const { error: delErr } = await supabaseAdmin.from('requests').delete().eq('id', id);
+        if (delErr) {
+          throw new Error(`Failed to delete request from database: ${delErr.message}`);
         }
       }
 
@@ -4294,22 +4117,7 @@ async function startServer() {
           createdAt: today,
         };
 
-        localStore.frontiers = [
-          bpFrontier,
-          ...localStore.frontiers.filter((f) => f.id !== bpFrontier.id),
-        ];
-        localStore.projects = [
-          bpProjectRoom,
-          ...localStore.projects.filter((p) => p.id !== bpProjectRoom.id),
-        ];
-        const existingEvIds = new Set(bpEvidence.map((e) => e.id));
-        localStore.evidenceNodes = [
-          ...bpEvidence,
-          ...localStore.evidenceNodes.filter((e) => !existingEvIds.has(e.id)),
-        ];
-        saveLocalStore(localStore);
-
-        // 1) First upsert Frontier, Project Room, and 4 Evidence Nodes into `public.catalog`
+        // 1) Upsert Frontier, Project Room, and 4 Evidence Nodes into Supabase catalog
         await Promise.all([
           syncFrontierToCatalog(bpFrontier),
           syncProjectToCatalog(bpProjectRoom),
@@ -4474,11 +4282,12 @@ async function startServer() {
           }
         }
       } else if (scenario === 'run_trust_isolation_audit') {
+        const stateProjects = await fetchSupabaseProjects();
         await logSupabaseActivity(
           actorId,
           'trust_architecture_isolation_verified',
           'security_audit',
-          `Zero-Training-Leakage & NDA Boundary Audit (${localStore.projects.length} Rooms)`,
+          `Zero-Training-Leakage & NDA Boundary Audit (${stateProjects.length} Rooms)`,
           {
             zeroCustomerModelTraining: true,
             backgroundIpSegregated: true,
@@ -4495,25 +4304,28 @@ async function startServer() {
     }
   });
 
+  // Explicit, Idempotent Demo Data Seed Endpoint
+  app.post('/api/dev/seed-demo-data', requireAdmin, async (_req, res) => {
+    try {
+      const { seedDemoDataToSupabase } = await import('./scripts/seed-demo-data.js');
+      const result = await seedDemoDataToSupabase();
+      const state = await fetchFullWorkspaceState();
+      res.json({ ok: true, ...result, state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to seed demo data.' });
+    }
+  });
+
   // 13. POST /api/dev/reset — Foreign-Key Safe Reset of Demo Catalog Artifacts
   app.post('/api/dev/reset', requireAdmin, async (req, res) => {
     try {
-      const idsToDelete = [
-        ...localStore.frontiers.map((f) => f.id),
-        ...localStore.projects.map((p) => p.id),
-        ...localStore.evidenceNodes.map((e) => e.id),
-        'frt-bp-800v-sic',
-        'prj-bp-800v-sic',
-        'ev-bp-eth-zvs-2026',
-        'ev-bp-fraunhofer-amb-2026',
-        'ev-bp-infineon-coolsic-g2',
-        'ev-bp-patent-gate-driver',
-      ];
-
-      localStore.frontiers = [];
-      localStore.projects = [];
-      localStore.evidenceNodes = [];
-      saveLocalStore(localStore);
+      const { data: demoCatalogRows } = supabaseAdmin
+        ? await supabaseAdmin.from('catalog').select('*')
+        : { data: [] };
+      const demoCatalog = demoCatalogRows || [];
+      const idsToDelete = demoCatalog
+        .filter((c: any) => c.metadata?.isDemo || c.metadata?.is_demo || c.id.startsWith('frt-bp') || c.id.startsWith('prj-bp') || c.id.startsWith('ev-bp'))
+        .map((c: any) => c.id);
 
       await deleteCatalogItemsSafe(Array.from(new Set(idsToDelete)));
 
@@ -5590,13 +5402,6 @@ async function startServer() {
 
   app.patch('/api/notifications/:id/read', requireAuth, async (req, res) => {
     const actor = req.user!;
-    if (!Array.isArray(localStore.notifications)) localStore.notifications = [];
-    const notif = localStore.notifications.find((n) => n.id === req.params.id);
-    if (notif) {
-      notif.read = true;
-      saveLocalStore(localStore);
-    }
-
     if (supabaseAdmin) {
       try {
         const { data: acts } = await supabaseAdmin
@@ -5630,13 +5435,6 @@ async function startServer() {
 
   app.post('/api/notifications/mark-all-read', requireAuth, async (req, res) => {
     const actor = req.user!;
-    if (Array.isArray(localStore.notifications)) {
-      localStore.notifications.forEach((n) => {
-        n.read = true;
-      });
-      saveLocalStore(localStore);
-    }
-
     if (supabaseAdmin) {
       try {
         const validUuid = resolveValidActorUuid(actor.id);
@@ -5672,11 +5470,6 @@ async function startServer() {
 
   app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
     const actor = req.user!;
-    if (Array.isArray(localStore.notifications)) {
-      localStore.notifications = localStore.notifications.filter((n) => n.id !== req.params.id);
-      saveLocalStore(localStore);
-    }
-
     if (supabaseAdmin) {
       try {
         await supabaseAdmin
@@ -5791,9 +5584,6 @@ async function startServer() {
 
     await syncProjectToCatalog(newRoom);
 
-    localStore.projects = [newRoom, ...(localStore.projects || []).filter((p) => p.id !== newRoom.id)];
-    saveLocalStore(localStore);
-
     if (supabaseAdmin && originatingFrontierId) {
       const { data: frtRow } = await supabaseAdmin
         .from('catalog')
@@ -5852,11 +5642,6 @@ async function startServer() {
 
     await syncProjectToCatalog(project);
 
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    else localStore.projects.push(project);
-    saveLocalStore(localStore);
-
     res.json({ ok: true, project });
   });
 
@@ -5870,9 +5655,6 @@ async function startServer() {
     }
 
     await deleteCatalogItemsSafe([req.params.id]);
-
-    localStore.projects = (localStore.projects || []).filter((p) => p.id !== req.params.id);
-    saveLocalStore(localStore);
 
     const remaining = await fetchSupabaseProjects();
     const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
@@ -5903,11 +5685,6 @@ async function startServer() {
     project.participants.push(newParticipant);
 
     await syncProjectToCatalog(project);
-
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    else localStore.projects.push(project);
-    saveLocalStore(localStore);
 
     // Notify user added to project
     createAndBroadcastNotification({
@@ -5950,11 +5727,6 @@ async function startServer() {
 
     await syncProjectToCatalog(project);
 
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    else localStore.projects.push(project);
-    saveLocalStore(localStore);
-
     // Broadcast milestone creation notification to collaborators
     createAndBroadcastNotification({
       type: 'milestone_created',
@@ -5987,10 +5759,6 @@ async function startServer() {
     if (ms && req.body.status) {
       ms.status = req.body.status;
       await syncProjectToCatalog(project);
-
-      const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-      if (idx !== -1) localStore.projects[idx] = project;
-      saveLocalStore(localStore);
 
       // Broadcast milestone status update notification
       createAndBroadcastNotification({
@@ -6078,11 +5846,6 @@ async function startServer() {
 
     project.documents.push(newDoc);
     await syncProjectToCatalog(project);
-
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    else localStore.projects.push(project);
-    saveLocalStore(localStore);
 
     await logSupabaseActivity(actor.id, 'project_document_uploaded', 'project_room', project.id, {
       documentId: newDoc.id,
@@ -6179,10 +5942,6 @@ async function startServer() {
     project.documents.splice(docIndex, 1);
     await syncProjectToCatalog(project);
 
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    saveLocalStore(localStore);
-
     await logSupabaseActivity(actor.id, 'project_document_deleted', 'project_room', project.id, {
       documentId: doc.id,
       documentTitle: doc.title,
@@ -6215,11 +5974,6 @@ async function startServer() {
     });
 
     await syncProjectToCatalog(project);
-
-    const idx = (localStore.projects || []).findIndex((p) => p.id === project.id);
-    if (idx !== -1) localStore.projects[idx] = project;
-    else localStore.projects.push(project);
-    saveLocalStore(localStore);
 
     await logSupabaseActivity(actor.id, 'project_message_posted', 'project_room', project.id, {
       messageCount: project.messages.length,
@@ -6263,11 +6017,6 @@ async function startServer() {
 
     await syncFrontierToCatalog(frontier);
 
-    const idx = (localStore.frontiers || []).findIndex((f) => f.id === frontier.id);
-    if (idx !== -1) localStore.frontiers[idx] = frontier;
-    else localStore.frontiers.push(frontier);
-    saveLocalStore(localStore);
-
     const notif = createAndBroadcastNotification({
       type: 'request_status_updated',
       title: 'Frontier Benchmark Updated',
@@ -6291,12 +6040,10 @@ async function startServer() {
   app.get('/api/enterprise/members', requireAuth, async (req, res) => {
     const actor = req.user!;
     const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
-    let members = localStore.enterpriseMembers || [];
+    let members: EnterpriseMember[] = [];
     try {
       const state = await fetchFullWorkspaceState(actor.id);
-      if (state.enterpriseMembers && state.enterpriseMembers.length > 0) {
-        members = state.enterpriseMembers;
-      }
+      members = state.enterpriseMembers || [];
     } catch (err) {
       console.warn('[Get Enterprise Members Warning]', err);
     }
@@ -6356,12 +6103,6 @@ async function startServer() {
       invitedBy: actor.fullName,
       lastActive: 'Pending activation',
     };
-
-    if (!Array.isArray(localStore.enterpriseMembers)) {
-      localStore.enterpriseMembers = [];
-    }
-    localStore.enterpriseMembers.unshift(newMember);
-    saveLocalStore(localStore);
 
     if (supabaseAdmin) {
       try {
@@ -6424,20 +6165,16 @@ async function startServer() {
     });
 
     const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, member: newMember, members: state.enterpriseMembers || localStore.enterpriseMembers, notification: notif, state });
+    res.json({ ok: true, member: newMember, members: state.enterpriseMembers || [], notification: notif, state });
   });
 
   app.patch('/api/enterprise/members/:id', requireAuth, async (req, res) => {
     const actor = req.user!;
-    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { id } = req.params;
     const { role, permissions, title, department, status, approvalStatus, fullName } = req.body;
 
-    if (!Array.isArray(localStore.enterpriseMembers)) {
-      localStore.enterpriseMembers = [];
-    }
-
-    const member = localStore.enterpriseMembers.find((m) => m.id === id || m.userId === id);
+    const state = await fetchFullWorkspaceState(actor.id);
+    const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
     if (!member) {
       return res.status(404).json({ error: 'Organization member not found.' });
     }
@@ -6448,55 +6185,41 @@ async function startServer() {
       return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
     }
 
-    if (role) member.role = role;
-    if (permissions) member.permissions = permissions;
-    if (title) member.title = title;
-    if (department) member.department = department;
-    if (status) member.status = status;
-    if (approvalStatus) member.approvalStatus = approvalStatus;
-    if (fullName) member.fullName = fullName;
-
-    // Synchronize matching user account role and active organization
-    const matchingAcc = localStore.customAccounts?.find(
-      (a) => a.id === member.userId || (a.email && member.email && a.email.toLowerCase() === member.email.toLowerCase())
-    );
-    if (matchingAcc) {
-      if (role) matchingAcc.role = role;
-      if (member.status === 'active') {
-        matchingAcc.organizationName = member.organizationName;
-        matchingAcc.organizationId = member.organizationId;
-        matchingAcc.role = member.role;
-        matchingAcc.title = member.title;
-        matchingAcc.department = member.department;
-      }
-    }
-
-    saveLocalStore(localStore);
+    const updatedMember = {
+      ...member,
+      role: role || member.role,
+      permissions: permissions || member.permissions,
+      title: title || member.title,
+      department: department || member.department,
+      status: status || member.status,
+      approvalStatus: approvalStatus || member.approvalStatus,
+      fullName: fullName || member.fullName,
+    };
 
     if (supabaseAdmin) {
       try {
         await supabaseAdmin
           .from('organization_members')
           .update({
-            status: member.status,
-            role: toPostgresMemberRole(member.role),
-            title: member.title,
-            department: member.department,
-            permissions: member.permissions,
+            status: updatedMember.status,
+            role: toPostgresMemberRole(updatedMember.role),
+            title: updatedMember.title,
+            department: updatedMember.department,
+            permissions: updatedMember.permissions,
           })
-          .or(`id.eq.${member.id},user_id.eq.${member.userId}`);
+          .or(`id.eq.${updatedMember.id},user_id.eq.${updatedMember.userId}`);
 
-        if (member.status === 'active') {
+        if (updatedMember.status === 'active') {
           await supabaseAdmin
             .from('profiles')
             .update({
               status: 'approved',
               approval_status: 'approved',
-              organization: member.organizationName,
-              organization_id: member.organizationId,
-              role: member.role,
+              organization: updatedMember.organizationName,
+              organization_id: updatedMember.organizationId,
+              role: updatedMember.role,
             })
-            .ilike('email', member.email);
+            .ilike('email', updatedMember.email);
         }
       } catch (err) {
         console.warn('[Supabase Member Patch Warning]', err);
@@ -6506,53 +6229,57 @@ async function startServer() {
     const notif = createAndBroadcastNotification({
       type: 'request_status_updated',
       title: 'Member Permissions / Role Updated',
-      message: `Permissions updated for ${member.fullName} (${member.role.toUpperCase()}) in ${member.organizationName}.`,
+      message: `Permissions updated for ${updatedMember.fullName} (${updatedMember.role.toUpperCase()}) in ${updatedMember.organizationName}.`,
       linkSection: 'dashboard',
-      linkId: member.id,
+      linkId: updatedMember.id,
       metadata: {
-        memberId: member.id,
-        email: member.email,
-        role: member.role,
-        permissions: member.permissions,
+        memberId: updatedMember.id,
+        email: updatedMember.email,
+        role: updatedMember.role,
+        permissions: updatedMember.permissions,
       },
     });
 
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, member, members: state.enterpriseMembers || localStore.enterpriseMembers, notification: notif, state });
+    const updatedState = await fetchFullWorkspaceState(actor.id);
+    res.json({ ok: true, member: updatedMember, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
   });
 
   app.delete('/api/enterprise/members/:id', requireAuth, async (req, res) => {
     const actor = req.user!;
-    const isPlatformAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
     const { id } = req.params;
-    if (!Array.isArray(localStore.enterpriseMembers)) {
-      localStore.enterpriseMembers = [];
-    }
 
-    const index = localStore.enterpriseMembers.findIndex((m) => m.id === id || m.userId === id);
-    if (index === -1) {
+    const state = await fetchFullWorkspaceState(actor.id);
+    const member = (state.enterpriseMembers || []).find((m) => m.id === id || m.userId === id);
+    if (!member) {
       return res.status(404).json({ error: 'Organization member not found.' });
     }
 
-    const member = localStore.enterpriseMembers[index];
     const isOrgLeader = await isAuthorizedOrgLeaderOrAdmin(actor, member.organizationId);
 
     if (!isOrgLeader) {
       return res.status(403).json({ error: 'Forbidden: Explicit organization owner or administrator permission required.' });
     }
 
-    const removed = localStore.enterpriseMembers.splice(index, 1)[0];
-    saveLocalStore(localStore);
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin
+          .from('organization_members')
+          .delete()
+          .or(`id.eq.${member.id},user_id.eq.${member.userId}`);
+      } catch (err) {
+        console.warn('[Supabase Member Delete Warning]', err);
+      }
+    }
 
     const notif = createAndBroadcastNotification({
       type: 'request_status_updated',
       title: 'Member Removed from Organization',
-      message: `${removed.fullName} has been removed from ${removed.organizationName}.`,
+      message: `${member.fullName} has been removed from ${member.organizationName}.`,
       linkSection: 'dashboard',
     });
 
-    const state = await fetchFullWorkspaceState(actor.id);
-    res.json({ ok: true, removed, members: localStore.enterpriseMembers, notification: notif, state });
+    const updatedState = await fetchFullWorkspaceState(actor.id);
+    res.json({ ok: true, removed: member, members: updatedState.enterpriseMembers || [], notification: notif, state: updatedState });
   });
 
   // --------------------------------------------------------------------------
@@ -6725,25 +6452,6 @@ async function startServer() {
       } (${supplier?.name || supplierId}) for application: ${
         targetApplication || 'R&D Verification'
       }. Notes: ${notes || 'Standard evaluation'}`;
-
-      if (!Array.isArray(localStore.customRequests)) {
-        localStore.customRequests = [];
-      }
-      const newReq: SupabaseAccessRequest = {
-        id: reqId,
-        userId: actorUuid,
-        name: requesterName,
-        email: requesterEmail,
-        organization: requesterOrg,
-        proposalBrief: brief,
-        requestType: 'collaboration_proposal',
-        status: 'pending',
-        catalogId: supplierId || null,
-        decisionNotes: null,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      localStore.customRequests.unshift(newReq);
-      saveLocalStore(localStore);
 
       if (supabaseAdmin) {
         try {
@@ -6945,25 +6653,6 @@ async function startServer() {
       } (${testingDomain || 'Characterization'}). Desired timeframe: ${
         requestedDates || 'Next 2-3 weeks'
       }. Protocol requirements: ${testRequirements || 'Full characterization sweep'}`;
-
-      if (!Array.isArray(localStore.customRequests)) {
-        localStore.customRequests = [];
-      }
-      const newReq: SupabaseAccessRequest = {
-        id: reqId,
-        userId: actorUuid,
-        name: requesterName,
-        email: requesterEmail,
-        organization: requesterOrg,
-        proposalBrief: brief,
-        requestType: 'access_briefing',
-        status: 'pending',
-        catalogId: labId || null,
-        decisionNotes: null,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      localStore.customRequests.unshift(newReq);
-      saveLocalStore(localStore);
 
       if (supabaseAdmin) {
         try {
@@ -7176,25 +6865,6 @@ async function startServer() {
         projectContext || 'General technical roadmap evaluation'
       }`;
 
-      if (!Array.isArray(localStore.customRequests)) {
-        localStore.customRequests = [];
-      }
-      const newReq: SupabaseAccessRequest = {
-        id: reqId,
-        userId: actorUuid,
-        name: requesterName,
-        email: requesterEmail,
-        organization: requesterOrg,
-        proposalBrief: brief,
-        requestType: 'expert_consultation',
-        status: 'pending',
-        catalogId: expertId || null,
-        decisionNotes: null,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      localStore.customRequests.unshift(newReq);
-      saveLocalStore(localStore);
-
       if (supabaseAdmin) {
         try {
           const insertPayload = {
@@ -7302,10 +6972,8 @@ async function startServer() {
       isDemo: false, // Explicit user-executed simulation, clearly distinguished from demo records
     };
 
-    // Sync to Supabase catalog and maintain in-memory store
+    // Sync authoritatively to Supabase catalog
     await syncSimulationToCatalog(newSim, actorUuid);
-    localStore.simulations.unshift(newSim);
-    saveLocalStore(localStore);
 
     if (supabaseAdmin) {
       await logSupabaseActivity(actorUuid, 'simulation_job_executed', 'simulation_job', simId, {
@@ -7374,8 +7042,6 @@ async function startServer() {
     };
 
     await syncBrainstormRoomToCatalog(newRoom, actorUuid);
-    localStore.brainstormRooms.unshift(newRoom);
-    saveLocalStore(localStore);
 
     if (supabaseAdmin) {
       await logSupabaseActivity(actorUuid, 'brainstorm_room_created', 'brainstorm_room', newRoom.id, {
@@ -7391,10 +7057,9 @@ async function startServer() {
 
   app.post('/api/brainstorm/:id/messages', requireAuth, async (req, res) => {
     const actor = req.user!;
-    let room = (localStore.brainstormRooms || []).find((r) => r.id === req.params.id);
+    let room: BrainstormRoom | null = null;
 
-    // Look up in Supabase catalog if not found in local array
-    if (!room && supabaseAdmin) {
+    if (supabaseAdmin) {
       const { data: dbRoomRow } = await supabaseAdmin
         .from('catalog')
         .select('*')
@@ -7459,20 +7124,15 @@ async function startServer() {
     });
 
     await syncBrainstormRoomToCatalog(room, actor.id);
-    const idx = (localStore.brainstormRooms || []).findIndex((r) => r.id === room!.id);
-    if (idx !== -1) localStore.brainstormRooms[idx] = room;
-    else localStore.brainstormRooms.unshift(room);
-    saveLocalStore(localStore);
 
     res.json({ ok: true, room });
   });
 
   app.post('/api/brainstorm/:id/tasks', requireAuth, async (req, res) => {
     const actor = req.user!;
-    let room = (localStore.brainstormRooms || []).find((r) => r.id === req.params.id);
+    let room: BrainstormRoom | null = null;
 
-    // Look up in Supabase catalog if not found in local array
-    if (!room && supabaseAdmin) {
+    if (supabaseAdmin) {
       const { data: dbRoomRow } = await supabaseAdmin
         .from('catalog')
         .select('*')
@@ -7511,10 +7171,6 @@ async function startServer() {
     }
 
     await syncBrainstormRoomToCatalog(room, actor.id);
-    const idx = (localStore.brainstormRooms || []).findIndex((r) => r.id === room!.id);
-    if (idx !== -1) localStore.brainstormRooms[idx] = room;
-    else localStore.brainstormRooms.unshift(room);
-    saveLocalStore(localStore);
 
     res.json({ ok: true, room });
   });
