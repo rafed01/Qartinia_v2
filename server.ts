@@ -181,9 +181,30 @@ export async function validateBearerToken(token: string): Promise<{ authUser: an
   return { authUser, user };
 }
 
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  const list: Record<string, string> = {};
+  if (!cookieHeader) return list;
+  cookieHeader.split(';').forEach((cookie) => {
+    const parts = cookie.split('=');
+    if (parts.length >= 2) {
+      const name = parts[0].trim();
+      const val = parts.slice(1).join('=').trim();
+      list[name] = decodeURIComponent(val);
+    }
+  });
+  return list;
+}
+
 export const authenticateToken: express.RequestHandler = async (req, _res, next) => {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+
+  if (!token && req.headers.cookie) {
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies.qartinia_session) {
+      token = cookies.qartinia_session;
+    }
+  }
 
   if (!token) {
     req.user = null;
@@ -2951,6 +2972,11 @@ export function registerAppRoutes(appInstance: express.Express = app) {
       });
 
       const state = await fetchFullWorkspaceState(profile.id);
+
+      const isSecure = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
+      const cookieFlags = `Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${isSecure ? '; Secure' : ''}`;
+      res.setHeader('Set-Cookie', [`qartinia_session=${sessionToken}; ${cookieFlags}`]);
+
       return res.json({
         ok: true,
         token: sessionToken,
@@ -3120,6 +3146,9 @@ export function registerAppRoutes(appInstance: express.Express = app) {
 
   // 5. POST /api/auth/logout
   app.post('/api/auth/logout', async (_req, res) => {
+    res.setHeader('Set-Cookie', [
+      'qartinia_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    ]);
     const state = await fetchFullWorkspaceState(null);
     res.json({ ok: true, currentUser: null, state });
   });
@@ -5471,6 +5500,11 @@ export function registerAppRoutes(appInstance: express.Express = app) {
       token = authHeader.slice(7).trim();
     } else if (typeof req.query.token === 'string') {
       token = req.query.token.trim();
+    } else if (req.headers.cookie) {
+      const cookies = parseCookies(req.headers.cookie);
+      if (cookies.qartinia_session) {
+        token = cookies.qartinia_session;
+      }
     }
 
     if (!token) {
