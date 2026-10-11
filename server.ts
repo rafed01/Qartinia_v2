@@ -32,9 +32,8 @@ import {
   NotificationItem,
   SocialPost,
   DirectMessage,
-  UserConnection,
 } from './src/types/qartinia.ts';
-export type { ProtectedProjectRoom };
+export type { ProtectedProjectRoom, NotificationItem };
 import {
   INITIAL_SUPPLIERS,
   INITIAL_LABS,
@@ -433,44 +432,58 @@ function createAndBroadcastNotification(
   return newNotif;
 }
 
-function filterNotificationsForActor(
+export function filterNotificationsForActor(
   allNotifs: NotificationItem[],
-  actor?: AuthenticatedUser | null
+  actor?: AuthenticatedUser | null,
+  accessibleProjects?: ProtectedProjectRoom[]
 ): NotificationItem[] {
   if (!actor) return [];
   const isAdmin = actor.role === 'admin' || actor.role === 'platform_admin';
   return allNotifs.filter((n) => {
-    // If targeted directly to this user ID
+    const projectId = n.metadata?.projectId || (n.linkSection === 'projects' ? n.linkId : null);
+    if (projectId && !isAdmin) {
+      if (accessibleProjects) {
+        const hasAccess = accessibleProjects.some((p) => p.id === projectId);
+        if (!hasAccess) return false;
+      }
+    }
+
+    // Direct recipient targeting
     if (n.recipientUserId && (n.recipientUserId === actor.id || n.recipientUserId === actor.profile?.id)) {
       return true;
     }
-    // If targeted to this user's email
     if (n.recipientEmail && actor.email && n.recipientEmail.toLowerCase() === actor.email.toLowerCase()) {
       return true;
     }
-    // If targeted to this user's organization
     if (
       n.recipientOrg &&
       ((actor.organizationName && n.recipientOrg.toLowerCase() === actor.organizationName.toLowerCase()) ||
         (actor.organizationId && n.recipientOrg === actor.organizationId))
     ) {
+      if (projectId && !isAdmin && accessibleProjects) {
+        return accessibleProjects.some((p) => p.id === projectId);
+      }
       return true;
     }
-    // If admin, they see administrative and unassigned system updates
     if (isAdmin && !n.recipientUserId && !n.recipientEmail) {
       return true;
     }
-    // Broadcast updates without explicit recipient can be viewed by all authenticated users
     if (!n.recipientUserId && !n.recipientEmail && !n.recipientOrg) {
-      return true;
+      if (projectId && !isAdmin && accessibleProjects) {
+        return accessibleProjects.some((p) => p.id === projectId);
+      }
+      return !projectId || isAdmin;
     }
     return false;
   });
 }
 
-async function fetchSupabaseNotifications(actor?: AuthenticatedUser | null): Promise<NotificationItem[]> {
+export async function fetchSupabaseNotifications(
+  actor?: AuthenticatedUser | null,
+  accessibleProjects?: ProtectedProjectRoom[]
+): Promise<NotificationItem[]> {
   if (!supabaseAdmin || !actor) {
-    return filterNotificationsForActor(localStore.notifications || [], actor);
+    return filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
   }
   try {
     const validUuid = resolveValidActorUuid(actor.id);
@@ -501,7 +514,7 @@ async function fetchSupabaseNotifications(actor?: AuthenticatedUser | null): Pro
     }
 
     // Merge with in-memory / localStore notifications scoped for actor
-    const localScoped = filterNotificationsForActor(localStore.notifications || [], actor);
+    const localScoped = filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
     const seenIds = new Set(dbNotifs.map((n) => n.id));
     for (const ln of localScoped) {
       if (!seenIds.has(ln.id)) {
@@ -509,10 +522,10 @@ async function fetchSupabaseNotifications(actor?: AuthenticatedUser | null): Pro
       }
     }
     dbNotifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return dbNotifs.slice(0, 60);
+    return filterNotificationsForActor(dbNotifs, actor, accessibleProjects).slice(0, 60);
   } catch (err) {
     console.warn('[fetchSupabaseNotifications]', err);
-    return filterNotificationsForActor(localStore.notifications || [], actor);
+    return filterNotificationsForActor(localStore.notifications || [], actor, accessibleProjects);
   }
 }
 
@@ -1191,22 +1204,23 @@ async function getSupabaseEvidenceById(id: string): Promise<EvidenceNode | null>
 }
 
 async function getSupabaseProjectById(id: string): Promise<ProtectedProjectRoom | null> {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .eq('id', id)
-        .eq('type', 'project_room')
-        .single();
-      if (!error && data) {
-        return mapCatalogRowToProject(data);
-      }
-    } catch (err) {
-      console.warn('[getSupabaseProjectById]', err);
-    }
+  if (!supabaseAdmin) {
+    throw new Error('Supabase service client is not initialized.');
   }
-  return (localStore.projects || []).find((p) => p.id === id) || null;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .eq('id', id)
+    .eq('type', 'project_room')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSupabaseProjectById Error]', error);
+    throw new Error(`Database error fetching project room ${id}: ${error.message}`);
+  }
+
+  if (!data) return null;
+  return mapCatalogRowToProject(data);
 }
 
 async function fetchSupabaseSuppliers(): Promise<SupplierItem[]> {
@@ -1892,6 +1906,8 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   let dbSuppliers: SupplierItem[] = [];
   let dbLabs: LabItem[] = [];
   let dbExperts: ExpertItem[] = [];
+  let catalogRows: any[] = [];
+  let relationshipRows: any[] = [];
 
   if (supabaseAdmin) {
     const [profRes, orgRes, memRes, reqRes, actRes, catRes, relRes, bmRes] = await Promise.all([
@@ -1920,8 +1936,8 @@ async function fetchFullWorkspaceState(userId?: string | null) {
     const memberRows = memRes.data || [];
     const requestRows = reqRes.data || [];
     const activityRows = actRes.data || [];
-    const catalogRows = catRes.data || [];
-    const relationshipRows = relRes.data || [];
+    catalogRows = catRes.data || [];
+    relationshipRows = relRes.data || [];
     const bookmarkRows = bmRes.data || [];
 
     accounts = profileRows.map(mapProfileRow);
@@ -2005,22 +2021,6 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         }
       });
     }
-
-    const catalogTitleMap = new Map<string, string>();
-    catalogRows.forEach((c: any) => {
-      catalogTitleMap.set(c.id, c.title || c.id);
-    });
-
-    catalogRelationships = relationshipRows.map((rel: any) => ({
-      id: rel.id,
-      sourceId: rel.source_id,
-      sourceTitle: catalogTitleMap.get(rel.source_id) || rel.source_id,
-      targetId: rel.target_id,
-      targetTitle: catalogTitleMap.get(rel.target_id) || rel.target_id,
-      relationshipType: rel.relationship_type || 'closes_frontier_gap',
-      description: rel.description || '',
-      createdAt: rel.created_at ? String(rel.created_at).slice(0, 10) : '',
-    }));
 
     bookmarks = bookmarkRows.map((bm: any) => ({
       id: bm.id,
@@ -2144,7 +2144,6 @@ async function fetchFullWorkspaceState(userId?: string | null) {
       }
     }
 
-    if (dbProjects.length > 0) localStore.projects = dbProjects;
     if (dbKnowledge.length > 0) localStore.knowledgeItems = dbKnowledge;
     if (dbRooms.length > 0) localStore.brainstormRooms = dbRooms;
     if (dbSims.length > 0) localStore.simulations = dbSims;
@@ -2158,7 +2157,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
 
   const frontiers = dbFrontiers;
   const evidenceNodes = dbEvidence;
-  const allProjects = dbProjects.length > 0 ? dbProjects : (localStore.projects || []);
+  const allProjects = dbProjects;
   const isStateAdmin = currentUser?.role === 'admin' || currentUser?.role === 'platform_admin';
   const projects = isStateAdmin
     ? allProjects
@@ -2166,6 +2165,38 @@ async function fetchFullWorkspaceState(userId?: string | null) {
         if (!currentUser) return false;
         return userHasProjectAccess(p, currentUser as any);
       });
+
+  const accessibleProjectIds = new Set(projects.map((p) => p.id));
+
+  const catalogTitleMap = new Map<string, string>();
+  catalogRows.forEach((c: any) => {
+    const isProjectRoom = c.type === 'project_room' || c.metadata?.qartinia_kind === 'project_room';
+    if (isProjectRoom && !accessibleProjectIds.has(c.id)) {
+      return;
+    }
+    catalogTitleMap.set(c.id, c.title || c.id);
+  });
+
+  catalogRelationships = relationshipRows
+    .filter((rel: any) => {
+      const sourceIsProject = rel.source_id?.startsWith('prj-') || catalogRows.some((c: any) => c.id === rel.source_id && (c.type === 'project_room' || c.metadata?.qartinia_kind === 'project_room'));
+      const targetIsProject = rel.target_id?.startsWith('prj-') || catalogRows.some((c: any) => c.id === rel.target_id && (c.type === 'project_room' || c.metadata?.qartinia_kind === 'project_room'));
+
+      if (sourceIsProject && !accessibleProjectIds.has(rel.source_id)) return false;
+      if (targetIsProject && !accessibleProjectIds.has(rel.target_id)) return false;
+      return true;
+    })
+    .map((rel: any) => ({
+      id: rel.id,
+      sourceId: rel.source_id,
+      sourceTitle: catalogTitleMap.get(rel.source_id) || rel.source_id,
+      targetId: rel.target_id,
+      targetTitle: catalogTitleMap.get(rel.target_id) || rel.target_id,
+      relationshipType: rel.relationship_type || 'closes_frontier_gap',
+      description: rel.description || '',
+      createdAt: rel.created_at ? String(rel.created_at).slice(0, 10) : '',
+    }));
+
   const suppliers = dbSuppliers;
   const labs = dbLabs;
   const experts = dbExperts;
@@ -2187,7 +2218,7 @@ async function fetchFullWorkspaceState(userId?: string | null) {
   const simulations = (localStore.simulations && localStore.simulations.length > 0) ? localStore.simulations : INITIAL_SIMULATIONS;
 
   // Fetch scoped notifications for current user from Supabase and in-memory store
-  const notifications = await fetchSupabaseNotifications(currentUser as any);
+  const notifications = await fetchSupabaseNotifications(currentUser as any, projects);
 
   // Scope private workspace data according to user role and ownership
   const scopedApprovals = isStateAdmin ? approvals : [];
@@ -3865,6 +3896,14 @@ async function startServer() {
 
       const actorUuid = req.user!.id;
 
+      if (String(sourceId).startsWith('prj-') || String(targetId).startsWith('prj-')) {
+        const prjId = String(sourceId).startsWith('prj-') ? sourceId : targetId;
+        const project = await getSupabaseProjectById(prjId);
+        if (project && !userCanModifyProject(project, req.user!)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to manage relationships for this protected project room.' });
+        }
+      }
+
       const { error } = await supabaseAdmin.from('catalog_relationships').insert({
         source_id: sourceId,
         target_id: targetId,
@@ -3915,6 +3954,13 @@ async function startServer() {
       }
       const { catalogId, folder, notes } = req.body;
       const actorUuid = req.user!.id;
+
+      if (catalogId && String(catalogId).startsWith('prj-')) {
+        const project = await getSupabaseProjectById(catalogId);
+        if (project && !userHasProjectAccess(project, req.user!)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have access to bookmark this protected project room.' });
+        }
+      }
 
       const { data: existing } = await supabaseAdmin
         .from('bookmarks')
@@ -5531,7 +5577,17 @@ async function startServer() {
 
   app.get('/api/notifications', requireAuth, async (req, res) => {
     const actor = req.user!;
-    const list = await fetchSupabaseNotifications(actor);
+    let userProjects: ProtectedProjectRoom[] = [];
+    try {
+      userProjects = await fetchSupabaseProjects();
+    } catch (err) {
+      console.warn('[Notifications Project Load Warning]', err);
+    }
+    const accessibleProjects = actor.role === 'admin' || actor.role === 'platform_admin'
+      ? userProjects
+      : userProjects.filter((p) => userHasProjectAccess(p, actor));
+
+    const list = await fetchSupabaseNotifications(actor, accessibleProjects);
     res.json({
       ok: true,
       notifications: list,

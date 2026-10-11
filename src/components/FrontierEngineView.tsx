@@ -157,7 +157,9 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
         operatingEnvelope: operatingEnvelope.trim(),
         constraints: constraints.trim(),
       });
-      onSelectFrontier(created.id);
+      if (created?.id) {
+        onSelectFrontier(created.id);
+      }
       setTitle('');
       setDomain('');
       setTechnologySystem('');

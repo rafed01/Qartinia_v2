@@ -5,11 +5,24 @@ import {
   userCanModifyProject,
   userCanDeleteProject,
   isAuthorizedOrgLeaderOrAdmin,
+  filterNotificationsForActor,
   AuthenticatedUser,
   ProtectedProjectRoom,
+  NotificationItem,
 } from '../server.js';
 
 describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
+  const userCreator: AuthenticatedUser = {
+    id: 'user-100',
+    email: 'creator@orga.com',
+    fullName: 'Project Creator',
+    role: 'engineer',
+    status: 'approved',
+    approvalStatus: 'approved',
+    organizationName: 'Org A',
+    organizationId: 'org-a-id',
+  };
+
   const userOrgA_Participant: AuthenticatedUser = {
     id: 'user-101',
     email: 'alice@orga.com',
@@ -99,6 +112,12 @@ describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
     assert.equal(userHasProjectAccess(sampleProject, undefined), false);
   });
 
+  it('grants full read, modify, and delete access to project creator', () => {
+    assert.equal(userHasProjectAccess(sampleProject, userCreator), true);
+    assert.equal(userCanModifyProject(sampleProject, userCreator), true);
+    assert.equal(userCanDeleteProject(sampleProject, userCreator), true);
+  });
+
   it('grants access to authorized participant matching user ID or email', () => {
     assert.equal(userHasProjectAccess(sampleProject, userOrgA_Participant), true);
     assert.equal(userCanModifyProject(sampleProject, userOrgA_Participant), true);
@@ -126,6 +145,39 @@ describe('Qartinia Authorization & Cross-Organization Security Tests', () => {
   it('denies project deletion to non-creator participants', () => {
     // Participant Alice can view & modify, but CANNOT delete if not creator or admin
     assert.equal(userCanDeleteProject(sampleProject, userOrgA_Participant), false);
+  });
+
+  it('filters project notifications so non-participants cannot receive private milestone/project alerts', () => {
+    const projectNotification: NotificationItem = {
+      id: 'notif-001',
+      type: 'milestone_created',
+      title: 'New Milestone in QRT-RM-9999',
+      message: 'Secret milestone posted',
+      linkSection: 'projects',
+      linkId: 'prj-test-01',
+      read: false,
+      timestamp: 'Just now',
+      createdAt: new Date().toISOString(),
+      metadata: { projectId: 'prj-test-01' },
+    };
+
+    const notifs = [projectNotification];
+
+    // Participant Alice receives the notification
+    const participantNotifs = filterNotificationsForActor(notifs, userOrgA_Participant, [sampleProject]);
+    assert.equal(participantNotifs.length, 1);
+
+    // Non-participant Bob from same org is filtered out
+    const nonParticipantNotifs = filterNotificationsForActor(notifs, userOrgA_NonParticipant, []);
+    assert.equal(nonParticipantNotifs.length, 0);
+
+    // External Org B user is filtered out
+    const externalNotifs = filterNotificationsForActor(notifs, userOrgB, []);
+    assert.equal(externalNotifs.length, 0);
+
+    // Admin receives notification
+    const adminNotifs = filterNotificationsForActor(notifs, adminUser, [sampleProject]);
+    assert.equal(adminNotifs.length, 1);
   });
 
   it('denies organization management to ordinary non-owner/non-admin users without stored permissions', async () => {

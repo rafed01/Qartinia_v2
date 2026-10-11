@@ -381,6 +381,9 @@ export default function App() {
       body: JSON.stringify(params),
     });
     const data = await res.json();
+    if (!res.ok || !data.frontier) {
+      throw new Error(data.error || 'Failed to compute frontier benchmark.');
+    }
     await fetchState();
     return data.frontier;
   };
@@ -630,6 +633,9 @@ export default function App() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
+    if (!res.ok || !data.project) {
+      throw new Error(data.error || 'Failed to create protected project.');
+    }
     await fetchState();
     return data.project;
   };
