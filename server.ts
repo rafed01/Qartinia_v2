@@ -1798,7 +1798,7 @@ async function syncSimulationToCatalog(sim: SimulationJob, userUuid?: string | n
   }
 }
 
-async function ensureDatabaseCatalogSeeded() {
+export async function ensureDatabaseCatalogSeeded() {
   if (!supabaseAdmin) return;
   try {
     const { data: profs } = await supabaseAdmin.from('profiles').select('id, role');
@@ -2751,12 +2751,12 @@ CRITICAL SCIENTIFIC INTEGRITY, COMPARABILITY & PROVENANCE RULES:
   };
 }
 
-async function startServer() {
-  const app = express();
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-  app.use(authenticateToken);
+export const app = express();
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(authenticateToken);
 
+export async function startServer() {
   // Bootstrap & verify authoritative Supabase catalog persistence
   await ensureDatabaseCatalogSeeded();
 
@@ -7383,28 +7383,30 @@ async function startServer() {
     res.json({ ok: true, room });
   });
 
-  // Mount Vite dev server or production static assets
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  // Mount Vite dev server or production static assets (standalone mode)
+  if (!process.env.VERCEL) {
+    if (process.env.NODE_ENV !== 'production') {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.resolve(__dirname, 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
+
+    const PORT = Number(process.env.PORT) || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Qartinia Full-Stack Server listening on http://0.0.0.0:${PORT}`);
     });
   }
-
-  const PORT = Number(process.env.PORT) || 3000;
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Qartinia Full-Stack Server listening on http://0.0.0.0:${PORT}`);
-  });
 }
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   startServer();
 }
