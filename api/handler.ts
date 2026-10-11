@@ -9,9 +9,18 @@ export async function handleVercelApiRequest(req: IncomingMessage, res: ServerRe
   }
 
   // Ensure req.url starts with /api for Express route matching
-  if (req.url && !req.url.startsWith('/api/') && req.url !== '/api') {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  if (req.url) {
+    if (
+      !req.url.startsWith('/api/') &&
+      !req.url.startsWith('/api?') &&
+      !req.url.startsWith('/api#') &&
+      req.url !== '/api'
+    ) {
+      const pathWithLeadingSlash = req.url.startsWith('/') ? req.url : '/' + req.url;
+      req.url = '/api' + pathWithLeadingSlash;
+    }
   }
 
   return app(req, res);
 }
+
