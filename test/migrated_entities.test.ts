@@ -153,11 +153,31 @@ describe('Migrated Supabase Entities Data Layer Test', () => {
       type: 'request_status_updated' as const,
       title: 'Unresolvable Recipient',
       message: 'Testing unresolvable recipient error',
+      recipientUserId: 'non-existent-user-id-99999',
     };
 
     await assert.rejects(
       async () => {
         await createAndBroadcastNotification(invalidNotif);
+      },
+      {
+        name: 'Error',
+        message: /Failed to resolve profile for recipient ID|Failed to resolve target recipient user ID/,
+      }
+    );
+  });
+
+  it('createAndBroadcastNotification throws explicit error for general or community notifications without explicit recipients (no all-users default broadcast)', async () => {
+    const unexplicitGeneralNotif = {
+      type: 'general' as const,
+      title: 'General Update',
+      message: 'General broadcast without explicit recipient',
+      linkSection: 'community' as const,
+    };
+
+    await assert.rejects(
+      async () => {
+        await createAndBroadcastNotification(unexplicitGeneralNotif);
       },
       {
         name: 'Error',

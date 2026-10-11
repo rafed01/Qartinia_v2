@@ -401,7 +401,7 @@ export async function createAndBroadcastNotification(
           if (p.id) targetUserIds.add(p.id);
         });
       } else {
-        targetUserIds.add(cleanId);
+        throw new Error(`Failed to resolve profile for recipient ID "${cleanId}": User profile not found.`);
       }
     }
   }
@@ -491,7 +491,7 @@ export async function createAndBroadcastNotification(
 
     let activeCount = 0;
     orgMembers.forEach((m) => {
-      const isActive = !m.status || m.status === 'active' || m.status === 'approved' || m.status === 'invited';
+      const isActive = (!m.status || m.status === 'active' || m.status === 'approved') && m.status !== 'invited' && m.status !== 'inactive' && m.status !== 'pending';
       if (m.user_id && isActive) {
         targetUserIds.add(m.user_id);
         activeCount++;
@@ -500,22 +500,6 @@ export async function createAndBroadcastNotification(
 
     if (activeCount === 0) {
       throw new Error(`Failed to resolve active organization members for organization "${cleanOrg}".`);
-    }
-  }
-
-  if (targetUserIds.size === 0 && (notifData.type === 'general' || notifData.linkSection === 'community')) {
-    const { data: allProfs, error: allProfErr } = await supabaseAdmin
-      .from('profiles')
-      .select('id');
-
-    if (allProfErr) {
-      throw new Error(`Failed to resolve platform profiles for broadcast notification: ${allProfErr.message}`);
-    }
-
-    if (allProfs && allProfs.length > 0) {
-      allProfs.forEach((pr) => {
-        if (pr.id) targetUserIds.add(pr.id);
-      });
     }
   }
 
@@ -5118,15 +5102,22 @@ async function startServer() {
         });
       }
 
-      await createAndBroadcastNotification({
-        type: 'general',
-        title: 'New Community Discussion',
-        message: `${newPost.authorName} shared a technical update: "${content.slice(0, 60)}..."`,
-        linkSection: 'community',
-        linkId: newPost.id,
-        timestamp: 'Just now',
-        read: false,
-      });
+      if (actor.organizationId || actor.organizationName) {
+        try {
+          await createAndBroadcastNotification({
+            type: 'general',
+            title: 'New Community Discussion',
+            message: `${newPost.authorName} shared a technical update: "${content.slice(0, 60)}..."`,
+            recipientOrg: actor.organizationId || actor.organizationName,
+            linkSection: 'community',
+            linkId: newPost.id,
+            timestamp: 'Just now',
+            read: false,
+          });
+        } catch (notifErr) {
+          console.warn('[Community notification skipped due to unresolved recipients]', notifErr);
+        }
+      }
 
       res.json({ ok: true, post: newPost });
     } catch (err: any) {
@@ -6229,6 +6220,8 @@ async function startServer() {
       type: 'request_status_updated',
       title: 'Frontier Benchmark Updated',
       message: `Administrator revised technical specifications and benchmark criteria for "${frontier.title}".`,
+      recipientUserId: req.user?.id,
+      recipientOrg: req.user?.organizationId,
       linkSection: 'frontier',
       linkId: frontier.id,
       metadata: {
@@ -6359,6 +6352,8 @@ async function startServer() {
         type: 'project_added',
         title: 'New Member Invited to Organization',
         message: `${newMember.fullName} (${newMember.email}) has been invited as ${newMember.role.toUpperCase()} to ${newMember.organizationName}.`,
+        recipientEmail: newMember.email,
+        recipientOrg: newMember.organizationId,
         linkSection: 'dashboard',
         linkId: newMember.id,
         metadata: {
@@ -6435,6 +6430,9 @@ async function startServer() {
         type: 'request_status_updated',
         title: 'Member Permissions / Role Updated',
         message: `Permissions updated for ${updatedMember.fullName} (${updatedMember.role.toUpperCase()}) in ${updatedMember.organizationName}.`,
+        recipientUserId: updatedMember.userId,
+        recipientEmail: updatedMember.email,
+        recipientOrg: updatedMember.organizationId,
         linkSection: 'dashboard',
         linkId: updatedMember.id,
         metadata: {
@@ -6480,6 +6478,8 @@ async function startServer() {
         type: 'request_status_updated',
         title: 'Member Removed from Organization',
         message: `${member.fullName} has been removed from ${member.organizationName}.`,
+        recipientUserId: member.userId,
+        recipientOrg: member.organizationId,
         linkSection: 'dashboard',
       });
 
