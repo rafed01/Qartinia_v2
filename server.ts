@@ -2756,12 +2756,16 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(authenticateToken);
 
-export async function startServer() {
-  // Bootstrap & verify authoritative Supabase catalog persistence
-  await ensureDatabaseCatalogSeeded();
+let routesRegistered = false;
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
+
+export function registerAppRoutes(appInstance: express.Express = app) {
+  if (routesRegistered) return;
+  routesRegistered = true;
 
   // 1. GET /api/state — Live Supabase + Local Workspace State
-  app.get('/api/state', requireAuth, async (req, res) => {
+  appInstance.get('/api/state', requireAuth, async (req, res) => {
     try {
       const state = await fetchFullWorkspaceState(req.user?.id || null);
       res.json(state);
@@ -7382,6 +7386,25 @@ export async function startServer() {
 
     res.json({ ok: true, room });
   });
+}
+
+// Automatically register routes on module load so Express app is ready
+registerAppRoutes(app);
+
+export async function initializeServer() {
+  if (isInitialized) return;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    await ensureDatabaseCatalogSeeded();
+    isInitialized = true;
+  })();
+
+  return initPromise;
+}
+
+export async function startServer() {
+  await initializeServer();
 
   // Mount Vite dev server or production static assets (standalone mode)
   if (!process.env.VERCEL) {

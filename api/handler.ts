@@ -1,16 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { app, ensureDatabaseCatalogSeeded } from '../server.ts';
-
-let isSeeded = false;
+import { app, initializeServer } from '../server.ts';
 
 export async function handleVercelApiRequest(req: IncomingMessage, res: ServerResponse) {
-  if (!isSeeded) {
-    try {
-      await ensureDatabaseCatalogSeeded();
-      isSeeded = true;
-    } catch (err) {
-      console.warn('[Vercel Catalog Seed Warning]', err);
-    }
+  try {
+    await initializeServer();
+  } catch (err) {
+    console.warn('[Vercel Server Initialization Warning]', err);
   }
 
   // Ensure req.url starts with /api for Express route matching
