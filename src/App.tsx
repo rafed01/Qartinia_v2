@@ -18,6 +18,7 @@ import { ProfileEditModal } from './components/ProfileEditModal';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { NotificationToastContainer, ToastNotification } from './components/NotificationToastContainer';
 import { MobileBottomDock } from './components/MobileBottomDock';
+import { AweInspiringMobileMenuOverlay } from './components/AweInspiringMobileMenuOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
@@ -996,40 +997,29 @@ export default function App() {
       </div>
 
       {/* Mobile Drawer Overlay */}
-      {mobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div
-            className="fixed inset-0 bg-[#0F2038]/60 backdrop-blur-xs transition-opacity"
-            onClick={() => setMobileSidebarOpen(false)}
-          />
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-[#FAF8F5] shadow-2xl z-10">
-            <div className="absolute top-4 right-4 z-20">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(false)}
-                className="p-1.5 rounded-lg text-[#0F2038] hover:bg-[#EFE9DF] transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <AppSidebar
-              activeSection={activeSection}
-              onSelectSection={(section) => {
-                setActiveSection(section);
-                setMobileSidebarOpen(false);
-              }}
-              frontiersCount={frontiers.length}
-              projectsCount={projects.length}
-              evidenceCount={evidenceNodes.length}
-              suppliersCount={suppliers.length}
-              labsCount={labs.length}
-              expertsCount={experts.length}
-              simulationsCount={simulations.length}
-              brainstormCount={brainstormRooms.length}
-            />
-          </div>
-        </div>
-      )}
+      <AweInspiringMobileMenuOverlay
+        isOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        activeSection={activeSection}
+        onSelectSection={(section) => {
+          setActiveSection(section);
+          setMobileSidebarOpen(false);
+        }}
+        currentUser={currentUser}
+        frontiersCount={frontiers.length}
+        projectsCount={projects.length}
+        evidenceCount={evidenceNodes.length}
+        suppliersCount={suppliers.length}
+        labsCount={labs.length}
+        expertsCount={experts.length}
+        simulationsCount={simulations.length}
+        brainstormCount={brainstormRooms.length}
+        onOpenAuthModal={() => setAuthModalOpen(true)}
+        onOpenProfileModal={() => setProfileModalOpen(true)}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onOpenExecutiveDossier={() => setDossierModalOpen(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content Column */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
@@ -1045,6 +1035,7 @@ export default function App() {
           onOpenProfileModal={() => setProfileModalOpen(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onLogout={handleLogout}
+          onToggleMobileMenu={() => setMobileSidebarOpen((prev) => !prev)}
         />
 
         <LiveSignalTicker onNavigateToSection={(sec) => setActiveSection(sec as QartiniaSection)} />
