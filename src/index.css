@@ -1,15 +1,38 @@
 @import "tailwindcss";
 
+:root {
+  --bg-canvas: #FAF8F5;
+  --bg-surface-1: #FFFFFF;
+  --bg-surface-2: #FAF8F5;
+  --bg-surface-3: #F5EFEB;
+  --border-subtle: #EBE3D7;
+  --border-default: #E5DDD0;
+  --border-bright: #D5C8B5;
+  --accent-gold: #8C6527;
+  --accent-gold-light: #C5A880;
+  --accent-navy: #0F2038;
+  --accent-terracotta: #C85A32;
+  --accent-emerald: #059669;
+}
+
 @layer base {
-  body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    color: #0F2537;
-    background-color: #FAF9F6;
+  html {
+    color-scheme: light;
+    background-color: #FAF8F5;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  h1, h2, .font-display {
+  body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    letter-spacing: -0.02em;
+    color: #0F2038;
+    background-color: #FAF8F5;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Cormorant Garamond', 'Cinzel', Georgia, serif;
+    letter-spacing: -0.01em;
     text-wrap: balance;
   }
 
@@ -18,10 +41,267 @@
     letter-spacing: 0.08em;
   }
 
+  .font-serif {
+    font-family: 'Cormorant Garamond', 'Cinzel', Georgia, serif;
+  }
+
   .font-mono, .tabular-nums {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
+
+  /* Focus rings for accessibility */
+  :focus-visible {
+    outline: 2px solid #8C6527;
+    outline-offset: 2px;
+  }
+
+  /* Custom warm scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #FAF8F5;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D5C8B5;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #C5A880;
+  }
 }
 
+/* Carthage Editorial Surface & Card Utilities */
+.carthage-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E5DDD0;
+  box-shadow: 0 1px 2px 0 rgba(15, 32, 56, 0.05);
+}
+
+.carthage-surface-warm {
+  background-color: #FAF8F5;
+  border: 1px solid #EBE3D7;
+}
+
+.carthage-border {
+  border: 1px solid #E5DDD0;
+}
+
+/* Reusable Action Buttons */
+.btn-primary {
+  background-color: #0F2038;
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, transform 0.2s;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .btn-primary:hover {
+    background-color: #1A365D;
+    box-shadow: 0 4px 14px 0 rgba(15, 32, 56, 0.25);
+    transform: translateY(-1px);
+  }
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-secondary {
+  background-color: #FFFFFF;
+  color: #0F2038;
+  border: 1px solid #E5DDD0;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, transform 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .btn-secondary:hover {
+    background-color: #FAF8F5;
+    border-color: #D5C8B5;
+    box-shadow: 0 2px 8px 0 rgba(140, 101, 39, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+/* Mesmerizing Live Animations & GPU Hardware Stabilized Keyframes */
+
+@keyframes spinSlow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spinSlowReverse {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(0.5deg); }
+}
+
+@keyframes pulseGlowGold {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(140, 101, 39, 0.2);
+    border-color: #D5C8B5;
+  }
+  50% {
+    box-shadow: 0 0 16px 2px rgba(140, 101, 39, 0.2);
+    border-color: #C5A880;
+  }
+}
+
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes liveBeaconRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes waveDriftHorizontal {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(10px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes subtleFlickerStar {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes goldAuraOpacity {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes galleySailSway {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(0.5deg); }
+}
+
+@keyframes watermarkFloatRotated {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Hardware Compositing Layer Isolation to prevent touch repaints */
+.animate-spin-slow,
+.animate-spin-slow-rev,
+.animate-float-gentle,
+.animate-pulse-gold,
+.animate-wave-drift,
+.animate-beacon-ring,
+.animate-flicker-star,
+.animate-gold-aura,
+.animate-galley-sway,
+.animate-watermark-float {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.animate-spin-slow {
+  animation: spinSlow 60s linear infinite;
+}
+
+.animate-spin-slow-rev {
+  animation: spinSlowReverse 75s linear infinite;
+}
+
+.animate-float-gentle {
+  animation: floatGentle 8s ease-in-out infinite;
+}
+
+.animate-pulse-gold {
+  animation: pulseGlowGold 4s ease-in-out infinite;
+}
+
+.animate-wave-drift {
+  animation: waveDriftHorizontal 10s ease-in-out infinite;
+}
+
+.animate-beacon-ring {
+  animation: liveBeaconRing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.animate-flicker-star {
+  animation: subtleFlickerStar 3s ease-in-out infinite;
+}
+
+.animate-gold-aura {
+  animation: goldAuraOpacity 3.5s ease-in-out infinite;
+}
+
+.animate-galley-sway {
+  animation: galleySailSway 7s ease-in-out infinite;
+}
+
+.animate-watermark-float {
+  animation: watermarkFloatRotated 9s ease-in-out infinite;
+}
+
+/* Shimmer Overlay effect (only on pointer hover devices) */
+.shimmer-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .shimmer-card:hover::after {
+    animation: shimmerSweep 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .carthage-interactive-card {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s, border-color 0.25s;
+  }
+
+  .carthage-interactive-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -6px rgba(15, 32, 56, 0.1), 0 4px 12px -2px rgba(140, 101, 39, 0.08);
+    border-color: #D5C8B5;
+  }
+}
 

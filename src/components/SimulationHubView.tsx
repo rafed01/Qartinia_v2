@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
-import { SimulationJob, SimulationToolType } from '../types/qartinia';
+import { SimulationJob } from '../types/qartinia';
 import {
   Activity,
   Play,
-  Cpu,
-  Clock,
   CheckCircle2,
-  AlertTriangle,
   Sliders,
-  RotateCcw,
-  Sparkles,
-  BarChart3,
   Layers,
+  Cpu,
+  RefreshCw,
+  BarChart3,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
+import { ThermalHeatmapCanvas } from './ThermalHeatmapCanvas';
 
 interface SimulationHubViewProps {
   simulations: SimulationJob[];
   onRunSimulation: (payload: {
     title: string;
-    tool: SimulationToolType;
+    tool: any;
     domain: string;
     parameters: Record<string, string | number>;
   }) => Promise<void>;
@@ -31,12 +31,12 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
   const [selectedSim, setSelectedSim] = useState<SimulationJob>(
     simulations[0] || {
       id: 'sim-default',
-      title: '800V SiC Half-Bridge Double-Pulse & Active Gate Trajectory Transient',
-      tool: 'SPICE',
+      title: 'Double-Pulse GaN Inverter Switching Transient',
       domain: 'Power Electronics',
+      tool: 'SPICE',
       status: 'Completed',
-      parameters: {
-        'Bus Voltage (Vdc)': '800 V',
+      inputParameters: {
+        'DC Bus Voltage (Vdc)': '800 V',
         'Peak Current (Ipk)': '450 A',
         'Stray Inductance (Lloop)': '1.8 nH',
         'Junction Temp (Tj)': '125 °C',
@@ -78,82 +78,81 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
   const [rgon, setRgon] = useState(1.8);
   const [running, setRunning] = useState(false);
 
+  // Custom synthetic waveform based on parameters
+  const waveform = selectedSim.outputWaveformData || [
+    { time: 0, value: 0 },
+    { time: 5, value: Math.round(ipk * 0.05) },
+    { time: 10, value: Math.round(ipk * 0.2) },
+    { time: 15, value: ipk },
+    { time: 20, value: Math.round(ipk * 0.98) },
+    { time: 25, value: Math.round(ipk * 0.96) },
+    { time: 30, value: Math.round(ipk * 0.95) },
+    { time: 35, value: Math.round(ipk * 0.8) },
+    { time: 40, value: Math.round(ipk * 0.25) },
+    { time: 45, value: Math.round(ipk * 0.02) },
+    { time: 50, value: 0 },
+  ];
+
   const handleExecuteRun = async () => {
     setRunning(true);
     try {
       await onRunSimulation({
-        title: `${selectedSim.tool} Transient Run (${vdc}V / ${ipk}A, Lloop=${lloop}nH)`,
-        tool: selectedSim.tool,
+        title: `${selectedSim.tool} Transient Sweep (Vdc=${vdc}V, Ipk=${ipk}A)`,
         domain: selectedSim.domain,
+        tool: selectedSim.tool,
         parameters: {
-          'Bus Voltage (Vdc)': vdc,
-          'Peak Current (Ipk)': ipk,
-          'Stray Inductance (Lloop)': lloop,
-          'Junction Temp (Tj)': tj,
-          'Gate Resistor (Rg_on)': rgon,
+          'DC Bus Voltage (Vdc)': `${vdc} V`,
+          'Peak Current (Ipk)': `${ipk} A`,
+          'Stray Inductance (Lloop)': `${lloop} nH`,
+          'Junction Temp (Tj)': `${tj} °C`,
+          'Gate Resistor (Rg_on)': `${rgon} Ω`,
         },
       });
-    } catch (err) {
-      console.error(err);
     } finally {
       setRunning(false);
     }
   };
 
-  // Waveform SVG Drawing Math
-  const waveform = selectedSim.outputWaveformData || [
-    { time: 0, value: 0 },
-    { time: 5, value: 12 },
-    { time: 10, value: 85 },
-    { time: 15, value: 450 },
-    { time: 20, value: 448 },
-    { time: 25, value: 442 },
-    { time: 30, value: 440 },
-    { time: 35, value: 380 },
-    { time: 40, value: 120 },
-    { time: 45, value: 8 },
-    { time: 50, value: 0 },
-  ];
-
-  const maxVal = Math.max(...waveform.map((w) => w.value), 500);
+  const maxVal = Math.max(...waveform.map((w) => w.value), ipk);
   const svgWidth = 600;
   const svgHeight = 220;
-  const padding = 30;
+  const padding = 35;
 
   const points = waveform
     .map((pt, i) => {
       const x = padding + (i / (waveform.length - 1)) * (svgWidth - padding * 2);
-      const y = svgHeight - padding - (pt.value / maxVal) * (svgHeight - padding * 2);
+      const y = svgHeight - padding - (pt.value / (maxVal || 1)) * (svgHeight - padding * 2);
       return `${x},${y}`;
     })
     .join(' ');
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-10 space-y-10">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 animate-in fade-in duration-200">
       {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 lg:p-8 space-y-4">
+      <div className="bg-white border border-[#E5DDD0] rounded-2xl p-6 lg:p-8 space-y-5 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
-              Computational Physics &amp; Circuit Modeling
+            <div className="text-xs font-bold text-[#8C6527] uppercase tracking-wider font-mono flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[#8C6527]" />
+              <span>Computational Physics &amp; Circuit Modeling</span>
             </div>
-            <h1 className="font-brand text-2xl sm:text-3xl font-bold text-[#0F2537] mt-1">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#0F2038] mt-1.5">
               Simulation Studio
             </h1>
-            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+            <p className="text-xs sm:text-sm text-[#5A6E85] mt-1 max-w-2xl leading-relaxed">
               Execute SPICE transient double-pulse gate trajectory sweeps, TCAD semiconductor electric field breakdowns, and DFT ceramic bonding models before hardware prototyping.
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono text-slate-600 bg-[#FAF9F6] border border-slate-200 p-3 rounded-lg self-start md:self-center">
+          <div className="flex items-center gap-4 text-xs font-mono text-[#0F2038] bg-[#FAF8F5] border border-[#E5DDD0] p-3.5 rounded-xl self-start md:self-center shadow-2xs">
             <div>
-              <span className="text-slate-400 block">Simulation Engines:</span>
-              <strong className="text-sm text-[#0F2537]">SPICE · TCAD · DFT</strong>
+              <span className="text-[#8C6527] block text-[10px] uppercase font-bold tracking-wider">Engines</span>
+              <strong className="text-sm text-[#0F2038] font-bold">SPICE · TCAD · DFT</strong>
             </div>
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="h-6 w-px bg-[#E5DDD0]" />
             <div>
-              <span className="text-slate-400 block">Runs Logged:</span>
-              <strong className="text-sm text-[#0F2537]">{simulations.length}</strong>
+              <span className="text-[#8C6527] block text-[10px] uppercase font-bold tracking-wider">Runs Logged</span>
+              <strong className="text-sm text-[#0F2038] font-bold">{simulations.length}</strong>
             </div>
           </div>
         </div>
@@ -162,12 +161,12 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
       {/* Main Studio Grid: Jobs Drawer (Left) & Active Simulation Dashboard (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left 4 Cols: Simulation Jobs Selector */}
-        <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-[#0F2537] uppercase tracking-wider">
+        <div className="lg:col-span-4 bg-white border border-[#E5DDD0] rounded-2xl p-5 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-[#EBE3D7]">
+            <h2 className="text-xs font-bold text-[#8C6527] uppercase tracking-wider font-mono">
               Simulation Runs ({simulations.length})
             </h2>
-            <span className="text-[11px] font-mono text-slate-400">History</span>
+            <span className="text-[11px] font-mono text-[#5A6E85]">History</span>
           </div>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
@@ -178,28 +177,28 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   key={sim.id}
                   type="button"
                   onClick={() => setSelectedSim(sim)}
-                  className={`w-full text-left p-3.5 rounded-lg border transition-all cursor-pointer ${
+                  className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-[#FAF9F6] border-[#0F2537] shadow-xs'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-[#FFFDF7] border-[#8C6527] shadow-xs'
+                      : 'bg-[#FAF8F5] border-[#E5DDD0] hover:bg-white hover:border-[#D5C8B5]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono font-bold text-[#108548] px-1.5 py-0.5 rounded bg-slate-100">
+                    <span className="text-xs font-mono font-bold text-[#8C6527] px-2 py-0.5 rounded bg-white border border-[#E5DDD0]">
                       {sim.tool}
                     </span>
-                    <span className="text-[11px] font-mono text-slate-400">
+                    <span className="text-[11px] font-mono text-[#5A6E85]">
                       {sim.submittedAt.slice(5, 16)}
                     </span>
                   </div>
 
-                  <div className="text-xs font-bold text-[#0F2537] mt-1.5 line-clamp-2">
+                  <div className="text-xs font-bold text-[#0F2038] font-serif mt-2 line-clamp-2">
                     {sim.title}
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                  <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[#EBE3D7] text-[11px] text-[#5A6E85]">
                     <span>{sim.domain}</span>
-                    <span className="font-mono text-slate-700">{sim.status}</span>
+                    <span className="font-mono text-emerald-700 font-semibold">{sim.status}</span>
                   </div>
                 </button>
               );
@@ -208,20 +207,20 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
         </div>
 
         {/* Right 8 Cols: Active Simulation Run Dashboard & Waveform Visualizer */}
-        <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 lg:p-8 space-y-8">
+        <div className="lg:col-span-8 bg-white border border-[#E5DDD0] rounded-2xl p-6 lg:p-8 space-y-8 shadow-xs">
           {/* Header of Active Simulation */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#EBE3D7]">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#0F2537] text-white">
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg bg-[#0F2038] text-white">
                   {selectedSim.tool}
                 </span>
-                <span className="text-xs font-mono text-[#108548] font-semibold">
+                <span className="text-xs font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   Status: {selectedSim.status}
                 </span>
               </div>
-              <h2 className="text-lg font-bold text-[#0F2537] mt-1">{selectedSim.title}</h2>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-0.5">
+              <h2 className="font-serif text-xl font-bold text-[#0F2038] mt-2">{selectedSim.title}</h2>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#5A6E85] mt-1">
                 <span>Domain: {selectedSim.domain}</span>
                 <span aria-hidden="true">·</span>
                 <span>Runtime: {selectedSim.runtimeSeconds}s</span>
@@ -234,9 +233,9 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
               type="button"
               onClick={handleExecuteRun}
               disabled={running}
-              className="px-4 py-2 bg-[#0F2537] text-white text-xs font-semibold rounded-lg hover:bg-[#16344D] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-center shadow-xs"
+              className="px-4 py-2 bg-[#0F2038] text-white text-xs font-serif font-bold rounded-xl hover:bg-[#1A365D] transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-center shadow-xs disabled:opacity-50"
             >
-              <Play className="w-3.5 h-3.5 text-[#C59B47]" />
+              <Play className="w-3.5 h-3.5" />
               <span>{running ? 'Computing Physics Grid...' : 'Re-Run Simulation'}</span>
             </button>
           </div>
@@ -244,71 +243,74 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
           {/* Interactive Waveform Visualizer */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#0F2537] uppercase tracking-wider flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4 text-[#108548]" />
+              <span className="text-xs font-bold text-[#8C6527] uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <BarChart3 className="w-4 h-4 text-[#8C6527]" />
                 <span>Transient Switching Waveform [Current I_ds (A) vs Time (ns)]</span>
               </span>
-              <span className="text-[11px] font-mono text-slate-500">
-                Peak: {Math.max(...waveform.map((w) => w.value))} A
+              <span className="text-[11px] font-mono text-[#5A6E85]">
+                Peak: <strong className="text-[#0F2038]">{Math.max(...waveform.map((w) => w.value))} A</strong>
               </span>
             </div>
 
-            <div className="bg-[#0F2537] rounded-xl p-4 text-white overflow-hidden shadow-inner">
+            <div className="bg-[#FAF8F5] rounded-2xl p-4 text-[#0F2038] border border-[#E5DDD0] overflow-hidden shadow-2xs">
               <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-48">
                 {/* Grid Lines */}
-                <line x1={padding} y1={padding} x2={svgWidth - padding} y2={padding} stroke="#1E3A54" strokeDasharray="3 3" />
-                <line x1={padding} y1={svgHeight / 2} x2={svgWidth - padding} y2={svgHeight / 2} stroke="#1E3A54" strokeDasharray="3 3" />
-                <line x1={padding} y1={svgHeight - padding} x2={svgWidth - padding} y2={svgHeight - padding} stroke="#334E68" />
-                <line x1={padding} y1={padding} x2={padding} y2={svgHeight - padding} stroke="#334E68" />
+                <line x1={padding} y1={padding} x2={svgWidth - padding} y2={padding} stroke="#E5DDD0" strokeDasharray="3 3" />
+                <line x1={padding} y1={svgHeight / 2} x2={svgWidth - padding} y2={svgHeight / 2} stroke="#E5DDD0" strokeDasharray="3 3" />
+                <line x1={padding} y1={svgHeight - padding} x2={svgWidth - padding} y2={svgHeight - padding} stroke="#D5C8B5" strokeWidth="1.2" />
+                <line x1={padding} y1={padding} x2={padding} y2={svgHeight - padding} stroke="#D5C8B5" strokeWidth="1.2" />
 
                 {/* Y-Axis Labels */}
-                <text x={padding - 6} y={padding + 4} textAnchor="end" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={padding - 8} y={padding + 4} textAnchor="end" fill="#8C6527" fontSize="10" fontFamily="monospace">
                   {maxVal}A
                 </text>
-                <text x={padding - 6} y={svgHeight / 2 + 3} textAnchor="end" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={padding - 8} y={svgHeight / 2 + 3} textAnchor="end" fill="#5A6E85" fontSize="10" fontFamily="monospace">
                   {Math.round(maxVal / 2)}A
                 </text>
-                <text x={padding - 6} y={svgHeight - padding} textAnchor="end" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={padding - 8} y={svgHeight - padding} textAnchor="end" fill="#5A6E85" fontSize="10" fontFamily="monospace">
                   0A
                 </text>
 
                 {/* X-Axis Labels */}
-                <text x={padding} y={svgHeight - 12} textAnchor="middle" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={padding} y={svgHeight - 12} textAnchor="middle" fill="#5A6E85" fontSize="10" fontFamily="monospace">
                   0ns
                 </text>
-                <text x={svgWidth / 2} y={svgHeight - 12} textAnchor="middle" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={svgWidth / 2} y={svgHeight - 12} textAnchor="middle" fill="#5A6E85" fontSize="10" fontFamily="monospace">
                   25ns
                 </text>
-                <text x={svgWidth - padding} y={svgHeight - 12} textAnchor="middle" fill="#9FB3C8" fontSize="10" fontFamily="monospace">
+                <text x={svgWidth - padding} y={svgHeight - 12} textAnchor="middle" fill="#5A6E85" fontSize="10" fontFamily="monospace">
                   50ns
                 </text>
 
                 {/* Transient Curve Path */}
-                <polyline fill="none" stroke="#C59B47" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+                <polyline fill="none" stroke="#0F2038" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
 
                 {/* Data Points */}
                 {waveform.map((pt, i) => {
                   const x = padding + (i / (waveform.length - 1)) * (svgWidth - padding * 2);
-                  const y = svgHeight - padding - (pt.value / maxVal) * (svgHeight - padding * 2);
+                  const y = svgHeight - padding - (pt.value / (maxVal || 1)) * (svgHeight - padding * 2);
                   return (
-                    <circle key={i} cx={x} cy={y} r="3.5" fill="#108548" stroke="#FAF9F6" strokeWidth="1.5" />
+                    <circle key={i} cx={x} cy={y} r="4" fill="#B89547" stroke="#FFFFFF" strokeWidth="1.5" />
                   );
                 })}
               </svg>
             </div>
           </div>
 
+          {/* 2D TCAD Junction Thermal Heatmap Solver */}
+          <ThermalHeatmapCanvas vdc={vdc} ipk={ipk} tj={tj} />
+
           {/* Computed Output Metrics */}
           {selectedSim.summaryMetrics && (
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-[#0F2537] uppercase tracking-wider block">
+              <span className="text-xs font-bold text-[#8C6527] uppercase tracking-wider block font-mono">
                 Calculated Physical Metrics &amp; Efficiencies
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.entries(selectedSim.summaryMetrics).map(([k, v]) => (
-                  <div key={k} className="p-3 rounded-lg bg-[#FAF9F6] border border-slate-200">
-                    <span className="text-[10px] text-slate-500 block truncate font-mono">{k}</span>
-                    <strong className="text-sm font-mono text-[#0F2537] block mt-0.5">{v}</strong>
+                  <div key={k} className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0] shadow-2xs">
+                    <span className="text-[10px] text-[#5A6E85] block truncate font-mono uppercase">{k}</span>
+                    <strong className="text-sm font-mono text-[#0F2038] block mt-0.5">{v}</strong>
                   </div>
                 ))}
               </div>
@@ -316,19 +318,19 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
           )}
 
           {/* Interactive Parameter Controls Panel */}
-          <div className="p-5 rounded-xl bg-[#FAF9F6] border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#0F2537] uppercase tracking-wider flex items-center gap-1.5">
-                <Sliders className="w-4 h-4 text-[#108548]" />
+          <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5DDD0] space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between pb-2 border-b border-[#EBE3D7]">
+              <span className="text-xs font-bold text-[#8C6527] uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <Sliders className="w-4 h-4 text-[#8C6527]" />
                 <span>Adjust Parameters &amp; Re-Synthesize</span>
               </span>
-              <span className="text-[11px] font-mono text-slate-500">Live Boundary Envelope</span>
+              <span className="text-[11px] font-mono text-[#5A6E85]">Live Boundary Envelope</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
               <div>
-                <label className="block text-slate-600 font-medium mb-1">
-                  DC Bus Voltage (Vdc): <strong className="text-[#0F2537]">{vdc} V</strong>
+                <label className="block text-[#0F2038] font-medium mb-1.5">
+                  DC Bus Voltage (Vdc): <strong className="text-[#8C6527] font-mono">{vdc} V</strong>
                 </label>
                 <input
                   type="range"
@@ -337,13 +339,13 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   step="50"
                   value={vdc}
                   onChange={(e) => setVdc(Number(e.target.value))}
-                  className="w-full accent-[#0F2537]"
+                  className="w-full accent-[#0F2038]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-medium mb-1">
-                  Peak Pulse Current (Ipk): <strong className="text-[#0F2537]">{ipk} A</strong>
+                <label className="block text-[#0F2038] font-medium mb-1.5">
+                  Peak Pulse Current (Ipk): <strong className="text-[#8C6527] font-mono">{ipk} A</strong>
                 </label>
                 <input
                   type="range"
@@ -352,13 +354,13 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   step="25"
                   value={ipk}
                   onChange={(e) => setIpk(Number(e.target.value))}
-                  className="w-full accent-[#0F2537]"
+                  className="w-full accent-[#0F2038]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-medium mb-1">
-                  Stray Loop Inductance (Lloop): <strong className="text-[#0F2537]">{lloop} nH</strong>
+                <label className="block text-[#0F2038] font-medium mb-1.5">
+                  Stray Loop Inductance (Lloop): <strong className="text-[#8C6527] font-mono">{lloop} nH</strong>
                 </label>
                 <input
                   type="range"
@@ -367,13 +369,13 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   step="0.2"
                   value={lloop}
                   onChange={(e) => setLloop(Number(e.target.value))}
-                  className="w-full accent-[#0F2537]"
+                  className="w-full accent-[#0F2038]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-medium mb-1">
-                  Junction Temp (Tj): <strong className="text-[#0F2537]">{tj} °C</strong>
+                <label className="block text-[#0F2038] font-medium mb-1.5">
+                  Junction Temp (Tj): <strong className="text-[#8C6527] font-mono">{tj} °C</strong>
                 </label>
                 <input
                   type="range"
@@ -382,13 +384,13 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   step="5"
                   value={tj}
                   onChange={(e) => setTj(Number(e.target.value))}
-                  className="w-full accent-[#0F2537]"
+                  className="w-full accent-[#0F2038]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-medium mb-1">
-                  Gate Resistor Rg_on: <strong className="text-[#0F2537]">{rgon} Ω</strong>
+                <label className="block text-[#0F2038] font-medium mb-1.5">
+                  Gate Resistor Rg_on: <strong className="text-[#8C6527] font-mono">{rgon} Ω</strong>
                 </label>
                 <input
                   type="range"
@@ -397,7 +399,7 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
                   step="0.2"
                   value={rgon}
                   onChange={(e) => setRgon(Number(e.target.value))}
-                  className="w-full accent-[#0F2537]"
+                  className="w-full accent-[#0F2038]"
                 />
               </div>
             </div>
@@ -405,8 +407,10 @@ export const SimulationHubView: React.FC<SimulationHubViewProps> = ({
 
           {/* Result Text Report */}
           {selectedSim.resultReport && (
-            <div className="p-4 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 leading-relaxed">
-              <strong className="text-[#0F2537] block mb-1">Physics Solver Report:</strong>
+            <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0] text-xs text-[#5A6E85] leading-relaxed shadow-2xs">
+              <strong className="text-[#0F2038] font-serif font-bold text-sm block mb-1">
+                Physics Solver Report:
+              </strong>
               {selectedSim.resultReport}
             </div>
           )}

@@ -1,6 +1,8 @@
 import { apiFetch, getSessionToken, setSessionToken } from './api/client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
+import { AppSidebar } from './components/AppSidebar';
+import { TopHeader } from './components/TopHeader';
 import { UserDashboardView } from './components/UserDashboardView';
 import { PlatformArchitectureView } from './components/PlatformArchitectureView';
 import { FrontierEngineView } from './components/FrontierEngineView';
@@ -15,6 +17,9 @@ import { AuthModal } from './components/AuthModal';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { NotificationToastContainer, ToastNotification } from './components/NotificationToastContainer';
+import { MobileBottomDock } from './components/MobileBottomDock';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import {
   QartiniaSection,
   FrontierBenchmark,
@@ -40,7 +45,10 @@ import {
   BrainstormTask,
   NotificationItem,
 } from './types/qartinia';
-import { QartiniaCrestSvg } from './components/QartiniaLogo';
+import { QartiniaCrestSvg, QartiniaLogo } from './components/QartiniaLogo';
+import { SubtlePageWhitespaceBackground, CarthageHarborPanorama } from './components/CarthageArtwork';
+import { LiveSignalTicker } from './components/LiveSignalTicker';
+import { ExecutiveDossierModal } from './components/ExecutiveDossierModal';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<QartiniaSection>('dashboard');
@@ -48,6 +56,8 @@ export default function App() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [autoOpenEvidenceModal, setAutoOpenEvidenceModal] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [dossierModalOpen, setDossierModalOpen] = useState(false);
 
   // Global Command Palette Shortcut: Ctrl+K / Cmd+K
   useEffect(() => {
@@ -965,170 +975,233 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#0F2537]">
-      <Navbar
-        activeSection={activeSection}
-        onSelectSection={setActiveSection}
-        frontiersCount={frontiers.length}
-        projectsCount={projects.length}
-        evidenceCount={evidenceNodes.length}
-        suppliersCount={suppliers.length}
-        labsCount={labs.length}
-        expertsCount={experts.length}
-        simulationsCount={simulations.length}
-        brainstormCount={brainstormRooms.length}
-        currentUser={currentUser}
-        notifications={notifications}
-        unreadNotificationsCount={notifications.filter((n) => !n.read).length}
-        onMarkNotificationAsRead={handleMarkNotificationAsRead}
-        onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
-        onDeleteNotification={handleDeleteNotification}
-        onNavigateToNotification={handleNavigateToNotification}
-        onOpenAuthModal={() => setAuthModalOpen(true)}
-        onOpenProfileModal={() => setProfileModalOpen(true)}
-        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-        onLogout={handleLogout}
-      />
+    <div className="min-h-screen flex bg-[#FAF8F5] text-[#0F2038] relative overflow-hidden">
+      {/* Translucent background illustrations canvas across all whitespace */}
+      <SubtlePageWhitespaceBackground />
 
-      <main className="flex-1">
-        {activeSection === 'dashboard' && (
-          <UserDashboardView
-            currentUser={currentUser}
-            accounts={accounts}
-            projects={projects}
-            frontiers={frontiers}
-            requests={requests}
-            bookmarks={bookmarks}
-            suppliers={suppliers}
-            labs={labs}
-            experts={experts}
-            simulations={simulations}
-            enterpriseMembers={enterpriseMembers}
-            onNavigate={setActiveSection}
-            onSelectProject={setActiveProjectId}
-            onSelectFrontier={setActiveFrontierId}
-            onOpenAuthModal={() => setAuthModalOpen(true)}
-            onOpenProfileModal={() => setProfileModalOpen(true)}
-            onUpdateRequestStatus={handleUpdateRequestStatus}
-            onDeleteRequest={handleDeleteRequest}
-            onInviteMember={handleInviteMember}
-            onUpdateMember={handleUpdateMember}
-            onDeleteMember={handleDeleteMember}
-          />
-        )}
+      {/* Desktop AppSidebar */}
+      <div className="hidden lg:block shrink-0">
+        <AppSidebar
+          activeSection={activeSection}
+          onSelectSection={setActiveSection}
+          frontiersCount={frontiers.length}
+          projectsCount={projects.length}
+          evidenceCount={evidenceNodes.length}
+          suppliersCount={suppliers.length}
+          labsCount={labs.length}
+          expertsCount={experts.length}
+          simulationsCount={simulations.length}
+          brainstormCount={brainstormRooms.length}
+        />
+      </div>
 
-        {activeSection === 'architecture' && (
-          <PlatformArchitectureView
-            onNavigate={setActiveSection}
-            frontiersCount={frontiers.length}
-            projectsCount={projects.length}
-            evidenceCount={evidenceNodes.length}
-            suppliersCount={suppliers.length}
-            labsCount={labs.length}
-            expertsCount={experts.length}
-            simulationsCount={simulations.length}
-            brainstormCount={brainstormRooms.length}
+      {/* Mobile Drawer Overlay */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="fixed inset-0 bg-[#0F2038]/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileSidebarOpen(false)}
           />
-        )}
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-[#FAF8F5] shadow-2xl z-10">
+            <div className="absolute top-4 right-4 z-20">
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-[#0F2038] hover:bg-[#EFE9DF] transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <AppSidebar
+              activeSection={activeSection}
+              onSelectSection={(section) => {
+                setActiveSection(section);
+                setMobileSidebarOpen(false);
+              }}
+              frontiersCount={frontiers.length}
+              projectsCount={projects.length}
+              evidenceCount={evidenceNodes.length}
+              suppliersCount={suppliers.length}
+              labsCount={labs.length}
+              expertsCount={experts.length}
+              simulationsCount={simulations.length}
+              brainstormCount={brainstormRooms.length}
+            />
+          </div>
+        </div>
+      )}
 
-        {activeSection === 'frontier' && (
-          <FrontierEngineView
-            frontiers={frontiers}
-            activeFrontierId={activeFrontierId}
-            currentUser={currentUser}
-            onSelectFrontier={setActiveFrontierId}
-            onRunFrontierAnalysis={handleRunFrontierAnalysis}
-            onReevaluateFrontier={handleReevaluateFrontier}
-            onDeleteFrontier={handleDeleteFrontier}
-            onUpdateFrontier={handleUpdateFrontier}
-            onSaveEvidenceNode={handleSaveEvidenceNode}
-            onLaunchProjectFromFrontier={handleLaunchProjectFromFrontier}
-          />
-        )}
+      {/* Main Content Column */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <TopHeader
+          currentUser={currentUser}
+          notifications={notifications}
+          unreadNotificationsCount={notifications.filter((n) => !n.read).length}
+          onMarkNotificationAsRead={handleMarkNotificationAsRead}
+          onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+          onDeleteNotification={handleDeleteNotification}
+          onNavigateToNotification={handleNavigateToNotification}
+          onOpenAuthModal={() => setAuthModalOpen(true)}
+          onOpenProfileModal={() => setProfileModalOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onLogout={handleLogout}
+        />
 
-        {activeSection === 'projects' && (
-          <ProjectsEngineView
-            projects={projects}
-            activeProjectId={activeProjectId}
-            onSelectProject={setActiveProjectId}
-            currentUser={currentUser}
-            onCreateProject={handleCreateProject}
-            onUpdateProjectStageOrGovernance={handleUpdateProjectStageOrGovernance}
-            onAddParticipant={handleAddParticipant}
-            onAddMilestone={handleAddMilestone}
-            onToggleMilestoneStatus={handleToggleMilestoneStatus}
-            onAddDocument={handleAddDocument}
-            onDownloadDocument={handleDownloadDocument}
-            onDeleteDocument={handleDeleteDocument}
-            onSendMessage={handleSendMessage}
-            onDeleteProject={handleDeleteProject}
-            pendingDraftFromFrontier={pendingDraftFromFrontier}
-            onClearPendingDraft={() => setPendingDraftFromFrontier(null)}
-          />
-        )}
+        <LiveSignalTicker onNavigateToSection={(sec) => setActiveSection(sec as QartiniaSection)} />
 
-        {activeSection === 'evidence' && (
-          <EvidenceGraphView
-            evidenceNodes={evidenceNodes}
-            frontiers={frontiers}
-            projects={projects}
-            catalogRelationships={catalogRelationships}
-            bookmarks={bookmarks}
-            currentUser={currentUser}
-            autoOpenCreateModal={autoOpenEvidenceModal}
-            onResetAutoOpen={() => setAutoOpenEvidenceModal(false)}
-            onCreateEvidenceNode={handleCreateEvidenceNode}
-            onDeleteEvidenceNode={handleDeleteEvidenceNode}
-            onToggleBookmark={handleToggleBookmark}
-            onCreateRelationship={handleCreateRelationship}
-            onDeleteRelationship={handleDeleteRelationship}
-            onLaunchProjectFromEvidence={handleLaunchProjectFromEvidence}
-          />
-        )}
+        <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 10, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.995 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {activeSection === 'dashboard' && (
+              <UserDashboardView
+                currentUser={currentUser}
+                accounts={accounts}
+                projects={projects}
+                frontiers={frontiers}
+                requests={requests}
+                bookmarks={bookmarks}
+                suppliers={suppliers}
+                labs={labs}
+                experts={experts}
+                simulations={simulations}
+                enterpriseMembers={enterpriseMembers}
+                onNavigate={setActiveSection}
+                onSelectProject={setActiveProjectId}
+                onSelectFrontier={setActiveFrontierId}
+                onOpenAuthModal={() => setAuthModalOpen(true)}
+                onOpenProfileModal={() => setProfileModalOpen(true)}
+                onUpdateRequestStatus={handleUpdateRequestStatus}
+                onDeleteRequest={handleDeleteRequest}
+                onInviteMember={handleInviteMember}
+                onUpdateMember={handleUpdateMember}
+                onDeleteMember={handleDeleteMember}
+                onOpenExecutiveDossier={() => setDossierModalOpen(true)}
+              />
+            )}
 
-        {activeSection === 'suppliers' && (
-          <SuppliersHubView
-            suppliers={suppliers}
-            onRequestSample={handleRequestSample}
-            onUpdateSupplier={handleUpdateSupplier}
-            currentUser={currentUser}
-          />
-        )}
+            {activeSection === 'architecture' && (
+              <PlatformArchitectureView
+                onNavigate={setActiveSection}
+                frontiersCount={frontiers.length}
+                projectsCount={projects.length}
+                evidenceCount={evidenceNodes.length}
+                suppliersCount={suppliers.length}
+                labsCount={labs.length}
+                expertsCount={experts.length}
+                simulationsCount={simulations.length}
+                brainstormCount={brainstormRooms.length}
+              />
+            )}
 
-        {activeSection === 'laboratories' && (
-          <LaboratoriesHubView
-            labs={labs}
-            onBookLab={handleBookLab}
-            onUpdateLab={handleUpdateLab}
-            currentUser={currentUser}
-          />
-        )}
+            {activeSection === 'frontier' && (
+              <FrontierEngineView
+                frontiers={frontiers}
+                activeFrontierId={activeFrontierId}
+                currentUser={currentUser}
+                onSelectFrontier={setActiveFrontierId}
+                onRunFrontierAnalysis={handleRunFrontierAnalysis}
+                onReevaluateFrontier={handleReevaluateFrontier}
+                onDeleteFrontier={handleDeleteFrontier}
+                onUpdateFrontier={handleUpdateFrontier}
+                onSaveEvidenceNode={handleSaveEvidenceNode}
+                onLaunchProjectFromFrontier={handleLaunchProjectFromFrontier}
+                onOpenExecutiveDossier={() => setDossierModalOpen(true)}
+              />
+            )}
 
-        {activeSection === 'experts' && (
-          <ExpertsHubView
-            experts={experts}
-            onBookExpert={handleBookExpert}
-            onUpdateExpert={handleUpdateExpert}
-            currentUser={currentUser}
-          />
-        )}
+            {activeSection === 'projects' && (
+              <ProjectsEngineView
+                projects={projects}
+                activeProjectId={activeProjectId}
+                onSelectProject={setActiveProjectId}
+                currentUser={currentUser}
+                onCreateProject={handleCreateProject}
+                onUpdateProjectStageOrGovernance={handleUpdateProjectStageOrGovernance}
+                onAddParticipant={handleAddParticipant}
+                onAddMilestone={handleAddMilestone}
+                onToggleMilestoneStatus={handleToggleMilestoneStatus}
+                onAddDocument={handleAddDocument}
+                onDownloadDocument={handleDownloadDocument}
+                onDeleteDocument={handleDeleteDocument}
+                onSendMessage={handleSendMessage}
+                onDeleteProject={handleDeleteProject}
+                pendingDraftFromFrontier={pendingDraftFromFrontier}
+                onClearPendingDraft={() => setPendingDraftFromFrontier(null)}
+                onOpenExecutiveDossier={() => setDossierModalOpen(true)}
+              />
+            )}
 
-        {activeSection === 'simulations' && (
-          <SimulationHubView
-            simulations={simulations}
-            onRunSimulation={handleRunSimulation}
-          />
-        )}
+            {activeSection === 'evidence' && (
+              <EvidenceGraphView
+                evidenceNodes={evidenceNodes}
+                frontiers={frontiers}
+                projects={projects}
+                catalogRelationships={catalogRelationships}
+                bookmarks={bookmarks}
+                currentUser={currentUser}
+                autoOpenCreateModal={autoOpenEvidenceModal}
+                onResetAutoOpen={() => setAutoOpenEvidenceModal(false)}
+                onCreateEvidenceNode={handleCreateEvidenceNode}
+                onDeleteEvidenceNode={handleDeleteEvidenceNode}
+                onToggleBookmark={handleToggleBookmark}
+                onCreateRelationship={handleCreateRelationship}
+                onDeleteRelationship={handleDeleteRelationship}
+                onLaunchProjectFromEvidence={handleLaunchProjectFromEvidence}
+                onOpenExecutiveDossier={() => setDossierModalOpen(true)}
+              />
+            )}
 
-        {activeSection === 'brainstorming' && (
-          <BrainstormingHubView
-            rooms={brainstormRooms}
-            onCreateRoom={handleCreateBrainstormRoom}
-            onSendMessage={handleSendBrainstormMessage}
-            onToggleTaskStatus={handleToggleBrainstormTask}
-            onAddTask={handleAddBrainstormTask}
-          />
-        )}
+            {activeSection === 'suppliers' && (
+              <SuppliersHubView
+                suppliers={suppliers}
+                onRequestSample={handleRequestSample}
+                onUpdateSupplier={handleUpdateSupplier}
+                currentUser={currentUser}
+              />
+            )}
+
+            {activeSection === 'laboratories' && (
+              <LaboratoriesHubView
+                labs={labs}
+                onBookLab={handleBookLab}
+                onUpdateLab={handleUpdateLab}
+                currentUser={currentUser}
+              />
+            )}
+
+            {activeSection === 'experts' && (
+              <ExpertsHubView
+                experts={experts}
+                onBookExpert={handleBookExpert}
+                onUpdateExpert={handleUpdateExpert}
+                currentUser={currentUser}
+              />
+            )}
+
+            {activeSection === 'simulations' && (
+              <SimulationHubView
+                simulations={simulations}
+                onRunSimulation={handleRunSimulation}
+              />
+            )}
+
+            {activeSection === 'brainstorming' && (
+              <BrainstormingHubView
+                rooms={brainstormRooms}
+                onCreateRoom={handleCreateBrainstormRoom}
+                onSendMessage={handleSendBrainstormMessage}
+                onToggleTaskStatus={handleToggleBrainstormTask}
+                onAddTask={handleAddBrainstormTask}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <AuthModal
@@ -1161,95 +1234,115 @@ export default function App() {
         onOpenInviteModal={() => setProfileModalOpen(true)}
       />
 
+      <ExecutiveDossierModal
+        isOpen={dossierModalOpen}
+        onClose={() => setDossierModalOpen(false)}
+        currentUser={currentUser}
+        project={projects.find((p) => p.id === activeProjectId) || projects[0]}
+        frontier={frontiers.find((f) => f.id === activeFrontierId) || frontiers[0]}
+        evidenceNodes={evidenceNodes}
+      />
+
       <NotificationToastContainer
         toasts={toasts}
         onDismissToast={handleDismissToast}
         onNavigateToNotification={handleNavigateToNotification}
       />
 
-      <footer className="bg-white border-t border-slate-200 mt-16">
-        <div className="max-w-[1440px] mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-500">
-          <div className="flex items-center gap-3">
-            <QartiniaCrestSvg className="w-6 h-6 text-[#0F2537]" />
-            <span className="font-brand font-bold text-[#0F2537] tracking-widest">QARTINIΛ</span>
-            <span>·</span>
-            <span>FROM RESEARCH TO INDUSTRY</span>
-          </div>
+      <MobileBottomDock
+        activeSection={activeSection}
+        onSelectSection={(sec) => setActiveSection(sec)}
+        onOpenDossier={() => setDossierModalOpen(true)}
+      />
 
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <button
-              type="button"
-              onClick={() => setActiveSection('dashboard')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              My Workspace
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('frontier')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Frontier Engine
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('projects')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Protected Projects
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('evidence')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Evidence Graph
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('suppliers')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Suppliers &amp; Fabs
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('laboratories')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Laboratories
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('experts')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Domain Experts
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('simulations')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Simulation Studio
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('brainstorming')}
-              className="hover:text-[#0F2537] cursor-pointer"
-            >
-              Brainstorming
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection('architecture')}
-              className="hover:text-[#0F2537] cursor-pointer font-medium text-[#108548]"
-            >
-              Platform Architecture
-            </button>
+        <footer className="bg-[#F5EFEB] border-t border-[#EBE3D7] mt-16 relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20 pointer-events-none select-none">
+            <CarthageHarborPanorama />
           </div>
-        </div>
-      </footer>
+          <div className="relative z-10 max-w-[1440px] mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-[#718096]">
+            <div className="flex items-center gap-3">
+              <QartiniaLogo height={22} />
+              <span>·</span>
+              <span className="tracking-wider text-[10px] uppercase font-mono text-[#8C6527]">
+                Engineering Intelligence Platform
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <button
+                type="button"
+                onClick={() => setActiveSection('dashboard')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                My Workspace
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('frontier')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Frontier Engine
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('projects')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Protected Projects
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('evidence')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Evidence Graph
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('suppliers')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Suppliers &amp; Fabs
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('laboratories')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Laboratories
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('experts')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Domain Experts
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('simulations')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Simulation Studio
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('brainstorming')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer"
+              >
+                Brainstorming
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('architecture')}
+                className="hover:text-[#0F2038] transition-colors cursor-pointer font-medium text-[#8C6527]"
+              >
+                Platform Architecture
+              </button>
+            </div>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

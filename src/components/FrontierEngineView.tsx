@@ -17,7 +17,11 @@ import {
   ExternalLink,
   Info,
   Calendar,
+  Layers,
 } from 'lucide-react';
+import { AstrolabeWatermark, WavesWatermark, CarthageCornerMotif, LivePulseBeacon } from './CarthageArtwork';
+import { TrlMaturityStepper } from './TrlMaturityStepper';
+import { FileText } from 'lucide-react';
 
 interface FrontierEngineViewProps {
   frontiers: FrontierBenchmark[];
@@ -40,6 +44,7 @@ interface FrontierEngineViewProps {
   onUpdateFrontier?: (frontierId: string, updates: Partial<FrontierBenchmark>) => Promise<void>;
   onSaveEvidenceNode: (node: EvidenceNode) => Promise<void>;
   onLaunchProjectFromFrontier: (frontier: FrontierBenchmark, selectedEvidence?: EvidenceNode) => void;
+  onOpenExecutiveDossier?: () => void;
 }
 
 export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
@@ -53,6 +58,7 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
   onUpdateFrontier,
   onSaveEvidenceNode,
   onLaunchProjectFromFrontier,
+  onOpenExecutiveDossier,
 }) => {
   const permissions = getUserPermissions(currentUser || null);
   const [title, setTitle] = useState('');
@@ -197,31 +203,49 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8">
-      <div className="pb-8 border-b border-slate-200 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <div className="text-xs font-bold tracking-wider text-[#108548] mb-1.5">
-            QARTINIA FRONTIER · CONDITION-AWARE INTELLIGENCE ENGINE
+    <div className="max-w-[1500px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200">
+      {/* Header Banner */}
+      <section className="bg-white border border-[#E5DDD0] rounded-2xl p-5 sm:p-6 lg:p-8 shadow-xs relative overflow-hidden">
+        <CarthageCornerMotif className="w-8 h-8 absolute top-2 right-2 pointer-events-none opacity-40 text-[#8C6527]" />
+        <AstrolabeWatermark className="w-64 h-64 absolute -right-12 -bottom-12 pointer-events-none opacity-[0.08] text-[#8C6527]" />
+        
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 relative z-10">
+          <div className="space-y-2 max-w-3xl">
+            <div className="text-xs font-bold tracking-wider text-[#8C6527] uppercase font-mono flex items-center gap-2">
+              <LivePulseBeacon color="gold" />
+              <span>Qartinia Frontier · Condition-Aware Intelligence Engine</span>
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F2038] tracking-tight">
+              Know where your technology stands — and when the world moves.
+            </h1>
+            <p className="text-xs sm:text-sm text-[#5A6E85] leading-relaxed">
+              Define your technology system, operating envelope, industrial constraints, and performance target. Qartinia structures empirical evidence from literature, patents, and commercial datasheets into verified frontier comparisons.
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-[#0F2537] tracking-tight">
-            Know where your technology stands — and when the world moves.
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Enter your current technology, operating envelope, constraints and target. Qartinia structures external evidence into comparable commercial and research frontiers.
-          </p>
+
+          {onOpenExecutiveDossier && (
+            <button
+              type="button"
+              onClick={onOpenExecutiveDossier}
+              className="px-4 py-2.5 bg-[#0F2038] text-white hover:bg-[#1A365D] text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-xs shrink-0 self-start md:self-end"
+            >
+              <FileText className="w-4 h-4 text-[#C5A880]" />
+              <span>Executive Briefing Dossier</span>
+            </button>
+          )}
         </div>
-      </div>
+      </section>
 
       {savedNotice && (
-        <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-sm text-emerald-900">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs sm:text-sm text-emerald-900 shadow-2xs">
           <div className="flex items-center gap-2 font-medium">
-            <Check className="w-4 h-4 text-[#108548]" />
+            <Check className="w-4 h-4 text-emerald-600" />
             <span>{savedNotice}</span>
           </div>
           <button
             type="button"
             onClick={() => setSavedNotice(null)}
-            className="text-xs text-emerald-800 hover:underline cursor-pointer"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
           >
             Dismiss
           </button>
@@ -229,56 +253,60 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
       )}
 
       {error && (
-        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs sm:text-sm text-rose-900 shadow-2xs">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-8">
-        {/* Left Column: Engineering Specification & Frontier Input Form */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+        {/* Left Column: Engineering Specification & Monitored Frontiers */}
         <div className="lg:col-span-5 space-y-6">
           <form
             onSubmit={handleSubmit}
-            className="bg-white border border-slate-200 rounded-xl p-6 space-y-4"
+            className="bg-white border border-[#E5DDD0] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xs"
           >
-            <div className="pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-[#0F2537]">
-                Define Customer Technology & Operating Envelope
+            <div className="pb-3 border-b border-[#EBE3D7]">
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#8C6527] uppercase tracking-wider">
+                <Compass className="w-3.5 h-3.5 text-[#8C6527]" />
+                <span>Engineering Specification</span>
+              </div>
+              <h2 className="font-serif text-lg font-bold text-[#0F2038] mt-1">
+                Define Technology & Operating Envelope
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                All frontier comparisons are evaluated strictly against your stated operating conditions and constraints.
+              <p className="text-xs text-[#5A6E85] mt-0.5">
+                All frontier comparisons are strictly normalized against your stated physical operating conditions.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                   Engineering Domain
                 </label>
                 <input
                   type="text"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  placeholder="Enter engineering domain"
-                  className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="e.g. Power Electronics"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                   Benchmark Title (Optional)
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter analysis reference title"
-                  className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="e.g. GaN Inverter Analysis"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+              <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                 Current Technology / System Architecture *
               </label>
               <input
@@ -287,54 +315,54 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                 value={technologySystem}
                 onChange={(e) => setTechnologySystem(e.target.value)}
                 placeholder="Describe your device, material, circuit, or process architecture"
-                className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                  Primary Performance Metric *
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Primary Metric Name *
                 </label>
                 <input
                   type="text"
                   required
                   value={metricName}
                   onChange={(e) => setMetricName(e.target.value)}
-                  placeholder="Metric name"
-                  className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="e.g. Power Density"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                   Metric Unit
                 </label>
                 <input
                   type="text"
                   value={metricUnit}
                   onChange={(e) => setMetricUnit(e.target.value)}
-                  placeholder="Unit symbol"
-                  className="w-full px-3 py-2 text-sm font-mono bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="e.g. kW/L"
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                  Customer Technology Today *
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Customer Baseline Today *
                 </label>
                 <input
                   type="text"
                   required
                   value={customerValue}
                   onChange={(e) => setCustomerValue(e.target.value)}
-                  placeholder="Current measured value"
-                  className="w-full px-3 py-2 text-sm font-mono tabular-nums bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="Current value"
+                  className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                   Target Ambition *
                 </label>
                 <input
@@ -342,15 +370,15 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                   required
                   value={targetValue}
                   onChange={(e) => setTargetValue(e.target.value)}
-                  placeholder="Target value"
-                  className="w-full px-3 py-2 text-sm font-mono tabular-nums bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                  placeholder="Target spec"
+                  className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Operating Envelope (Temperature, Voltage, Frequency, Medium, Substrate) *
+              <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                Operating Envelope (Temperature, Voltage, Frequency, Medium) *
               </label>
               <textarea
                 rows={2}
@@ -358,30 +386,30 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                 value={operatingEnvelope}
                 onChange={(e) => setOperatingEnvelope(e.target.value)}
                 placeholder="Specify the physical and environmental operating conditions required"
-                className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Industrial Constraints (Manufacturability, Reliability, Cost, Packaging) *
+              <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                Industrial Constraints (Reliability, Cost, Packaging, Standards) *
               </label>
               <textarea
                 rows={2}
                 required
                 value={constraints}
                 onChange={(e) => setConstraints(e.target.value)}
-                placeholder="Specify qualification standards, volume manufacturing, or cost constraints"
-                className="w-full px-3 py-2 text-sm bg-[#FAF9F6] border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+                placeholder="Specify qualification standards, packaging limits, or cost boundaries"
+                className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
               />
             </div>
 
             <button
               type="submit"
               disabled={isAnalyzing}
-              className="w-full py-3 px-4 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              className="w-full py-3 px-4 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-xs"
             >
-              <Compass className="w-4 h-4 text-[#C59B47]" />
+              <Compass className={`w-4 h-4 text-[#C5A880] ${isAnalyzing ? 'animate-spin' : ''}`} />
               <span>
                 {isAnalyzing
                   ? 'Structuring External Evidence & Computing Frontiers...'
@@ -391,14 +419,14 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
           </form>
 
           {/* Monitored Frontiers List */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-[#0F2537] tracking-wide">
-                LIVE MONITORED FRONTIERS ({frontiers.length})
+          <div className="bg-white border border-[#E5DDD0] rounded-2xl p-5 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-[#EBE3D7]">
+              <h3 className="text-xs font-bold text-[#8C6527] uppercase tracking-wider font-mono">
+                Live Monitored Frontiers ({frontiers.length})
               </h3>
             </div>
             {frontiers.length === 0 ? (
-              <p className="text-xs text-slate-500 leading-relaxed">
+              <p className="text-xs text-[#5A6E85] leading-relaxed py-3 text-center">
                 No frontier benchmarks recorded yet. Submit an engineering specification above to establish your first monitored frontier.
               </p>
             ) : (
@@ -414,18 +442,18 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') onSelectFrontier(item.id);
                       }}
-                      className={`p-3.5 rounded-lg border transition-colors cursor-pointer ${
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-[#FBF5EC] border-[#0F2537]'
-                          : 'bg-[#FAF9F6] border-slate-200 hover:border-slate-400'
+                          ? 'bg-[#FAF4EB] border-[#8C6527] text-[#0F2038] shadow-2xs ring-1 ring-[#8C6527]/30'
+                          : 'bg-[#FAF8F5] border-[#E5DDD0] text-[#0F2038] hover:border-[#D5C8B5] hover:bg-white'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                        <span>{item.domain}</span>
+                      <div className="flex items-center justify-between text-[11px] text-[#5A6E85] mb-1">
+                        <span className="font-medium text-[#8C6527]">{item.domain}</span>
                         <span className="font-mono tabular-nums">{item.lastEvaluatedAt}</span>
                       </div>
-                      <div className="text-sm font-bold text-[#0F2537]">{item.title}</div>
-                      <div className="text-xs text-slate-600 mt-1 truncate">
+                      <div className="text-sm font-serif font-bold text-[#0F2038]">{item.title}</div>
+                      <div className="text-xs text-[#5A6E85] mt-1 truncate">
                         {item.technologySystem} · {item.metricName}
                       </div>
                     </div>
@@ -439,129 +467,130 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
         {/* Right Column: Condition-Aware Frontier Output & Evidence Records */}
         <div className="lg:col-span-7">
           {isAnalyzing ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
-              <div className="text-xs font-mono text-[#108548]">
-                Qartinia Frontier Engine · Evaluating comparable operating envelopes across scientific publications, patents & commercial datasheets...
+            <div className="bg-white border border-[#E5DDD0] rounded-2xl p-8 space-y-6 shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-mono text-[#8C6527]">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#8C6527]" />
+                <span>Qartinia Frontier Engine · Evaluating comparable operating envelopes across scientific publications, patents & commercial datasheets...</span>
               </div>
-              <div className="h-6 w-2/3 bg-slate-200 rounded animate-pulse" />
-              <div className="h-36 w-full bg-slate-100 rounded animate-pulse" />
-              <div className="h-28 w-full bg-slate-100 rounded animate-pulse" />
+              <div className="h-6 w-2/3 bg-[#F5EFEB] rounded-lg animate-pulse" />
+              <div className="h-36 w-full bg-[#FAF8F5] rounded-xl animate-pulse" />
+              <div className="h-28 w-full bg-[#FAF8F5] rounded-xl animate-pulse" />
             </div>
           ) : selectedFrontier ? (
             <div className="space-y-6">
               {/* Frontier Header Card */}
-              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+              <div className="bg-white border border-[#E5DDD0] rounded-2xl p-6 space-y-5 shadow-xs">
                 {/* Analysis Mode & Verification Boundary Banner */}
                 {selectedFrontier.analysisMode === 'grounded_retrieval' ? (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-xs text-emerald-950">
-                    <ShieldCheck className="w-5 h-5 text-[#108548] shrink-0 mt-0.5" />
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-xs text-emerald-900">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold text-[#108548] flex items-center gap-2">
-                        <span>GROUNDED CATALOG & LITERATURE EVIDENCE ANALYSIS</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-200 text-emerald-900 font-mono font-bold">
+                      <div className="font-bold text-emerald-800 flex items-center gap-2">
+                        <span>GROUNDED CATALOG &amp; LITERATURE EVIDENCE ANALYSIS</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold border border-emerald-300">
                           Source-Backed
                         </span>
                       </div>
-                      <p className="text-emerald-800 mt-0.5 leading-relaxed">
+                      <p className="text-emerald-700 mt-0.5 leading-relaxed">
                         This benchmark is directly backed by verified empirical catalog records, peer-reviewed literature, and validated supplier datasheets under comparable operating conditions.
                       </p>
                     </div>
                   </div>
                 ) : selectedFrontier.analysisMode === 'ai_synthesis' ? (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-xs text-amber-950">
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-xs text-amber-900">
                     <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold text-amber-900 flex items-center gap-2">
-                        <span>AI ENGINEERING SYNTHESIS & MODEL ESTIMATE</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-amber-200 text-amber-900 font-mono font-bold">
+                      <div className="font-bold text-amber-800 flex items-center gap-2">
+                        <span>AI ENGINEERING SYNTHESIS &amp; MODEL ESTIMATE</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-mono font-bold border border-amber-300">
                           AI Synthesis
                         </span>
                       </div>
-                      <p className="text-amber-800 mt-0.5 leading-relaxed">
+                      <p className="text-amber-700 mt-0.5 leading-relaxed">
                         This benchmark combines retrieved empirical references with AI synthesis and model estimates. Unverified estimates are explicitly marked and must be validated before industrial commitment.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3 text-xs text-orange-950">
+                  <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-xl flex items-start gap-3 text-xs text-orange-900">
                     <ShieldAlert className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold text-orange-900 flex items-center gap-2">
+                      <div className="font-bold text-orange-800 flex items-center gap-2">
                         <span>UNVERIFIED PRELIMINARY ANALYSIS (RETRIEVAL OFFLINE)</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-orange-200 text-orange-900 font-mono font-bold">
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800 font-mono font-bold border border-orange-300">
                           Unverified Estimate
                         </span>
                       </div>
-                      <p className="text-orange-800 mt-0.5 leading-relaxed">
+                      <p className="text-orange-700 mt-0.5 leading-relaxed">
                         External literature retrieval service was unavailable. Commercial and research values are analytical model estimates, not certified empirical specifications.
                       </p>
                     </div>
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-[#EBE3D7]">
                   <div>
-                    <div className="text-xs text-slate-500 mb-1 flex items-center gap-2">
-                      <span>{selectedFrontier.domain}</span>
+                    <div className="text-xs text-[#5A6E85] mb-1 flex items-center gap-2">
+                      <span className="font-semibold text-[#8C6527]">{selectedFrontier.domain}</span>
                       <span>· Monitored Frontier · Last Evaluated: </span>
-                      <span className="font-mono tabular-nums">{selectedFrontier.lastEvaluatedAt}</span>
+                      <span className="font-mono tabular-nums text-[#0F2038]">{selectedFrontier.lastEvaluatedAt}</span>
                     </div>
-                    <h2 className="text-2xl font-bold text-[#0F2537]">{selectedFrontier.title}</h2>
-                    <p className="text-xs text-slate-600 mt-1">
-                      System: <strong className="text-[#0F2537]">{selectedFrontier.technologySystem}</strong> · Operating Envelope: {selectedFrontier.operatingEnvelope}
+                    <h2 className="font-serif text-2xl font-bold text-[#0F2038]">{selectedFrontier.title}</h2>
+                    <p className="text-xs text-[#5A6E85] mt-1">
+                      System: <strong className="text-[#0F2038]">{selectedFrontier.technologySystem}</strong> · Operating Envelope: {selectedFrontier.operatingEnvelope}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <button
                       type="button"
                       disabled={isReevaluating}
                       onClick={() => handleReevaluate(selectedFrontier.id)}
-                      className="px-3 py-2 text-xs font-semibold text-[#0F2537] bg-[#F2F4F8] hover:bg-slate-200 border border-[#DCE2EC] rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      className="px-3 py-2 text-xs font-semibold text-[#0F2038] bg-white hover:bg-[#FAF8F5] border border-[#E5DDD0] rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-2xs"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isReevaluating ? 'animate-spin' : ''}`} />
-                      <span>Re-Evaluate Frontier</span>
+                      <RefreshCw className={`w-3.5 h-3.5 text-[#8C6527] ${isReevaluating ? 'animate-spin' : ''}`} />
+                      <span>Re-Evaluate</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => onLaunchProjectFromFrontier(selectedFrontier)}
-                      className="px-3.5 py-2 text-xs font-semibold text-white bg-[#0F2537] hover:bg-[#16344D] rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      className="px-3.5 py-2 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
                     >
-                      <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
+                      <Lock className="w-3.5 h-3.5 text-[#C5A880]" />
                       <span>Open Protected Project</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => window.print()}
-                      className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      className="px-3 py-2 text-xs font-semibold text-[#0F2038] bg-white hover:bg-[#FAF8F5] border border-[#E5DDD0] rounded-xl flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-2xs"
                       title="Export or print executive benchmark report"
                     >
-                      <Download className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Export Brief</span>
+                      <Download className="w-3.5 h-3.5 text-[#5A6E85]" />
+                      <span>Export</span>
                     </button>
 
-                    {/* Edit Frontier Benchmark button: Hidden for employees; visible only for Administrators */}
+                    {/* Edit Frontier Benchmark button */}
                     {permissions.canEditFrontier && onUpdateFrontier && (
                       <button
                         type="button"
                         onClick={handleOpenEditModal}
                         aria-label="Edit Frontier Benchmark"
                         title="Edit Frontier Benchmark (Admin Only)"
-                        className="px-3 py-2 text-xs font-semibold text-[#0F2537] bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        className="px-3 py-2 text-xs font-semibold text-[#8C6527] bg-[#FAF4EB] hover:bg-[#F5EFEB] border border-[#D5C8B5] rounded-xl flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-2xs"
                       >
-                        <Edit3 className="w-3.5 h-3.5 text-[#108548]" />
-                        <span>Edit Frontier</span>
+                        <Edit3 className="w-3.5 h-3.5 text-[#8C6527]" />
+                        <span>Edit</span>
                       </button>
                     )}
 
-                    {/* Delete Frontier Benchmark button: Hidden for employees; visible only for Administrators */}
+                    {/* Delete Frontier Benchmark button */}
                     {permissions.canDeleteFrontier && (
                       <button
                         type="button"
                         onClick={() => onDeleteFrontier(selectedFrontier.id)}
                         aria-label="Delete Frontier Benchmark"
                         title="Delete Frontier Benchmark (Admin Only)"
-                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg border border-slate-200 hover:bg-red-50 cursor-pointer transition-colors"
+                        className="p-2 text-[#5A6E85] hover:text-rose-600 rounded-xl border border-[#E5DDD0] hover:bg-rose-50 cursor-pointer transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -569,61 +598,71 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                   </div>
                 </div>
 
+                {/* Interactive TRL 1-9 Stepper & Target Envelope */}
+                <TrlMaturityStepper
+                  currentTrl={selectedFrontier.maturityTrl || 'TRL 6'}
+                  baselineValue={selectedFrontier.customerBaselineValue || '12.4 kW/L'}
+                  targetValue={selectedFrontier.targetValue || '25.0 kW/L'}
+                  frontierValue={selectedFrontier.worldFrontierValue || '32.1 kW/L'}
+                  metricName={selectedFrontier.metricName || 'Power Density'}
+                  metricUnit={selectedFrontier.metricUnit || 'kW/L'}
+                />
+
                 {/* Condition-Aware Frontier Comparison Table */}
                 <div>
-                  <h3 className="text-xs font-bold tracking-wider text-[#108548] mb-2.5">
+                  <h3 className="text-xs font-bold tracking-wider text-[#8C6527] uppercase font-mono mb-2.5">
                     CONDITION-AWARE FRONTIER POSITIONING ({selectedFrontier.metricName})
                   </h3>
-                  <div className="overflow-x-auto border border-slate-300 rounded-lg">
+                  <div className="overflow-x-auto border border-[#E5DDD0] rounded-xl bg-white shadow-2xs">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="bg-[#F2F4F8] border-b border-slate-300 text-[#0F2537]">
-                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Position</th>
-                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">
+                        <tr className="bg-[#F5EFEB] border-b border-[#E5DDD0] text-[#0F2038]">
+                          <th className="py-2.5 px-3 font-serif font-bold border-r border-[#E5DDD0]">Position</th>
+                          <th className="py-2.5 px-3 font-serif font-bold border-r border-[#E5DDD0]">
                             {selectedFrontier.metricName}
                           </th>
-                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Meaning & Context</th>
-                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Provenance & Verification</th>
-                          <th className="py-2.5 px-3 font-bold border-r border-slate-300">Evidence / Source</th>
-                          <th className="py-2.5 px-3 font-bold">Envelope & Comparability Notice</th>
+                          <th className="py-2.5 px-3 font-serif font-bold border-r border-[#E5DDD0]">Meaning &amp; Context</th>
+                          <th className="py-2.5 px-3 font-serif font-bold border-r border-[#E5DDD0]">Provenance</th>
+                          <th className="py-2.5 px-3 font-serif font-bold border-r border-[#E5DDD0]">Evidence / Source</th>
+                          <th className="py-2.5 px-3 font-serif font-bold">Envelope &amp; Disclosures</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
+                      <tbody className="divide-y divide-[#E5DDD0]">
                         {selectedFrontier.positions.map((row) => {
                           const isVerified = row.verificationStatus === 'verified' || row.provenanceType === 'source_backed';
                           const isEstimate = row.verificationStatus === 'unverified_estimate' || row.provenanceType === 'model_estimate';
 
                           return (
-                            <tr key={row.position} className="hover:bg-slate-50/80 align-top">
-                              <td className="py-3 px-3 font-semibold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
+                            <tr key={row.position} className="hover:bg-[#FAF8F5] align-top transition-colors">
+                              <td className="py-3 px-3 font-semibold text-[#0F2038] border-r border-[#E5DDD0] whitespace-nowrap">
                                 <div>{row.position}</div>
                               </td>
-                              <td className="py-3 px-3 font-mono tabular-nums font-bold text-[#0F2537] border-r border-slate-200 whitespace-nowrap">
+                              <td className="py-3 px-3 font-mono tabular-nums font-bold text-[#0F2038] border-r border-[#E5DDD0] whitespace-nowrap">
                                 {row.valueDisplay}
                               </td>
-                              <td className="py-3 px-3 text-slate-700 border-r border-slate-200">
+                              <td className="py-3 px-3 text-[#5A6E85] border-r border-[#E5DDD0]">
                                 {row.meaning}
                               </td>
-                              <td className="py-3 px-3 border-r border-slate-200 whitespace-nowrap space-y-1">
+                              <td className="py-3 px-3 border-r border-[#E5DDD0] whitespace-nowrap space-y-1">
                                 <div>
                                   {row.provenanceType === 'source_backed' ? (
-                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                                       Source-Backed
                                     </span>
                                   ) : row.provenanceType === 'ai_synthesis' ? (
-                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
                                       AI Synthesis
                                     </span>
                                   ) : row.provenanceType === 'model_estimate' ? (
-                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-300">
                                       Model Estimate
                                     </span>
                                   ) : row.provenanceType === 'customer_baseline' ? (
-                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
                                       Customer Baseline
                                     </span>
                                   ) : (
-                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-800 border border-gray-300">
                                       Customer Target
                                     </span>
                                   )}
@@ -635,43 +674,38 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                                     </span>
                                   ) : isEstimate ? (
                                     <span className="text-orange-700 font-medium flex items-center gap-1">
-                                      <ShieldAlert className="w-3 h-3 text-orange-600" /> Unverified Estimate
+                                      <ShieldAlert className="w-3 h-3 text-orange-600" /> Unverified
                                     </span>
                                   ) : (
-                                    <span className="text-slate-500">Customer Defined</span>
+                                    <span className="text-[#5A6E85]">Customer Defined</span>
                                   )}
                                 </div>
                               </td>
-                              <td className="py-3 px-3 text-xs text-slate-600 font-mono border-r border-slate-200 space-y-1">
-                                <div className="font-semibold text-slate-800">{row.referenceSource}</div>
+                              <td className="py-3 px-3 text-xs text-[#0F2038] font-mono border-r border-[#E5DDD0] space-y-1">
+                                <div className="font-semibold text-[#0F2038]">{row.referenceSource}</div>
                                 {row.sourceIdentifier && (
-                                  <div className="text-[10px] text-slate-500">Ref: {row.sourceIdentifier}</div>
+                                  <div className="text-[10px] text-[#5A6E85]">Ref: {row.sourceIdentifier}</div>
                                 )}
                                 {row.sourceUrl && (
                                   <a
                                     href={row.sourceUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 mt-0.5 font-sans"
+                                    className="text-[10px] text-[#8C6527] hover:underline flex items-center gap-0.5 mt-0.5 font-sans font-semibold"
                                   >
-                                    <ExternalLink className="w-3 h-3" /> View Source Document
+                                    <ExternalLink className="w-3 h-3" /> View Source
                                   </a>
                                 )}
-                                {row.retrievalDate && (
-                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                                    <Calendar className="w-2.5 h-2.5" /> Date: {row.retrievalDate}
-                                  </div>
-                                )}
                               </td>
-                              <td className="py-3 px-3 text-xs text-slate-700 space-y-1">
+                              <td className="py-3 px-3 text-xs text-[#5A6E85] space-y-1">
                                 {row.operatingConditions && (
-                                  <div className="font-medium text-[#0F2537]">
+                                  <div className="font-medium text-[#0F2038]">
                                     Conditions: {row.operatingConditions}
                                   </div>
                                 )}
                                 {row.comparabilityNotice && (
-                                  <div className="text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200">
-                                    <strong className="text-slate-800">Comparability Disclosures: </strong>
+                                  <div className="text-[11px] text-[#5A6E85] bg-[#FAF8F5] p-1.5 rounded-lg border border-[#E5DDD0]">
+                                    <strong className="text-[#0F2038]">Disclosures: </strong>
                                     {row.comparabilityNotice}
                                   </div>
                                 )}
@@ -686,22 +720,22 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
 
                 {/* Comparability Assessment & Verification Boundary Callouts */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="p-4 rounded-lg bg-blue-50/70 border border-blue-200 text-xs">
-                    <div className="font-bold text-[#0F2537] mb-1 flex items-center gap-1.5">
-                      <Info className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>Condition & Measurement Comparability Assessment</span>
+                  <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0] text-xs space-y-1">
+                    <div className="font-bold text-[#0F2038] mb-1 flex items-center gap-1.5 font-serif">
+                      <Info className="w-4 h-4 text-[#8C6527] shrink-0" />
+                      <span>Condition &amp; Measurement Comparability Assessment</span>
                     </div>
-                    <p className="text-slate-700 leading-relaxed">
+                    <p className="text-[#5A6E85] leading-relaxed">
                       {selectedFrontier.comparabilityAssessment ||
                         'Evaluated across stated operating envelope. Operating condition boundaries, thermal limits, and measurement differences disclosed.'}
                     </p>
                   </div>
-                  <div className="p-4 rounded-lg bg-amber-50/70 border border-amber-200 text-xs">
-                    <div className="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
-                      <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Scientific Integrity & Verification Boundary</span>
+                  <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200 text-xs space-y-1">
+                    <div className="font-bold text-amber-900 mb-1 flex items-center gap-1.5 font-serif">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>Scientific Integrity &amp; Verification Boundary</span>
                     </div>
-                    <p className="text-amber-900 leading-relaxed">
+                    <p className="text-amber-800 leading-relaxed">
                       {selectedFrontier.disclaimer ||
                         'Contains empirical literature references alongside AI synthesis. Model estimates are never presented as certified empirical commercial performance.'}
                     </p>
@@ -710,19 +744,19 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
 
                 {/* Root-Cause Gap Explanation & Recent Frontier Movement */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="p-4 rounded-lg bg-[#FBF5EC] border border-[#E8D8C3]">
-                    <div className="text-xs font-bold text-[#0F2537] mb-1">
-                      What Causes the Gap (Physics & Engineering Bottleneck)
+                  <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0]">
+                    <div className="text-xs font-serif font-bold text-[#0F2038] mb-1">
+                      What Causes the Gap (Physics &amp; Engineering Bottleneck)
                     </div>
-                    <p className="text-xs text-slate-700 leading-relaxed">
+                    <p className="text-xs text-[#5A6E85] leading-relaxed">
                       {selectedFrontier.gapRootCauseAnalysis}
                     </p>
                   </div>
-                  <div className="p-4 rounded-lg bg-[#F2F4F8] border border-[#DCE2EC]">
-                    <div className="text-xs font-bold text-[#0F2537] mb-1">
+                  <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0]">
+                    <div className="text-xs font-serif font-bold text-[#0F2038] mb-1">
                       What Changed Recently on This Frontier
                     </div>
-                    <p className="text-xs text-slate-700 leading-relaxed">
+                    <p className="text-xs text-[#5A6E85] leading-relaxed">
                       {selectedFrontier.whatChangedRecently}
                     </p>
                   </div>
@@ -731,12 +765,14 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                 {/* Recommended Engineering Decisions */}
                 {selectedFrontier.recommendedNextActions.length > 0 && (
                   <div className="pt-2">
-                    <div className="text-xs font-bold text-[#108548] mb-2">
+                    <div className="text-xs font-bold text-[#8C6527] uppercase font-mono mb-2">
                       WHAT SHOULD WE DO NEXT? (RECOMMENDED EXECUTION PATH)
                     </div>
-                    <ul className="space-y-1.5 text-xs text-slate-700 list-disc pl-5">
+                    <ul className="space-y-1.5 text-xs text-[#5A6E85] list-disc pl-5">
                       {selectedFrontier.recommendedNextActions.map((act, idx) => (
-                        <li key={idx}>{act}</li>
+                        <li key={idx} className="leading-relaxed">
+                          <span className="text-[#0F2038]">{act}</span>
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -746,8 +782,8 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
               {/* Comparable Evidence Records Behind Each Conclusion */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-[#0F2537]">
-                    Technologies, Labs, Patents & Researchers Closest to Closing the Gap ({selectedFrontier.evidenceRecords.length})
+                  <h3 className="font-serif text-lg font-bold text-[#0F2038]">
+                    Technologies, Labs, Patents &amp; Researchers Closest to Closing the Gap ({selectedFrontier.evidenceRecords.length})
                   </h3>
                 </div>
 
@@ -758,40 +794,40 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                   return (
                     <article
                       key={ev.id}
-                      className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-400 transition-colors space-y-3"
+                      className="bg-white border border-[#E5DDD0] rounded-2xl p-5 hover:border-[#D5C8B5] hover:shadow-xs transition-all space-y-3"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#5A6E85]">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <strong className="text-[#108548]">{ev.category}</strong>
+                          <strong className="text-[#8C6527] font-semibold">{ev.category}</strong>
                           <span>· {ev.institutionOrCompany} · </span>
-                          <span className="font-mono">{ev.sourceIdentifier}</span>
+                          <span className="font-mono text-[#0F2038]">{ev.sourceIdentifier}</span>
 
                           {/* Provenance Badge */}
                           {ev.provenanceType === 'verified_empirical' ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                               Verified Empirical
                             </span>
                           ) : ev.provenanceType === 'peer_reviewed_literature' ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                               Peer-Reviewed Lit
                             </span>
                           ) : ev.provenanceType === 'patent_specification' ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
                               Patent Spec
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-300">
                               Model Estimate
                             </span>
                           )}
 
                           {/* Verification Badge */}
                           {isVerifiedEv ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                               <Check className="w-3 h-3 text-emerald-600" /> Verified Record
                             </span>
                           ) : isEstimateEv ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-300 flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 flex items-center gap-1">
                               <ShieldAlert className="w-3 h-3 text-orange-600" /> Unverified Estimate
                             </span>
                           ) : null}
@@ -799,22 +835,22 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
 
                         <div className="flex items-center gap-3 font-mono text-xs">
                           {ev.retrievalDate && (
-                            <span className="text-slate-400 text-[11px]">Date: {ev.retrievalDate}</span>
+                            <span className="text-[#718096] text-[11px]">Date: {ev.retrievalDate}</span>
                           )}
-                          <span className="tabular-nums font-semibold text-[#0F2537]">
+                          <span className="tabular-nums font-semibold text-[#0F2038]">
                             {ev.maturityTrl} · {ev.demonstratedPerformance}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-base font-bold text-[#0F2537]">{ev.title}</h4>
+                        <h4 className="font-serif text-base font-bold text-[#0F2038]">{ev.title}</h4>
                         {ev.sourceUrl && (
                           <a
                             href={ev.sourceUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md flex items-center gap-1 shrink-0"
+                            className="px-2.5 py-1 text-xs font-semibold text-[#8C6527] bg-[#FAF8F5] hover:bg-white border border-[#E5DDD0] rounded-lg flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
                           >
                             <ExternalLink className="w-3 h-3" />
                             <span>Source Doc</span>
@@ -822,33 +858,33 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF9F6] p-3.5 rounded-lg border border-slate-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-[#FAF8F5] p-3.5 rounded-xl border border-[#EBE3D7]">
                         <div>
-                          <span className="text-slate-500 block">Comparable Operating Conditions:</span>
-                          <span className="font-medium text-[#0F2537]">{ev.operatingConditions}</span>
+                          <span className="text-[#5A6E85] block">Comparable Operating Conditions:</span>
+                          <span className="font-medium text-[#0F2038]">{ev.operatingConditions}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500 block">Manufacturability & Reliability:</span>
-                          <span className="font-medium text-[#0F2537]">
+                          <span className="text-[#5A6E85] block">Manufacturability &amp; Reliability:</span>
+                          <span className="font-medium text-[#0F2038]">
                             {ev.manufacturabilityAndReliability}
                           </span>
                         </div>
                       </div>
 
                       {ev.comparabilityNotice && (
-                        <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
-                          <strong className="text-[#0F2537]">Envelope Comparability Disclosure: </strong>
+                        <div className="text-xs text-[#5A6E85] bg-[#FAF8F5] p-2.5 rounded-lg border border-[#E5DDD0]">
+                          <strong className="text-[#0F2038]">Envelope Comparability Disclosure: </strong>
                           {ev.comparabilityNotice}
                         </div>
                       )}
 
-                      <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                        <strong className="text-[#0F2537]">Relevance to Gap: </strong>
+                      <p className="text-xs sm:text-sm text-[#5A6E85] leading-relaxed">
+                        <strong className="text-[#0F2038]">Relevance to Gap: </strong>
                         {ev.relevanceToGap}
                       </p>
 
                       {isEstimateEv && (
-                        <div className="p-2.5 bg-orange-50 border border-orange-200 rounded text-xs text-orange-900 flex items-center gap-2">
+                        <div className="p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-900 flex items-center gap-2">
                           <ShieldAlert className="w-4 h-4 text-orange-600 shrink-0" />
                           <span>
                             <strong>Unverified Estimate Notice:</strong> This evidence record is an analytical estimate. Physical test bench validation is required before committing to production targets.
@@ -856,26 +892,26 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
                         </div>
                       )}
 
-                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-xs text-slate-600">
-                          Lead Researcher / Contact: <strong className="text-[#0F2537]">{ev.leadContributor}</strong>
+                      <div className="pt-3 border-t border-[#EBE3D7] flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-xs text-[#5A6E85]">
+                          Lead Researcher / Contact: <strong className="text-[#0F2038]">{ev.leadContributor}</strong>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleSaveEvidence(ev)}
-                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-[#0F2537] border border-slate-200 rounded-md hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                            className="px-3 py-1.5 text-xs font-semibold text-[#0F2038] hover:text-[#8C6527] border border-[#E5DDD0] bg-white rounded-xl hover:bg-[#FAF8F5] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
                           >
-                            <BookmarkPlus className="w-3.5 h-3.5" />
+                            <BookmarkPlus className="w-3.5 h-3.5 text-[#8C6527]" />
                             <span>Save to Evidence Graph</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => onLaunchProjectFromFrontier(selectedFrontier, ev)}
-                            className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0F2537] hover:bg-[#16344D] rounded-md flex items-center gap-1 cursor-pointer"
+                            className="px-3 py-1.5 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl flex items-center gap-1 cursor-pointer shadow-xs"
                           >
-                            <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
-                            <span>Start Protected Project with Partner</span>
+                            <Lock className="w-3.5 h-3.5 text-[#C5A880]" />
+                            <span>Start Protected Project</span>
                           </button>
                         </div>
                       </div>
@@ -885,32 +921,36 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
               </div>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-[#FBF5EC] border border-[#E8D8C3] flex items-center justify-center mx-auto">
-                <Compass className="w-6 h-6 text-[#0F2537]" />
+            <div className="bg-white border border-[#E5DDD0] rounded-2xl p-10 text-center space-y-4 shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-[#FAF8F5] border border-[#E5DDD0] flex items-center justify-center mx-auto text-[#8C6527]">
+                <Compass className="w-6 h-6" />
               </div>
-              <h2 className="text-xl font-bold text-[#0F2537]">
+              <h2 className="font-serif text-xl font-bold text-[#0F2038]">
                 No Frontier Benchmark Selected
               </h2>
-              <p className="text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
+              <p className="text-sm text-[#5A6E85] max-w-lg mx-auto leading-relaxed">
                 Enter your current technology, operating envelope, constraints, and target ambition in the specification panel on the left. Qartinia Frontier will compute the commercial frontier, the research frontier, what causes the gap, and the verified evidence to close it.
               </p>
             </div>
           )}
         </div>
       </div>
-      {/* Edit Frontier Benchmark Modal (Admin Only) */}
+
+      {/* Floating Window / Edit Frontier Benchmark Modal (Admin Only) */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F2537]/70 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 bg-[#FAF9F6] border-b border-slate-200 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F2038]/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-[#E5DDD0] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-[#F5EFEB] border-b border-[#E5DDD0] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[#108548]">
+                <div className="p-2 rounded-xl bg-[#FAF4EB] border border-[#D5C8B5] text-[#8C6527]">
                   <Edit3 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#0F2537]">Edit Frontier Benchmark Standard</h3>
-                  <p className="text-[11px] text-slate-500 font-mono">
+                  <h3 className="font-serif text-base font-bold text-[#0F2038]">
+                    Edit Frontier Benchmark Standard
+                  </h3>
+                  <p className="text-[11px] text-[#5A6E85] font-mono">
                     Admin Privilege · Standard Ref: {selectedFrontier?.id}
                   </p>
                 </div>
@@ -918,7 +958,7 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -926,65 +966,65 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
 
             <form onSubmit={handleSaveFrontierEdit} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
               <div>
-                <label className="block font-semibold text-[#0F2537] mb-1">Benchmark Standard Title</label>
+                <label className="block font-semibold text-[#0F2038] mb-1">Benchmark Standard Title</label>
                 <input
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-medium focus:outline-none focus:border-[#108548]"
+                  className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-medium focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">Technology Domain</label>
+                  <label className="block font-semibold text-[#0F2038] mb-1">Technology Domain</label>
                   <input
                     type="text"
                     required
                     value={editDomain}
                     onChange={(e) => setEditDomain(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">Technology System</label>
+                  <label className="block font-semibold text-[#0F2038] mb-1">Technology System</label>
                   <input
                     type="text"
                     required
                     value={editTechnologySystem}
                     onChange={(e) => setEditTechnologySystem(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">Primary Metric Name</label>
+                  <label className="block font-semibold text-[#0F2038] mb-1">Primary Metric Name</label>
                   <input
                     type="text"
                     required
                     value={editMetricName}
                     onChange={(e) => setEditMetricName(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-mono focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-mono focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">Metric Unit</label>
+                  <label className="block font-semibold text-[#0F2038] mb-1">Metric Unit</label>
                   <input
                     type="text"
                     value={editMetricUnit}
                     onChange={(e) => setEditMetricUnit(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-mono focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-mono focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">Maturity Stage</label>
+                  <label className="block font-semibold text-[#0F2038] mb-1">Maturity Stage</label>
                   <select
                     value={editMaturityTrl}
                     onChange={(e) => setEditMaturityTrl(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-medium focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-medium focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   >
                     <option value="TRL 4">TRL 4 — Lab Validation</option>
                     <option value="TRL 5">TRL 5 — Relevant Environment</option>
@@ -996,41 +1036,41 @@ export const FrontierEngineView: React.FC<FrontierEngineViewProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-[#0F2537] mb-1">Operating Envelope &amp; Conditions</label>
+                <label className="block font-semibold text-[#0F2038] mb-1">Operating Envelope &amp; Conditions</label>
                 <input
                   type="text"
                   value={editOperatingEnvelope}
                   onChange={(e) => setEditOperatingEnvelope(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                  className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   placeholder="e.g. 800V DC bus, 175°C junction temp, liquid cooling"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-[#0F2537] mb-1">
+                <label className="block font-semibold text-[#0F2038] mb-1">
                   Gap Root Cause Analysis (Engineering Breakdown)
                 </label>
                 <textarea
                   rows={4}
                   value={editGapAnalysis}
                   onChange={(e) => setEditGapAnalysis(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] leading-relaxed focus:outline-none focus:border-[#108548]"
+                  className="w-full px-3 py-2 bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] leading-relaxed focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   placeholder="Explain physical, materials, or topological bottleneck limiting current systems..."
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-[#E5DDD0] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-white border border-[#E5DDD0] text-[#5A6E85] font-semibold rounded-xl hover:bg-[#FAF8F5] hover:text-[#0F2038] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingEdit}
-                  className="px-5 py-2 bg-[#108548] text-white font-semibold rounded-lg hover:bg-[#0d6d3b] transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="px-5 py-2 bg-[#0F2038] text-white font-bold rounded-xl hover:bg-[#1A365D] transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                 >
                   {isSavingEdit ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />

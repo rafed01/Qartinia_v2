@@ -19,7 +19,16 @@ import {
   Bookmark,
   GitBranch,
   ArrowRight,
+  Network,
+  FileText,
+  Eye,
+  ExternalLink,
+  ShieldCheck,
+  Award,
 } from 'lucide-react';
+import { AstrolabeWatermark, WavesWatermark, CarthageCornerMotif, ColumnsWatermark, LivePulseBeacon } from './CarthageArtwork';
+import { ConstellationRadarCanvas } from './ConstellationRadarCanvas';
+import { CryptographicProvenanceInspectorModal } from './CryptographicProvenanceInspectorModal';
 
 interface EvidenceGraphViewProps {
   evidenceNodes: EvidenceNode[];
@@ -41,6 +50,7 @@ interface EvidenceGraphViewProps {
   }) => Promise<void>;
   onDeleteRelationship: (id: string) => Promise<void>;
   onLaunchProjectFromEvidence: (node: EvidenceNode) => void;
+  onOpenExecutiveDossier?: () => void;
 }
 
 const CATEGORIES: ('All' | EvidenceCategory | 'Bookmarked')[] = [
@@ -69,6 +79,7 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
   onCreateRelationship,
   onDeleteRelationship,
   onLaunchProjectFromEvidence,
+  onOpenExecutiveDossier,
 }) => {
   const permissions = getUserPermissions(currentUser || null);
   const [selectedCategory, setSelectedCategory] = useState<
@@ -77,6 +88,9 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [selectedNodeForInspect, setSelectedNodeForInspect] = useState<EvidenceNode | null>(null);
+  const [viewMode, setViewMode] = useState<'radar' | 'grid'>('radar');
+  const [sealModalNode, setSealModalNode] = useState<EvidenceNode | null>(null);
 
   React.useEffect(() => {
     if (autoOpenCreateModal) {
@@ -99,63 +113,61 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
   // Relationship Link Modal State
   const [relSourceId, setRelSourceId] = useState('');
   const [relTargetId, setRelTargetId] = useState('');
-  const [relType, setRelType] = useState('closes_frontier_gap');
+  const [relType, setRelType] = useState('cites_method');
   const [relDesc, setRelDesc] = useState('');
 
-  const bookmarkedIds = useMemo(
-    () => new Set(bookmarks.map((b) => b.catalogId)),
-    [bookmarks]
-  );
+  const bookmarkedIds = useMemo(() => {
+    return new Set(bookmarks.map((b) => b.catalogId));
+  }, [bookmarks]);
 
+  // Combined pool of entities that can be linked
   const allCatalogEntities = useMemo(() => {
-    const items: { id: string; label: string }[] = [];
-    frontiers.forEach((f) => items.push({ id: f.id, label: `[Frontier] ${f.title}` }));
-    projects.forEach((p) =>
-      items.push({ id: p.id, label: `[Project Room ${p.code}] ${p.title}` })
-    );
-    evidenceNodes.forEach((e) =>
-      items.push({ id: e.id, label: `[${e.category}] ${e.title}` })
-    );
-    return items;
-  }, [frontiers, projects, evidenceNodes]);
+    const list: { id: string; title: string; type: string }[] = [];
+    evidenceNodes.forEach((n) => list.push({ id: n.id, title: n.title, type: 'Evidence' }));
+    frontiers.forEach((f) => list.push({ id: f.id, title: f.title, type: 'Frontier' }));
+    projects.forEach((p) => list.push({ id: p.id, title: p.title, type: 'Project' }));
+    return list;
+  }, [evidenceNodes, frontiers, projects]);
 
   const filteredNodes = useMemo(() => {
-    return evidenceNodes.filter((n) => {
-      if (selectedCategory === 'Bookmarked' && !bookmarkedIds.has(n.id)) {
-        return false;
+    return evidenceNodes.filter((node) => {
+      if (selectedCategory === 'Bookmarked') {
+        if (!bookmarkedIds.has(node.id)) return false;
+      } else if (selectedCategory !== 'All') {
+        if (node.category !== selectedCategory) return false;
       }
-      const matchesCat =
-        selectedCategory === 'All' ||
-        selectedCategory === 'Bookmarked' ||
-        n.category === selectedCategory;
-      const matchesQuery =
-        !searchQuery ||
-        n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.institutionOrCompany.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.operatingConditions.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.leadContributor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.sourceIdentifier.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCat && matchesQuery;
+
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        node.title.toLowerCase().includes(q) ||
+        node.institutionOrCompany.toLowerCase().includes(q) ||
+        node.operatingConditions.toLowerCase().includes(q) ||
+        node.sourceIdentifier.toLowerCase().includes(q) ||
+        node.leadContributor.toLowerCase().includes(q) ||
+        node.category.toLowerCase().includes(q)
+      );
     });
   }, [evidenceNodes, selectedCategory, searchQuery, bookmarkedIds]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !institutionOrCompany.trim()) return;
+
     await onCreateEvidenceNode({
       title: title.trim(),
       category,
-      sourceIdentifier: sourceIdentifier.trim() || 'Verified Record',
+      sourceIdentifier: sourceIdentifier.trim() || 'Internal Registration',
       institutionOrCompany: institutionOrCompany.trim(),
-      leadContributor: leadContributor.trim() || 'Principal Investigator',
-      operatingConditions: operatingConditions.trim() || 'Standard laboratory envelope',
-      demonstratedPerformance: demonstratedPerformance.trim() || 'Verified performance point',
-      maturityTrl: maturityTrl.trim() || 'TRL 5',
+      leadContributor: leadContributor.trim() || 'Not specified',
+      operatingConditions: operatingConditions.trim() || 'Unspecified envelope',
+      demonstratedPerformance: demonstratedPerformance.trim() || 'See source document',
+      maturityTrl: maturityTrl.trim() || 'TRL 4',
       manufacturabilityAndReliability:
-        manufacturabilityAndReliability.trim() || 'Evaluated for industrial compatibility',
-      relevanceToGap: relevanceToGap.trim() || 'Direct technical evidence node',
+        manufacturabilityAndReliability.trim() || 'Under evaluation',
+      relevanceToGap: relevanceToGap.trim() || 'General R&D relevance',
     });
-    setShowAddModal(false);
+
     setTitle('');
     setSourceIdentifier('');
     setInstitutionOrCompany('');
@@ -165,76 +177,142 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
     setMaturityTrl('');
     setManufacturabilityAndReliability('');
     setRelevanceToGap('');
+    setShowAddModal(false);
   };
 
-  const handleCreateLink = async (e: React.FormEvent) => {
+  const handleCreateRelationship = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!relSourceId || !relTargetId) return;
+    if (!relSourceId || !relTargetId || relSourceId === relTargetId) return;
+
     await onCreateRelationship({
       sourceId: relSourceId,
       targetId: relTargetId,
       relationshipType: relType,
-      description:
-        relDesc.trim() || 'Condition-aware provenance edge in public.catalog_relationships',
+      description: relDesc.trim(),
     });
-    setShowLinkModal(false);
+
     setRelDesc('');
+    setShowLinkModal(false);
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-8">
-      <div className="pb-8 border-b border-slate-200 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-        <div>
-          <div className="text-xs font-bold tracking-wider text-[#108548] mb-1.5">
-            QARTINIA KNOWLEDGE GRAPH · CONDITION-AWARE PROVENANCE LAYER (public.catalog &amp; public.catalog_relationships)
+    <div className="max-w-[1500px] mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200">
+      {/* 1. Header Banner */}
+      <section className="bg-white border border-[#E5DDD0] rounded-2xl p-5 sm:p-6 lg:p-8 shadow-xs relative overflow-hidden">
+        <CarthageCornerMotif className="w-8 h-8 absolute top-2 right-2 pointer-events-none opacity-40 text-[#8C6527]" />
+        <AstrolabeWatermark className="w-64 h-64 absolute -right-12 -bottom-12 pointer-events-none opacity-[0.08] text-[#8C6527]" />
+        
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 relative z-10">
+          <div className="space-y-2 max-w-3xl">
+            <div className="text-xs font-bold tracking-wider text-[#8C6527] uppercase font-mono flex items-center gap-2">
+              <Network className="w-4 h-4 text-[#8C6527]" />
+              <span>Condition-Aware Provenance Layer</span>
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F2038] tracking-tight">
+              Structured Evidence Graph &amp; Knowledge Network
+            </h1>
+            <p className="text-xs sm:text-sm text-[#5A6E85] leading-relaxed">
+              Scientific publications, patents, product datasheets, standards, and laboratories linked by operating conditions, maturity, and reliability.
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-[#0F2537] tracking-tight">
-            Structured Engineering Evidence &amp; Relational Knowledge Graph
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Scientific publications, patents, product datasheets, standards, laboratories, and relational edges (<code className="font-mono text-xs">public.catalog_relationships</code>) packaged by comparable operating conditions, maturity, and reliability.
-          </p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-3 self-start">
-          {allCatalogEntities.length >= 2 && (
+          <div className="flex flex-wrap items-center gap-3 self-start">
+            {allCatalogEntities.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRelSourceId(allCatalogEntities[0]?.id || '');
+                  setRelTargetId(allCatalogEntities[1]?.id || '');
+                  setShowLinkModal(true);
+                }}
+                className="px-4 py-2.5 text-xs font-semibold text-[#0F2038] bg-white border border-[#E5DDD0] rounded-xl hover:border-[#D5C8B5] hover:bg-[#FAF8F5] transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs"
+              >
+                <GitBranch className="w-4 h-4 text-[#8C6527]" />
+                <span>Link Graph Edge ({catalogRelationships.length})</span>
+              </button>
+            )}
+
+            {onOpenExecutiveDossier && (
+              <button
+                type="button"
+                onClick={onOpenExecutiveDossier}
+                className="px-4 py-2.5 text-xs font-bold text-[#0F2038] bg-white border border-[#D5C8B5] hover:bg-[#FAF8F5] rounded-xl transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-2xs"
+              >
+                <FileText className="w-4 h-4 text-[#8C6527]" />
+                <span>Executive Dossier</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => {
-                setRelSourceId(allCatalogEntities[0]?.id || '');
-                setRelTargetId(allCatalogEntities[1]?.id || '');
-                setShowLinkModal(true);
-              }}
-              className="px-4 py-2.5 text-xs font-semibold text-[#0F2537] bg-white border border-slate-300 rounded-lg hover:border-[#0F2537] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2.5 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shadow-xs"
             >
-              <GitBranch className="w-4 h-4 text-[#108548]" />
-              <span>Link Knowledge Graph Edge ({catalogRelationships.length})</span>
+              <Plus className="w-4 h-4 text-[#C5A880]" />
+              <span>Register Evidence Record</span>
             </button>
-          )}
+          </div>
+        </div>
+      </section>
 
+      {/* View Mode Switcher Header */}
+      <div className="flex items-center justify-between bg-white border border-[#E5DDD0] rounded-2xl p-2 px-4 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <LivePulseBeacon color="gold" />
+          <span className="font-serif font-bold text-xs text-[#0F2038]">Knowledge Network Display Mode</span>
+        </div>
+        <div className="flex items-center gap-1 bg-[#FAF8F5] border border-[#E5DDD0] p-1 rounded-xl text-xs font-semibold">
           <button
             type="button"
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2.5 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+            onClick={() => setViewMode('radar')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'radar'
+                ? 'bg-[#0F2038] text-white shadow-2xs font-bold'
+                : 'text-[#5A6E85] hover:text-[#0F2038]'
+            }`}
           >
-            <Plus className="w-4 h-4 text-[#C59B47]" />
-            <span>Register Evidence Record</span>
+            <Network className="w-3.5 h-3.5 text-[#C5A880]" />
+            <span>Interactive Celestial Astrolabe</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'grid'
+                ? 'bg-[#0F2038] text-white shadow-2xs font-bold'
+                : 'text-[#5A6E85] hover:text-[#0F2038]'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-[#C5A880]" />
+            <span>Evidence Record Cards</span>
           </button>
         </div>
       </div>
 
-      {/* Knowledge Graph Relational Edges (`public.catalog_relationships`) */}
+      {/* Interactive Canvas Constellation Radar Layer */}
+      {viewMode === 'radar' && (
+        <ConstellationRadarCanvas
+          nodes={evidenceNodes}
+          edges={catalogRelationships}
+          onSelectNode={(node) => {
+            setSelectedNodeForInspect(node);
+            setSealModalNode(node);
+          }}
+        />
+      )}
+
+      {/* 2. Knowledge Graph Relational Edges */}
       {catalogRelationships.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
+        <section className="bg-white border border-[#E5DDD0] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between pb-3 border-b border-[#EBE3D7]">
             <div className="flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-[#108548]" />
-              <h2 className="text-sm font-bold text-[#0F2537]">
-                Verified Knowledge Graph Provenance Edges (<code className="font-mono text-xs">public.catalog_relationships</code>)
+              <GitBranch className="w-4 h-4 text-[#8C6527]" />
+              <h2 className="font-serif text-base font-bold text-[#0F2038]">
+                Verified Knowledge Graph Edges (<code className="font-mono text-xs text-[#8C6527]">catalog_relationships</code>)
               </h2>
             </div>
-            <span className="text-xs font-mono text-slate-500">
-              {catalogRelationships.length} Relational Edges
+            <span className="text-xs font-mono text-[#5A6E85]">
+              {catalogRelationships.length} Edges
             </span>
           </div>
 
@@ -242,48 +320,48 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
             {catalogRelationships.map((rel) => (
               <div
                 key={rel.id}
-                className="p-3.5 rounded-lg bg-[#FAF9F6] border border-slate-200 flex items-start justify-between gap-3 text-xs"
+                className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0] flex items-start justify-between gap-3 text-xs"
               >
                 <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-1.5 font-semibold text-[#0F2537]">
+                  <div className="flex flex-wrap items-center gap-1.5 font-semibold text-[#0F2038]">
                     <span>{rel.sourceTitle}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#C59B47] shrink-0" />
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-[#108548] font-mono text-[11px]">
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8C6527] shrink-0" />
+                    <span className="px-2 py-0.5 rounded bg-white border border-[#E5DDD0] text-[#8C6527] font-mono text-[11px]">
                       {rel.relationshipType}
                     </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#C59B47] shrink-0" />
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8C6527] shrink-0" />
                     <span>{rel.targetTitle}</span>
                   </div>
                   {rel.description && (
-                    <p className="text-slate-600 leading-relaxed">{rel.description}</p>
+                    <p className="text-[#5A6E85] leading-relaxed">{rel.description}</p>
                   )}
                 </div>
                 <button
                   type="button"
                   onClick={() => onDeleteRelationship(rel.id)}
-                  className="p-1 text-slate-400 hover:text-red-600 cursor-pointer shrink-0"
-                  title="Remove Knowledge Graph Edge"
+                  className="p-1 text-[#5A6E85] hover:text-rose-600 cursor-pointer shrink-0 transition-colors"
+                  title="Remove Edge"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Filter & Search Bar */}
-      <div className="py-2 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
+      {/* 3. Filter & Search Bar */}
+      <div className="py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white border border-[#E5DDD0] rounded-xl shadow-2xs">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-white text-[#0F2537] shadow-xs'
-                  : 'text-slate-600 hover:text-[#0F2537]'
+                  ? 'bg-[#0F2038] text-white shadow-2xs'
+                  : 'text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5]'
               }`}
             >
               {cat === 'Bookmarked' ? `Bookmarked (${bookmarks.length})` : cat}
@@ -292,34 +370,34 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
         </div>
 
         <div className="relative w-full lg:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#718096] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter by operating conditions, institution, DOI/patent..."
-            className="w-full pl-10 pr-4 py-2 text-xs bg-white border border-slate-200 rounded-lg text-[#0F2537] focus:outline-none focus:ring-2 focus:ring-[#0F2537]"
+            className="w-full pl-10 pr-4 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] placeholder:text-[#A0AEC0] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527] shadow-2xs"
           />
         </div>
       </div>
 
-      {/* Evidence Records Grid */}
+      {/* 4. Evidence Records Grid */}
       <div>
         {filteredNodes.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-[#FBF5EC] border border-[#E8D8C3] flex items-center justify-center mx-auto">
-              <Layers className="w-6 h-6 text-[#0F2537]" />
+          <div className="bg-white border border-[#E5DDD0] rounded-2xl p-10 text-center space-y-4 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-[#FAF8F5] border border-[#E5DDD0] flex items-center justify-center mx-auto text-[#8C6527]">
+              <Layers className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-[#0F2537]">
+            <h2 className="font-serif text-xl font-bold text-[#0F2038]">
               Structured Evidence Graph Is Ready
             </h2>
-            <p className="text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-              Every technical record saved from a Qartinia Frontier analysis or contributed directly by researchers and engineers is persisted to <code className="font-mono text-xs">public.catalog</code> and linked via <code className="font-mono text-xs">public.catalog_relationships</code>.
+            <p className="text-xs sm:text-sm text-[#5A6E85] max-w-lg mx-auto leading-relaxed">
+              Every technical record saved from a Qartinia Frontier analysis or contributed directly by researchers is persisted to <code className="font-mono text-xs text-[#8C6527]">public.catalog</code>.
             </p>
             <button
               type="button"
               onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] cursor-pointer"
+              className="px-4 py-2 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl cursor-pointer shadow-xs"
             >
               Register First Evidence Record
             </button>
@@ -331,44 +409,38 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
               return (
                 <article
                   key={node.id}
-                  className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col justify-between hover:border-slate-400 transition-colors space-y-4"
+                  className="bg-white border border-[#E5DDD0] rounded-2xl p-6 flex flex-col justify-between hover:border-[#D5C8B5] hover:shadow-xs transition-all space-y-4 group"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <div className="flex items-center justify-between gap-2 text-xs text-[#5A6E85]">
                       <div>
-                        <strong className="text-[#108548]">{node.category}</strong>
+                        <strong className="text-[#8C6527] font-semibold font-mono">{node.category}</strong>
                         <span> · {node.institutionOrCompany} · </span>
-                        <span className="font-mono">{node.sourceIdentifier}</span>
+                        <span className="font-mono text-[#0F2038]">{node.sourceIdentifier}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold text-[#0F2537]">
+                        <span className="font-mono font-semibold text-[#0F2038] bg-[#FAF8F5] px-2 py-0.5 rounded border border-[#E5DDD0]">
                           {node.maturityTrl}
                         </span>
                         <button
                           type="button"
                           onClick={() => onToggleBookmark(node.id, node.title)}
-                          title={
+                          title={isBookmarked ? 'Remove Bookmark' : 'Save Bookmark'}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
                             isBookmarked
-                              ? 'Remove from public.bookmarks'
-                              : 'Save to public.bookmarks'
-                          }
-                          className={`p-1 rounded cursor-pointer ${
-                            isBookmarked
-                              ? 'text-[#C59B47] bg-[#FBF5EC]'
-                              : 'text-slate-400 hover:text-[#0F2537]'
+                              ? 'text-[#8C6527] bg-[#FAF4EB] border border-[#D5C8B5]'
+                              : 'text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5]'
                           }`}
                         >
                           <Bookmark className="w-3.5 h-3.5 fill-current" />
                         </button>
 
-                        {/* Delete Evidence Node button: Hidden for employees; visible only for Administrators */}
                         {permissions.canDeleteEvidence && (
                           <button
                             type="button"
                             onClick={() => onDeleteEvidenceNode(node.id)}
-                            aria-label="Remove Evidence Node"
                             title="Delete Evidence Record (Admin Only)"
-                            className="p-1 text-slate-400 hover:text-red-600 cursor-pointer transition-colors"
+                            className="p-1.5 text-[#5A6E85] hover:text-rose-600 cursor-pointer transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -376,46 +448,44 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                       </div>
                     </div>
 
-                    <h3 className="text-lg font-bold text-[#0F2537]">{node.title}</h3>
+                    <h3 className="font-serif text-lg font-bold text-[#0F2038] group-hover:text-[#8C6527] transition-colors">
+                      {node.title}
+                    </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-lg bg-[#FAF9F6] border border-slate-200 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#FAF8F5] border border-[#EBE3D7] text-xs">
                       <div>
-                        <span className="text-slate-500 block">Comparable Operating Envelope</span>
-                        <strong className="text-[#0F2537]">{node.operatingConditions}</strong>
+                        <span className="text-[#5A6E85] block font-medium">Operating Conditions:</span>
+                        <span className="font-semibold text-[#0F2038] mt-0.5 block">{node.operatingConditions}</span>
                       </div>
                       <div>
-                        <span className="text-slate-500 block">Demonstrated Performance</span>
-                        <strong className="text-[#0F2537] font-mono tabular-nums">
-                          {node.demonstratedPerformance}
-                        </strong>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <span className="text-slate-500 block">
-                          Manufacturability, Reliability &amp; Cost
-                        </span>
-                        <strong className="text-[#0F2537]">
-                          {node.manufacturabilityAndReliability}
-                        </strong>
+                        <span className="text-[#5A6E85] block font-medium">Demonstrated Performance:</span>
+                        <span className="font-mono font-semibold text-[#0F2038] mt-0.5 block">{node.demonstratedPerformance}</span>
                       </div>
                     </div>
 
-                    <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                    <p className="text-xs text-[#5A6E85] leading-relaxed">
+                      <strong className="text-[#0F2038]">Relevance to Gap: </strong>
                       {node.relevanceToGap}
                     </p>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
-                    <div className="text-slate-600">
-                      Lead Contributor:{' '}
-                      <strong className="text-[#0F2537]">{node.leadContributor}</strong>
-                    </div>
+                  <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-between text-xs flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedNodeForInspect(node)}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF8F5] border border-[#E5DDD0] text-[#0F2038] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-[#8C6527]" />
+                      <span>Inspect Canvas Node</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => onLaunchProjectFromEvidence(node)}
-                      className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0F2537] rounded-md hover:bg-[#16344D] flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                      className="px-3 py-1.5 rounded-xl bg-[#0F2038] hover:bg-[#1A365D] text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                     >
-                      <Lock className="w-3.5 h-3.5 text-[#C59B47]" />
-                      <span>Open Protected Project</span>
+                      <Lock className="w-3 h-3 text-[#C5A880]" />
+                      <span>Start Project Room</span>
                     </button>
                   </div>
                 </article>
@@ -425,138 +495,143 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
         )}
       </div>
 
-      {/* Link Knowledge Graph Edge Modal (`public.catalog_relationships`) */}
+      {/* Floating Window: Link Graph Edge Modal */}
       {showLinkModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#0F2038]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <form
-            onSubmit={handleCreateLink}
-            className="bg-white border border-slate-200 rounded-xl max-w-lg w-full p-6 space-y-4"
+            onSubmit={handleCreateRelationship}
+            className="bg-white border border-[#E5DDD0] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h2 className="text-base font-bold text-[#0F2537]">
-                Create Knowledge Graph Relationship (<code className="font-mono text-xs">public.catalog_relationships</code>)
-              </h2>
+            <div className="flex items-center justify-between pb-3 border-b border-[#EBE3D7]">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-[#8C6527]" />
+                <h2 className="font-serif text-base font-bold text-[#0F2038]">
+                  Link Verified Knowledge Graph Edge
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowLinkModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                className="p-1 text-[#5A6E85] hover:text-[#0F2038] rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Source Catalog Entity (source_id) *
-              </label>
-              <select
-                value={relSourceId}
-                onChange={(e) => setRelSourceId(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
-              >
-                {allCatalogEntities.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Source Entity
+                </label>
+                <select
+                  value={relSourceId}
+                  onChange={(e) => setRelSourceId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] text-[#0F2038] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
+                >
+                  {allCatalogEntities.map((ent) => (
+                    <option key={ent.id} value={ent.id}>
+                      [{ent.type}] {ent.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Relationship Type
+                </label>
+                <select
+                  value={relType}
+                  onChange={(e) => setRelType(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] text-[#0F2038] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
+                >
+                  <option value="cites_method">cites_method</option>
+                  <option value="benchmarks_against">benchmarks_against</option>
+                  <option value="licensed_from">licensed_from</option>
+                  <option value="fabricated_by">fabricated_by</option>
+                  <option value="derived_from">derived_from</option>
+                  <option value="supersedes">supersedes</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Target Entity
+                </label>
+                <select
+                  value={relTargetId}
+                  onChange={(e) => setRelTargetId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] text-[#0F2038] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
+                >
+                  {allCatalogEntities.map((ent) => (
+                    <option key={ent.id} value={ent.id}>
+                      [{ent.type}] {ent.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Engineering Provenance Description
+                </label>
+                <input
+                  type="text"
+                  value={relDesc}
+                  onChange={(e) => setRelDesc(e.target.value)}
+                  placeholder="Explain how these entities connect under comparable conditions"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E5DDD0] text-[#0F2038] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Relationship Type (relationship_type) *
-              </label>
-              <select
-                value={relType}
-                onChange={(e) => setRelType(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
-              >
-                <option value="closes_research_frontier_gap">closes_research_frontier_gap</option>
-                <option value="benchmarks_commercial_frontier">
-                  benchmarks_commercial_frontier
-                </option>
-                <option value="enables_thermal_and_emi_envelope">
-                  enables_thermal_and_emi_envelope
-                </option>
-                <option value="licenses_background_ip_in_room">
-                  licenses_background_ip_in_room
-                </option>
-                <option value="executes_on_frontier">executes_on_frontier</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Target Catalog Entity (target_id) *
-              </label>
-              <select
-                value={relTargetId}
-                onChange={(e) => setRelTargetId(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
-              >
-                {allCatalogEntities.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                Provenance / Engineering Description
-              </label>
-              <input
-                type="text"
-                value={relDesc}
-                onChange={(e) => setRelDesc(e.target.value)}
-                placeholder="Explain how these two entities connect under comparable conditions"
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-              />
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-3">
+            <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-[#EBE3D7]">
               <button
                 type="button"
                 onClick={() => setShowLinkModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] cursor-pointer"
+                className="px-5 py-2 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl cursor-pointer shadow-xs"
               >
-                Insert Edge in public.catalog_relationships
+                Insert Edge
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Register Evidence Node Modal */}
+      {/* Floating Window: Register Evidence Node Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#0F2038]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <form
             onSubmit={handleCreate}
-            className="bg-white border border-slate-200 rounded-xl max-w-lg w-full p-6 max-h-[92vh] overflow-y-auto"
+            className="bg-white border border-[#E5DDD0] rounded-2xl max-w-xl w-full p-6 max-h-[92vh] overflow-y-auto space-y-4 shadow-2xl"
           >
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-[#0F2537]">
-                Register Condition-Aware Evidence Record
-              </h2>
+            <div className="flex items-center justify-between pb-3 border-b border-[#EBE3D7]">
+              <div>
+                <h2 className="font-serif text-lg font-bold text-[#0F2038]">
+                  Register Condition-Aware Evidence Record
+                </h2>
+                <p className="text-xs text-[#5A6E85]">
+                  Add verified empirical literature, patents, or lab qualifications
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                className="p-1 text-[#5A6E85] hover:text-[#0F2038] rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-2 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                   Evidence Record Title *
                 </label>
                 <input
@@ -565,19 +640,19 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Enter publication, patent, laboratory, or product title"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                  className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Evidence Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as EvidenceCategory)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] text-[#0F2038] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   >
                     <option value="Publication">Publication</option>
                     <option value="Patent">Patent</option>
@@ -588,7 +663,7 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     DOI / Patent / Reference ID
                   </label>
                   <input
@@ -596,14 +671,14 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={sourceIdentifier}
                     onChange={(e) => setSourceIdentifier(e.target.value)}
                     placeholder="DOI, patent number, or datasheet ID"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-mono focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Institution / Company *
                   </label>
                   <input
@@ -612,11 +687,11 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={institutionOrCompany}
                     onChange={(e) => setInstitutionOrCompany(e.target.value)}
                     placeholder="University, research institute, or vendor"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Lead Author / Investigator
                   </label>
                   <input
@@ -624,14 +699,14 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={leadContributor}
                     onChange={(e) => setLeadContributor(e.target.value)}
                     placeholder="Principal investigator or engineering lead"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Operating Envelope / Conditions
                   </label>
                   <input
@@ -639,26 +714,26 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={operatingConditions}
                     onChange={(e) => setOperatingConditions(e.target.value)}
                     placeholder="Voltage, temperature, load, substrate, etc."
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                    Demonstrated Performance &amp; Unit
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                    Demonstrated Performance
                   </label>
                   <input
                     type="text"
                     value={demonstratedPerformance}
                     onChange={(e) => setDemonstratedPerformance(e.target.value)}
                     placeholder="Measured performance value and unit"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-mono focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Maturity (TRL)
                   </label>
                   <input
@@ -666,11 +741,11 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={maturityTrl}
                     onChange={(e) => setMaturityTrl(e.target.value)}
                     placeholder="e.g., TRL 4, TRL 6, TRL 8"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] font-mono focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#0F2537] mb-1">
+                  <label className="block text-xs font-semibold text-[#0F2038] mb-1">
                     Manufacturability &amp; Reliability
                   </label>
                   <input
@@ -678,43 +753,147 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({
                     value={manufacturabilityAndReliability}
                     onChange={(e) => setManufacturabilityAndReliability(e.target.value)}
                     placeholder="Qualification, yield, or process notes"
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                    className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#0F2537] mb-1">
-                  Engineering Relevance &amp; Provenance Summary
+                <label className="block text-xs font-semibold text-[#0F2038] mb-1">
+                  Engineering Relevance
                 </label>
                 <textarea
                   rows={3}
                   value={relevanceToGap}
                   onChange={(e) => setRelevanceToGap(e.target.value)}
-                  placeholder="Describe why this evidence record is relevant to closing the frontier gap"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                  placeholder="Describe why this record is relevant to closing the gap"
+                  className="w-full px-3 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                 />
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+            <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-semibold text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] cursor-pointer"
+                className="px-5 py-2 text-xs font-bold text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl cursor-pointer shadow-xs"
               >
-                Save to Evidence Graph
+                Save Record
               </button>
             </div>
           </form>
         </div>
       )}
+      {/* Canvas Node Inspector Drawer */}
+      {selectedNodeForInspect && (
+        <div className="fixed inset-0 z-50 bg-[#0F2038]/60 backdrop-blur-xs flex items-center justify-end p-2 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-[#D5C8B5] rounded-2xl max-w-xl w-full h-full max-h-[95vh] p-6 shadow-2xl overflow-y-auto space-y-6 relative flex flex-col justify-between">
+            <CarthageCornerMotif className="w-8 h-8 absolute top-3 right-3 opacity-40 text-[#8C6527]" />
+            <AstrolabeWatermark className="w-48 h-48 absolute -right-10 -bottom-10 opacity-[0.08] text-[#8C6527]" />
+
+            <div className="space-y-5 relative z-10">
+              <div className="flex items-start justify-between pb-4 border-b border-[#EBE3D7]">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <LivePulseBeacon color="gold" />
+                    <span className="font-mono text-xs font-bold text-[#8C6527] uppercase">
+                      Canvas Node Inspection
+                    </span>
+                  </div>
+                  <h2 className="font-serif text-xl font-bold text-[#0F2038]">
+                    {selectedNodeForInspect.title}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedNodeForInspect(null)}
+                  className="p-1.5 text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] rounded-xl transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0]">
+                  <span className="text-[10px] font-mono text-[#718096] uppercase block">Category</span>
+                  <span className="font-serif font-bold text-[#0F2038] mt-0.5 block">{selectedNodeForInspect.category}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E5DDD0]">
+                  <span className="text-[10px] font-mono text-[#718096] uppercase block">TRL Maturity</span>
+                  <span className="font-serif font-bold text-[#8C6527] mt-0.5 block">{selectedNodeForInspect.maturityTrl}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-[#E5DDD0] space-y-1">
+                  <span className="font-mono text-[10px] font-bold text-[#8C6527] uppercase block">Operating Conditions Envelope</span>
+                  <p className="text-[#0F2038] font-medium leading-relaxed">{selectedNodeForInspect.operatingConditions}</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-[#E5DDD0] space-y-1">
+                  <span className="font-mono text-[10px] font-bold text-[#8C6527] uppercase block">Demonstrated Performance</span>
+                  <p className="font-mono font-semibold text-[#0F2038] leading-relaxed">{selectedNodeForInspect.demonstratedPerformance}</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-[#E5DDD0] space-y-1">
+                  <span className="font-mono text-[10px] font-bold text-[#8C6527] uppercase block">Manufacturability &amp; Yield</span>
+                  <p className="text-[#5A6E85] leading-relaxed">{selectedNodeForInspect.manufacturabilityAndReliability || 'Under qualification review'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-[#E5DDD0] space-y-1">
+                  <span className="font-mono text-[10px] font-bold text-[#8C6527] uppercase block">Engineering Relevance to Tech Gap</span>
+                  <p className="text-[#5A6E85] leading-relaxed">{selectedNodeForInspect.relevanceToGap}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-between gap-3 relative z-10 text-xs">
+              <span className="text-[#718096] font-mono text-[10px]">
+                Source: {selectedNodeForInspect.sourceIdentifier}
+              </span>
+              <div className="flex items-center gap-2">
+                {onOpenExecutiveDossier && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedNodeForInspect(null);
+                      onOpenExecutiveDossier();
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-white border border-[#D5C8B5] hover:bg-[#FAF8F5] text-[#0F2038] font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#8C6527]" />
+                    <span>Dossier</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onLaunchProjectFromEvidence(selectedNodeForInspect);
+                    setSelectedNodeForInspect(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#0F2038] hover:bg-[#1A365D] text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Lock className="w-3.5 h-3.5 text-[#C5A880]" />
+                  <span>Launch Project Room</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cryptographic Provenance Inspector Seal Modal */}
+      <CryptographicProvenanceInspectorModal
+        isOpen={!!sealModalNode}
+        onClose={() => setSealModalNode(null)}
+        node={sealModalNode}
+      />
     </div>
   );
 };

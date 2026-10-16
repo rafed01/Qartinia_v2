@@ -120,6 +120,9 @@ export interface FrontierBenchmark {
   recommendedNextActions: string[];
   monitored: boolean;
   maturityTrl?: string;
+  customerBaselineValue?: string;
+  targetValue?: string;
+  worldFrontierValue?: string;
   updatedAt?: string;
   createdAt: string;
   lastEvaluatedAt: string;

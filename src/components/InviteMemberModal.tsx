@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   Sliders,
 } from 'lucide-react';
+import { ColumnsWatermark, ShipWatermark, CarthageCornerMotif } from './CarthageArtwork';
 
 export const ALL_PERMISSION_KEYS = [
   {
@@ -229,23 +230,26 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F2537]/75 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F2038]/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl max-w-2xl w-full border border-[#D5C8B5] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all relative">
+        <CarthageCornerMotif className="w-8 h-8 absolute top-2 right-2 pointer-events-none opacity-40 text-[#8C6527] z-20" />
+        <ColumnsWatermark className="w-48 h-48 absolute -right-10 -bottom-10 pointer-events-none opacity-[0.08] text-[#0F2038]" />
+
         {/* Header Bar */}
-        <div className="px-6 py-4 bg-[#FAF9F6] border-b border-slate-200 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 bg-[#F5EFEB] border-b border-[#EBE3D7] flex items-center justify-between shrink-0 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[#108548]">
+            <div className="p-2 rounded-xl bg-[#FAF8F5] border border-[#D5C8B5] text-[#8C6527]">
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#0F2537]">
+              <h3 className="text-base font-serif font-bold text-[#0F2038]">
                 Invite Member to Organization
               </h3>
-              <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
-                <Building className="w-3.5 h-3.5 text-slate-400" />
+              <p className="text-xs text-[#5A6E85] font-mono flex items-center gap-1.5 mt-0.5">
+                <Building className="w-3.5 h-3.5 text-[#8C6527]" />
                 <span>{currentUser?.organizationName || 'Qartinia Deep-Tech Consortium'}</span>
-                <span className="text-slate-300">·</span>
-                <span className="text-[#108548] font-bold">{enterpriseMembers.length} Active Seats</span>
+                <span className="text-[#C5A880]">·</span>
+                <span className="text-[#8C6527] font-bold">{enterpriseMembers.length} Active Seats</span>
               </p>
             </div>
           </div>
@@ -253,14 +257,14 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#EBE3D7] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Step Indicator & Search Mode Switcher */}
-        <div className="px-6 py-3 bg-white border-b border-slate-100 flex items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-3 bg-[#FAF8F5] border-b border-[#EBE3D7] flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -270,11 +274,11 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 activeStep === 'search' && inviteMode === 'search'
-                  ? 'bg-[#0F2537] text-white shadow-2xs font-bold'
-                  : 'bg-[#FAF9F6] text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                  : 'bg-white text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
               }`}
             >
-              <Search className="w-3.5 h-3.5 text-[#108548]" />
+              <Search className="w-3.5 h-3.5" />
               <span>1. Search Existing Users</span>
             </button>
 
@@ -287,11 +291,11 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 inviteMode === 'manual'
-                  ? 'bg-[#0F2537] text-white shadow-2xs font-bold'
-                  : 'bg-[#FAF9F6] text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                  : 'bg-white text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
               }`}
             >
-              <Mail className="w-3.5 h-3.5 text-slate-400" />
+              <Mail className="w-3.5 h-3.5" />
               <span>Manual Email Invite</span>
             </button>
           </div>
@@ -300,7 +304,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
             <button
               type="button"
               onClick={() => setActiveStep('search')}
-              className="text-xs font-semibold text-[#108548] hover:text-[#0c6b39] flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold text-[#8C6527] hover:underline flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Search</span>
@@ -323,29 +327,29 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               {/* Search Bar Input */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block font-bold text-[#0F2537] text-xs">
+                  <label className="block font-bold text-[#0F2038] text-xs">
                     Search Registered Users by Username, Name, or Email
                   </label>
-                  <span className="text-[11px] font-mono text-slate-400">
+                  <span className="text-[11px] font-mono text-[#5A6E85]">
                     {filteredUsers.length} Users Found
                   </span>
                 </div>
 
                 <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-[#5A6E85] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Type username (e.g. markus.becker), full name, or email..."
-                    className="w-full pl-10 pr-9 py-2.5 bg-[#FAF9F6] border border-slate-300 rounded-xl text-[#0F2537] font-semibold text-xs focus:outline-none focus:border-[#108548] focus:bg-white shadow-2xs"
+                    className="w-full pl-10 pr-9 py-2.5 bg-[#FAF8F5] border border-[#E5DDD0] rounded-xl text-[#0F2038] font-semibold text-xs focus:outline-none focus:border-[#C5A880] placeholder-[#8A9BA8] shadow-2xs"
                     autoFocus
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6E85] hover:text-[#0F2038] cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -360,8 +364,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                   onClick={() => setFilterCategory('all')}
                   className={`px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors ${
                     filterCategory === 'all'
-                      ? 'bg-[#0F2537] text-white font-bold'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                      : 'bg-[#FAF8F5] text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
                   }`}
                 >
                   All Users ({accounts.length})
@@ -371,8 +375,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                   onClick={() => setFilterCategory('independent')}
                   className={`px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors ${
                     filterCategory === 'independent'
-                      ? 'bg-[#0F2537] text-white font-bold'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                      : 'bg-[#FAF8F5] text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
                   }`}
                 >
                   Independent / Unassigned
@@ -382,8 +386,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                   onClick={() => setFilterCategory('company')}
                   className={`px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors ${
                     filterCategory === 'company'
-                      ? 'bg-[#0F2537] text-white font-bold'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                      : 'bg-[#FAF8F5] text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
                   }`}
                 >
                   Corporate Partners
@@ -393,8 +397,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                   onClick={() => setFilterCategory('advisor')}
                   className={`px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors ${
                     filterCategory === 'advisor'
-                      ? 'bg-[#0F2537] text-white font-bold'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#0F2038] text-white font-bold shadow-2xs'
+                      : 'bg-[#FAF8F5] text-[#5A6E85] hover:text-[#0F2038] border border-[#E5DDD0]'
                   }`}
                 >
                   Advisors &amp; PIs
@@ -404,12 +408,12 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               {/* Live Search Results Roster */}
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1 pt-1">
                 {filteredUsers.length === 0 ? (
-                  <div className="p-8 text-center bg-[#FAF9F6] rounded-xl border border-slate-200 space-y-2">
-                    <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
-                    <p className="text-slate-600 font-semibold">
+                  <div className="p-8 text-center bg-[#FAF8F5] rounded-xl border border-[#E5DDD0] space-y-2">
+                    <AlertCircle className="w-6 h-6 text-[#8C6527] mx-auto" />
+                    <p className="text-[#0F2038] font-serif font-bold text-sm">
                       No registered users found matching "{searchQuery}"
                     </p>
-                    <p className="text-slate-400 text-[11px]">
+                    <p className="text-[#5A6E85] text-[11px]">
                       The user may not have registered an account yet.
                     </p>
                     <button
@@ -418,7 +422,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                         setInviteMode('manual');
                         setActiveStep('configure');
                       }}
-                      className="mt-2 px-3 py-1.5 bg-[#108548] text-white font-semibold rounded-lg hover:bg-[#0c6b39] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                      className="mt-2 px-3 py-1.5 bg-[#0F2038] text-white font-bold rounded-lg hover:bg-[#1A365D] transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                     >
                       <Mail className="w-3.5 h-3.5" />
                       <span>Switch to Manual Email Invite</span>
@@ -436,43 +440,43 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                         key={acc.id}
                         className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-4 ${
                           selectedUser?.id === acc.id
-                            ? 'bg-emerald-50/80 border-[#108548] shadow-xs'
-                            : 'bg-[#FAF9F6] border-slate-200 hover:bg-white hover:border-[#108548]'
+                            ? 'bg-[#FFFDF7] border-[#8C6527] shadow-xs'
+                            : 'bg-white border-[#E5DDD0] hover:bg-[#FAF8F5] hover:border-[#D5C8B5]'
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-[#0F2537] text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-2xs">
+                          <div className="w-10 h-10 rounded-full bg-[#FAF8F5] border border-[#D5C8B5] text-[#0F2038] font-serif font-bold text-sm flex items-center justify-center shrink-0 shadow-2xs">
                             {acc.fullName ? acc.fullName[0] : username[0].toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-bold text-[#0F2537] text-xs truncate flex items-center gap-2">
+                            <div className="font-bold text-[#0F2038] text-xs truncate flex items-center gap-2">
                               <span>{acc.fullName || username}</span>
-                              <span className="font-mono text-[10px] text-[#108548] bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                              <span className="font-mono text-[10px] text-[#8C6527] bg-[#FAF8F5] px-1.5 py-0.2 rounded border border-[#D5C8B5]">
                                 @{username}
                               </span>
                             </div>
-                            <div className="text-[11px] text-slate-500 truncate font-mono mt-0.5">
+                            <div className="text-[11px] text-[#5A6E85] truncate font-mono mt-0.5">
                               {acc.email} · {acc.organizationName || 'Independent'}
                             </div>
-                            <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                            <div className="text-[10px] text-[#5A6E85] truncate mt-0.5">
                               {acc.title || acc.role?.toUpperCase()} {acc.department ? `· ${acc.department}` : ''}
                             </div>
                           </div>
                         </div>
 
                         {isAlreadyMember ? (
-                          <span className="px-2.5 py-1 rounded font-mono text-[10px] bg-slate-200 text-slate-700 font-bold shrink-0 flex items-center gap-1">
-                            <UserCheck className="w-3 h-3 text-slate-500" />
+                          <span className="px-2.5 py-1 rounded font-mono text-[10px] bg-[#FAF8F5] text-[#5A6E85] border border-[#E5DDD0] font-bold shrink-0 flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-[#5A6E85]" />
                             <span>Already Member</span>
                           </span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleSelectUser(acc)}
-                            className="px-3.5 py-1.5 bg-[#108548] text-white font-semibold rounded-lg hover:bg-[#0c6b39] transition-colors cursor-pointer text-xs shrink-0 shadow-2xs flex items-center gap-1"
+                            className="px-3.5 py-1.5 bg-[#0F2038] text-white font-bold rounded-lg hover:bg-[#1A365D] transition-all cursor-pointer text-xs shrink-0 flex items-center gap-1 shadow-xs"
                           >
                             <span>Select &amp; Assign</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
+                            <ChevronRight className="w-3.5 h-3.5 text-[#C5A880]" />
                           </button>
                         )}
                       </div>
@@ -488,19 +492,19 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
             <div className="space-y-4 animate-in fade-in duration-150">
               {/* Selected User Header Banner */}
               {selectedUser && inviteMode === 'search' && (
-                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3">
+                <div className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#D5C8B5] flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#0F2537] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-white text-[#0F2038] font-serif font-bold text-xs flex items-center justify-center shrink-0 border border-[#D5C8B5]">
                       {selectedUser.fullName ? selectedUser.fullName[0] : selectedUser.email[0].toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="font-bold text-[#0F2537] text-xs flex items-center gap-1.5">
+                      <h4 className="font-bold text-[#0F2038] text-xs flex items-center gap-1.5">
                         <span>{selectedUser.fullName}</span>
-                        <span className="font-mono text-[10px] text-[#108548]">
+                        <span className="font-mono text-[10px] text-[#8C6527]">
                           (@{selectedUser.username || selectedUser.email.split('@')[0]})
                         </span>
                       </h4>
-                      <p className="text-[11px] text-slate-600 font-mono">
+                      <p className="text-[11px] text-[#5A6E85] font-mono">
                         {selectedUser.email} · {selectedUser.organizationName || 'Independent'}
                       </p>
                     </div>
@@ -512,7 +516,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                       setSelectedUser(null);
                       setActiveStep('search');
                     }}
-                    className="text-xs text-slate-500 hover:text-slate-900 font-semibold cursor-pointer underline shrink-0"
+                    className="text-xs text-[#8C6527] hover:underline font-semibold cursor-pointer shrink-0"
                   >
                     Change User
                   </button>
@@ -523,7 +527,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               {inviteMode === 'manual' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block font-semibold text-[#0F2537] mb-1">
+                    <label className="block font-semibold text-[#0F2038] mb-1">
                       Full Name
                     </label>
                     <input
@@ -532,12 +536,12 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Dr. Thomas Weber"
-                      className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-medium focus:outline-none focus:border-[#108548]"
+                      className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E5DDD0] rounded-lg text-[#0F2038] font-medium focus:outline-none focus:border-[#C5A880]"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-[#0F2537] mb-1">
+                    <label className="block font-semibold text-[#0F2038] mb-1">
                       Corporate or Academic Email
                     </label>
                     <input
@@ -546,7 +550,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. thomas.weber@infineon.com"
-                      className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-mono focus:outline-none focus:border-[#108548]"
+                      className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E5DDD0] rounded-lg text-[#0F2038] font-mono focus:outline-none focus:border-[#C5A880]"
                     />
                   </div>
                 </div>
@@ -555,13 +559,13 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               {/* Role & Department Selection */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
+                  <label className="block font-semibold text-[#0F2038] mb-1">
                     Assigned Organization Role
                   </label>
                   <select
                     value={role}
                     onChange={(e) => handleRoleChange(e.target.value as 'owner' | 'admin' | 'employee')}
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] font-semibold focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E5DDD0] rounded-lg text-[#0F2038] font-semibold focus:outline-none focus:border-[#C5A880]"
                   >
                     <option value="employee">Technical Staff / Employee</option>
                     <option value="admin">Administrator (Approvals &amp; Benchmarks)</option>
@@ -570,7 +574,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
+                  <label className="block font-semibold text-[#0F2038] mb-1">
                     Department / Business Unit
                   </label>
                   <input
@@ -578,13 +582,13 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
                     placeholder="e.g. R&D Power Stage & Inverters"
-                    className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                    className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E5DDD0] rounded-lg text-[#0F2038] focus:outline-none focus:border-[#C5A880]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-[#0F2537] mb-1">
+                <label className="block font-semibold text-[#0F2038] mb-1">
                   Job Title
                 </label>
                 <input
@@ -592,17 +596,17 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Principal SiC Application Engineer"
-                  className="w-full px-3 py-2 bg-[#FAF9F6] border border-slate-300 rounded-lg text-[#0F2537] focus:outline-none focus:border-[#108548]"
+                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E5DDD0] rounded-lg text-[#0F2038] focus:outline-none focus:border-[#C5A880]"
                 />
               </div>
 
               {/* Granular Permissions Checklist */}
-              <div className="space-y-2 pt-2 border-t border-slate-200">
+              <div className="space-y-2 pt-2 border-t border-[#EBE3D7]">
                 <div className="flex items-center justify-between">
-                  <label className="block font-semibold text-[#0F2537]">
+                  <label className="block font-semibold text-[#0F2038]">
                     Granular Permission Grants ({permissions.length} selected)
                   </label>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-[10px] text-[#5A6E85] font-mono">
                     {role === 'admin' || role === 'owner' ? 'All Permissions Pre-selected' : 'Custom Grants'}
                   </span>
                 </div>
@@ -615,19 +619,19 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                         key={perm.key}
                         className={`p-2.5 rounded-lg border flex items-start gap-2.5 cursor-pointer transition-colors ${
                           isChecked
-                            ? 'bg-emerald-50/50 border-emerald-300'
-                            : 'bg-[#FAF9F6] border-slate-200 hover:border-slate-300'
+                            ? 'bg-[#F5EFEB] border-[#D5C8B5] text-[#0F2038]'
+                            : 'bg-[#FAF8F5] border-[#E5DDD0] hover:border-[#D5C8B5] text-[#5A6E85]'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => handleTogglePermission(perm.key)}
-                          className="mt-0.5 rounded text-[#108548] focus:ring-[#108548]"
+                          className="mt-0.5 rounded text-[#0F2038] focus:ring-[#0F2038]"
                         />
                         <div>
-                          <strong className="block text-[#0F2537] text-xs">{perm.label}</strong>
-                          <span className="text-[11px] text-slate-500 leading-snug block">
+                          <strong className="block text-[#0F2038] text-xs">{perm.label}</strong>
+                          <span className="text-[11px] text-[#5A6E85] leading-snug block">
                             {perm.desc}
                           </span>
                         </div>
@@ -640,9 +644,9 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
           )}
 
           {/* Footer Action Buttons */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
-            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-[#108548]" />
+          <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-between gap-3 shrink-0">
+            <div className="text-[11px] text-[#5A6E85] flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-[#8C6527]" />
               <span>Seat will be allocated immediately upon submission</span>
             </div>
 
@@ -650,7 +654,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                className="px-4 py-2 bg-white border border-[#E5DDD0] text-[#5A6E85] font-semibold rounded-lg hover:bg-[#FAF8F5] hover:text-[#0F2038] transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -659,12 +663,12 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || (!fullName && !selectedUser)}
-                  className="px-5 py-2 bg-[#108548] text-white font-semibold rounded-lg hover:bg-[#0c6b39] transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="px-5 py-2 bg-[#0F2038] text-white font-bold rounded-lg hover:bg-[#1A365D] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                 >
                   {isSubmitting ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#C5A880]" />
                   ) : (
-                    <Send className="w-3.5 h-3.5" />
+                    <Send className="w-3.5 h-3.5 text-[#C5A880]" />
                   )}
                   <span>Send Seat Invitation</span>
                 </button>

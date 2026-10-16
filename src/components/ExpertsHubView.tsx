@@ -1,19 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { ExpertItem } from '../types/qartinia';
 import {
   Search,
   GraduationCap,
-  Star,
-  Award,
-  BookOpen,
-  FileCheck,
-  Send,
-  X,
-  CheckCircle2,
   Calendar,
+  CheckCircle2,
+  BookOpen,
+  Award,
+  Clock,
+  X,
+  Send,
   Building,
-  ShieldCheck,
+  Mail,
   MapPin,
+  ExternalLink,
+  ShieldCheck,
+  Edit3,
 } from 'lucide-react';
 
 interface ExpertsHubViewProps {
@@ -47,26 +49,25 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
   const [editLocation, setEditLocation] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // Booking Modal State
-  const [topic, setTopic] = useState('Active Gate Driver Trajectory & ZVS Pareto Optimization');
+  // Booking Form State
+  const [preferredFormat, setPreferredFormat] = useState('1-Hour Deep-Dive Consultation');
+  const [hours, setHours] = useState(1);
+  const [topic, setTopic] = useState('Review Double-Pulse Gate Driver Parasitic Oscillations');
   const [projectContext, setProjectContext] = useState(
-    '800V SiC Traction Inverter program aiming for 98.7% WLTP efficiency under CISPR 25 Class 5 EMI limits.'
+    'Evaluating 1200V SiC MOSFET switching trajectory at 800V DC link under high-slew-rate conditions.'
   );
-  const [format, setFormat] = useState('1-Hour Deep-Dive Consultation');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const filteredExperts = useMemo(() => {
-    return experts.filter((exp) => {
-      const q = searchQuery.toLowerCase();
-      return (
-        exp.name.toLowerCase().includes(q) ||
-        exp.affiliation.toLowerCase().includes(q) ||
-        exp.title.toLowerCase().includes(q) ||
-        exp.domainExpertise.some((d) => d.toLowerCase().includes(q))
-      );
-    });
-  }, [experts, searchQuery]);
+  const filteredExperts = experts.filter((exp) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      exp.name.toLowerCase().includes(q) ||
+      exp.affiliation.toLowerCase().includes(q) ||
+      exp.domainExpertise.some((d) => d.toLowerCase().includes(q)) ||
+      exp.title.toLowerCase().includes(q)
+    );
+  });
 
   const handleSubmitBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,14 +79,14 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
         expertName: selectedExpert.name,
         topic,
         projectContext,
-        preferredFormat: format,
-        hours: 1,
+        preferredFormat,
+        hours,
       });
       setSubmitSuccess(true);
       setTimeout(() => {
         setSubmitSuccess(false);
         setSelectedExpert(null);
-      }, 2000);
+      }, 2500);
     } catch (err) {
       console.error(err);
     } finally {
@@ -94,31 +95,32 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-10 space-y-10">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 animate-in fade-in duration-200">
       {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 lg:p-8 space-y-4">
+      <div className="bg-white border border-[#E5DDD0] rounded-2xl p-6 lg:p-8 space-y-5 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
-              Scientific Advisory &amp; Technical Council
+            <div className="text-xs font-bold text-[#8C6527] uppercase tracking-wider font-mono flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-[#8C6527]" />
+              <span>Scientific Advisory &amp; Technical Council</span>
             </div>
-            <h1 className="font-brand text-2xl sm:text-3xl font-bold text-[#0F2537] mt-1">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#0F2038] mt-1.5">
               Domain Experts &amp; Principal Investigators
             </h1>
-            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+            <p className="text-xs sm:text-sm text-[#5A6E85] mt-1 max-w-2xl leading-relaxed">
               Engage directly with world-renowned academic leaders, IEEE Fellows, packaging directors, and European patent attorneys for high-stakes technical reviews and IP strategy.
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono text-slate-600 bg-[#FAF9F6] border border-slate-200 p-3 rounded-lg self-start md:self-center">
+          <div className="flex items-center gap-4 text-xs font-mono text-[#0F2038] bg-[#FAF8F5] border border-[#E5DDD0] p-3.5 rounded-xl self-start md:self-center shadow-2xs">
             <div>
-              <span className="text-slate-400 block">Verified Experts:</span>
-              <strong className="text-sm text-[#0F2537]">{experts.length}</strong>
+              <span className="text-[#8C6527] block text-[10px] uppercase font-bold tracking-wider">Verified Experts</span>
+              <strong className="text-sm text-[#0F2038] font-bold">{experts.length}</strong>
             </div>
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="h-6 w-px bg-[#E5DDD0]" />
             <div>
-              <span className="text-slate-400 block">Indexed Publications:</span>
-              <strong className="text-sm text-[#0F2537]">
+              <span className="text-[#8C6527] block text-[10px] uppercase font-bold tracking-wider">Indexed Publications</span>
+              <strong className="text-sm text-[#0F2038] font-bold">
                 {experts.reduce((acc, e) => acc + e.publicationsCount, 0)}+
               </strong>
             </div>
@@ -127,167 +129,189 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
 
         {/* Search */}
         <div className="pt-2 relative max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#8C6527] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search experts by name, institution, or domain (e.g. SiC, AQG-324, Patent)..."
-            className="w-full pl-9 pr-4 py-2 text-xs bg-[#FAF9F6] border border-slate-200 rounded-lg focus:outline-none focus:border-[#0F2537] text-[#0F2537]"
+            className="w-full pl-9 pr-4 py-2.5 text-xs bg-white border border-[#E5DDD0] rounded-xl focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527] text-[#0F2038] placeholder:text-[#A0AEC0] transition-colors"
           />
         </div>
       </div>
 
-      {/* Expert Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredExperts.map((exp) => (
+      {/* Experts Roster Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+        {filteredExperts.map((expert) => (
           <div
-            key={exp.id}
-            className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col justify-between hover:border-slate-300 transition-colors"
+            key={expert.id}
+            className="bg-white border border-[#E5DDD0] rounded-2xl p-6 flex flex-col justify-between hover:border-[#D5C8B5] shadow-xs transition-all duration-200 space-y-6"
           >
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-[#0F2537] flex items-center gap-1.5">
-                    <span>{exp.name}</span>
-                    {exp.verified && <ShieldCheck className="w-4 h-4 text-[#108548]" />}
-                    {exp.isDemo && (
-                      <span className="text-[10px] font-mono font-medium text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
-                        Demo Record
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-xs text-slate-600 font-medium mt-0.5">{exp.title}</p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-slate-400" />
-                    <span>{exp.location}</span>
-                  </p>
+              {/* Profile Top Row */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-14 h-14 rounded-full bg-[#FAF8F5] border border-[#D5C8B5] text-[#0F2038] font-serif font-bold text-xl flex items-center justify-center shadow-2xs shrink-0">
+                    {expert.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-serif text-lg font-bold text-[#0F2038]">{expert.name}</h2>
+                      {expert.verified && (
+                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-xs text-[#5A6E85] font-medium">{expert.title}</div>
+                    <div className="text-xs text-[#8C6527] font-serif font-semibold mt-0.5">
+                      {expert.affiliation}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold text-[#0F2537] block">
-                    {exp.advisoryFee}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-[11px] font-mono text-[#8C6527] font-bold bg-[#FAF4EB] border border-[#D5C8B5] px-2.5 py-0.5 rounded-lg">
+                    {expert.availability}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">Rate</span>
-                </div>
-              </div>
-
-              {/* Stats Strip */}
-              <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-[#FAF9F6] border border-slate-200 text-center text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-mono">Papers</span>
-                  <strong className="font-mono text-[#0F2537]">{exp.publicationsCount}</strong>
-                </div>
-                <div className="border-x border-slate-200">
-                  <span className="text-[10px] text-slate-400 block font-mono">Patents</span>
-                  <strong className="font-mono text-[#0F2537]">{exp.patentsCount}</strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-mono">Experience</span>
-                  <strong className="font-mono text-[#0F2537]">{exp.yearsExperience} yrs</strong>
+                  {onUpdateExpert && (currentUser?.role === 'admin' || currentUser?.role === 'platform_admin' || (expert.organizationId && currentUser?.organizationId && expert.organizationId === currentUser.organizationId)) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingExpert(expert);
+                        setEditBio(expert.bio);
+                        setEditFee(expert.advisoryFee);
+                        setEditAvailability(expert.availability);
+                        setEditLocation(expert.location);
+                      }}
+                      className="text-[10px] text-[#5A6E85] hover:text-[#0F2038] flex items-center gap-1 cursor-pointer pt-1"
+                    >
+                      <Edit3 className="w-3 h-3 text-[#8C6527]" />
+                      <span>Edit Profile</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Bio */}
-              <p className="text-xs text-slate-600 leading-relaxed">{exp.bio}</p>
+              <p className="text-xs text-[#5A6E85] leading-relaxed line-clamp-3">
+                {expert.bio}
+              </p>
 
-              {/* Domains */}
+              {/* Specialties Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {exp.domainExpertise.map((dom) => (
+                {expert.domainExpertise.map((s) => (
                   <span
-                    key={dom}
-                    className="text-[11px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-medium"
+                    key={s}
+                    className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#E5DDD0] text-[#0F2038]"
                   >
-                    {dom}
+                    {s}
                   </span>
                 ))}
               </div>
+
+              {/* Research Metrics Strip */}
+              <div className="grid grid-cols-3 gap-2 p-3 bg-[#FAF8F5] border border-[#E5DDD0] rounded-xl text-center text-xs shadow-2xs">
+                <div>
+                  <span className="text-[10px] text-[#5A6E85] block uppercase font-mono">Publications</span>
+                  <strong className="text-sm font-bold text-[#0F2038] font-mono">
+                    {expert.publicationsCount}
+                  </strong>
+                </div>
+                <div className="border-x border-[#E5DDD0]">
+                  <span className="text-[10px] text-[#5A6E85] block uppercase font-mono">Patents</span>
+                  <strong className="text-sm font-bold text-[#0F2038] font-mono">
+                    {expert.patentsCount}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#5A6E85] block uppercase font-mono">Experience</span>
+                  <strong className="text-sm font-bold text-[#8C6527] font-mono">
+                    {expert.yearsExperience} yrs
+                  </strong>
+                </div>
+              </div>
             </div>
 
-            {/* Bottom Action */}
-            <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-mono text-[11px]">{exp.availability}</span>
-
-              <div className="flex items-center gap-2">
-                {onUpdateExpert && (currentUser?.role === 'admin' || currentUser?.role === 'platform_admin' || (exp.profileId && currentUser?.id && exp.profileId === currentUser.id) || (exp.organizationId && currentUser?.organizationId && exp.organizationId === currentUser.organizationId)) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingExpert(exp);
-                      setEditBio(exp.bio);
-                      setEditFee(exp.advisoryFee);
-                      setEditAvailability(exp.availability);
-                      setEditLocation(exp.location);
-                    }}
-                    className="px-2.5 py-1.5 font-semibold text-xs text-[#0F2537] bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    Edit Profile
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setSelectedExpert(exp)}
-                  className="px-3.5 py-1.5 font-semibold text-xs text-white bg-[#0F2537] rounded-lg hover:bg-[#16344D] transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-[#C59B47]" />
-                  <span>Book Consultation</span>
-                </button>
+            {/* Bottom Booking Strip */}
+            <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1 text-xs text-[#5A6E85]">
+                <MapPin className="w-3.5 h-3.5 text-[#8C6527]" />
+                <span>{expert.location}</span>
+                <span aria-hidden="true" className="mx-1">·</span>
+                <span className="font-mono text-[#8C6527] font-bold">{expert.advisoryFee}</span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedExpert(expert)}
+                className="px-4 py-2 font-serif font-bold text-xs text-white bg-[#0F2038] hover:bg-[#1A365D] rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Book Advisory</span>
+              </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Advisory Booking Modal */}
+      {/* Floating Window: Advisory Booking Modal */}
       {selectedExpert && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg p-6 space-y-5 shadow-xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div>
-                <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
-                  Advisory Session Reservation
+        <div className="fixed inset-0 z-50 bg-[#0F2038]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E5DDD0] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="px-6 py-4 bg-[#F5EFEB] border-b border-[#E5DDD0] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#FAF4EB] border border-[#D5C8B5] text-[#8C6527]">
+                  <GraduationCap className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#0F2537]">
-                  Consult with {selectedExpert.name}
-                </h3>
+                <div>
+                  <h3 className="font-serif text-base font-bold text-[#0F2038]">
+                    Consult with {selectedExpert.name}
+                  </h3>
+                  <div className="text-[11px] text-[#5A6E85] font-mono">
+                    Scientific Advisory Reservation
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedExpert(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                className="p-1.5 text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] rounded-lg cursor-pointer transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {submitSuccess ? (
-              <div className="py-8 text-center space-y-3">
-                <CheckCircle2 className="w-12 h-12 text-[#108548] mx-auto" />
-                <h4 className="text-base font-bold text-[#0F2537]">
+              <div className="p-8 text-center space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+                <h4 className="font-serif text-lg font-bold text-[#0F2038]">
                   Consultation Request Dispatched
                 </h4>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                  Your advisory request has been registered in the Requests Pipeline (logged in Supabase `public.requests`) with `request_type: expert_consultation`. {selectedExpert.name} has been notified.
+                <p className="text-xs text-[#5A6E85] max-w-sm mx-auto leading-relaxed">
+                  Your advisory request has been registered in the Requests Pipeline. {selectedExpert.name} has been notified.
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleSubmitBooking} className="space-y-4 text-xs">
-                <div className="p-3 bg-[#FAF9F6] border border-slate-200 rounded-lg space-y-1">
-                  <div className="font-bold text-[#0F2537]">{selectedExpert.name}</div>
-                  <div className="text-slate-500">{selectedExpert.title} · {selectedExpert.affiliation}</div>
-                  <div className="text-[11px] text-slate-600 font-mono">
+              <form onSubmit={handleSubmitBooking} className="p-6 overflow-y-auto space-y-4 text-xs">
+                <div className="p-4 bg-[#FAF8F5] border border-[#E5DDD0] rounded-xl space-y-1">
+                  <div className="font-serif font-bold text-sm text-[#0F2038]">{selectedExpert.name}</div>
+                  <div className="text-[#5A6E85] text-xs">{selectedExpert.title} · {selectedExpert.affiliation}</div>
+                  <div className="text-[11px] text-[#8C6527] font-mono font-bold pt-1">
                     Advisory Fee: {selectedExpert.advisoryFee}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
+                  <label className="block font-semibold text-[#0F2038] mb-1">
                     Engagement Format
                   </label>
                   <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white"
+                    value={preferredFormat}
+                    onChange={(e) => setPreferredFormat(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   >
                     <option value="1-Hour Deep-Dive Consultation">1-Hour Deep-Dive Consultation</option>
                     <option value="Freedom-to-Operate &amp; Patent Landscape Review">
@@ -303,44 +327,58 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
-                    Consultation Topic
+                  <label className="block font-semibold text-[#0F2038] mb-1">
+                    Allocated Hours
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="40"
+                    value={hours}
+                    onChange={(e) => setHours(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-[#0F2038] mb-1">
+                    Consultation Topic *
                   </label>
                   <input
                     type="text"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
+                  <label className="block font-semibold text-[#0F2038] mb-1">
                     Project Context &amp; Key Questions
                   </label>
                   <textarea
                     value={projectContext}
                     onChange={(e) => setProjectContext(e.target.value)}
                     rows={3}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   />
                 </div>
 
-                <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setSelectedExpert(null)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="px-4 py-2 border border-[#E5DDD0] rounded-xl font-semibold text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2 bg-[#0F2537] text-white font-semibold rounded-lg hover:bg-[#16344D] cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2 bg-[#0F2038] text-white font-serif font-bold rounded-xl hover:bg-[#1A365D] cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                   >
-                    <Send className="w-3.5 h-3.5 text-[#C59B47]" />
+                    <Send className="w-3.5 h-3.5" />
                     <span>{submitting ? 'Submitting...' : 'Dispatch Request'}</span>
                   </button>
                 </div>
@@ -349,25 +387,31 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
           </div>
         </div>
       )}
-      {/* Edit Expert Modal */}
+
+      {/* Floating Window: Edit Expert Modal */}
       {editingExpert && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg p-6 space-y-5 shadow-xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div>
-                <div className="text-xs font-bold text-[#108548] uppercase tracking-wider">
-                  Expert Profile Configuration
+        <div className="fixed inset-0 z-50 bg-[#0F2038]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E5DDD0] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="px-6 py-4 bg-[#F5EFEB] border-b border-[#E5DDD0] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#FAF4EB] border border-[#D5C8B5] text-[#8C6527]">
+                  <Edit3 className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#0F2537]">
-                  Edit Technical Advisory Profile
-                </h3>
+                <div>
+                  <h3 className="font-serif text-base font-bold text-[#0F2038]">
+                    Edit Technical Advisory Profile
+                  </h3>
+                  <div className="text-[11px] text-[#5A6E85] font-mono">
+                    Ref: {editingExpert.id}
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingExpert(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                className="p-1.5 text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] rounded-lg cursor-pointer transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -388,42 +432,42 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
                   setSavingEdit(false);
                 }
               }}
-              className="space-y-4 text-xs"
+              className="p-6 overflow-y-auto space-y-4 text-xs"
             >
               <div>
-                <label className="block font-semibold text-[#0F2537] mb-1">
-                  Professional Bio &amp; Research Track Record
+                <label className="block font-semibold text-[#0F2038] mb-1">
+                  Professional Bio &amp; Research Track Record *
                 </label>
                 <textarea
                   value={editBio}
                   onChange={(e) => setEditBio(e.target.value)}
                   rows={3}
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                  className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
-                    Advisory Rate
+                  <label className="block font-semibold text-[#0F2038] mb-1">
+                    Advisory Rate *
                   </label>
                   <input
                     type="text"
                     value={editFee}
                     onChange={(e) => setEditFee(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
+                  <label className="block font-semibold text-[#0F2038] mb-1">
                     Availability
                   </label>
                   <select
                     value={editAvailability}
                     onChange={(e) => setEditAvailability(e.target.value as ExpertItem['availability'])}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white"
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                   >
                     <option value="Open for Consultations">Open for Consultations</option>
                     <option value="Project Advisory Only">Project Advisory Only</option>
@@ -431,34 +475,34 @@ export const ExpertsHubView: React.FC<ExpertsHubViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#0F2537] mb-1">
-                    Location
+                  <label className="block font-semibold text-[#0F2038] mb-1">
+                    Location *
                   </label>
                   <input
                     type="text"
                     value={editLocation}
                     onChange={(e) => setEditLocation(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    className="w-full px-3 py-2 border border-[#E5DDD0] rounded-xl text-xs bg-white text-[#0F2038] focus:outline-none focus:border-[#8C6527] focus:ring-1 focus:ring-[#8C6527]"
                     required
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-[#EBE3D7] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setEditingExpert(null)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2 border border-[#E5DDD0] rounded-xl font-semibold text-[#5A6E85] hover:text-[#0F2038] hover:bg-[#FAF8F5] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingEdit}
-                  className="px-5 py-2 bg-[#0F2537] text-white font-semibold rounded-lg hover:bg-[#16344D] cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 bg-[#0F2038] text-white font-serif font-bold rounded-xl hover:bg-[#1A365D] cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5 text-[#C59B47]" />
-                  <span>{savingEdit ? 'Saving...' : 'Save Updates to Supabase'}</span>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{savingEdit ? 'Saving...' : 'Save Updates'}</span>
                 </button>
               </div>
             </form>

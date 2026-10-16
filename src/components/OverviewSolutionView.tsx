@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QARTINIA_EMBLEM_SRC, QartiniaCrestSvg } from './QartiniaLogo';
+import { QARTINIA_EMBLEM_SRC, QartiniaCrestSvg, QartiniaLogo } from './QartiniaLogo';
 import { QartiniaSection } from './Navbar';
 import { ArrowRight, ShieldCheck, Layers, Compass, Lock } from 'lucide-react';
 
@@ -131,24 +131,27 @@ export const OverviewSolutionView: React.FC<OverviewSolutionViewProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Official Qartinia Heritage Emblem Artwork from Page 1 */}
+          {/* Right Column: Official Qartinia Heritage Emblem Artwork from Canva Design */}
           <div className="lg:col-span-5 flex flex-col items-center">
-            <div className="w-full max-w-md rounded-xl overflow-hidden border border-[#E6D5BE] bg-[#FBF5EC] shadow-xs">
-              <img
-                src={QARTINIA_EMBLEM_SRC}
-                alt="Qartinia — Connecting Minds, Building Tomorrow"
-                referrerPolicy="no-referrer"
-                className="w-full aspect-square object-cover"
-              />
-              <div className="p-5 text-center bg-[#FBF5EC] border-t border-[#E6D5BE]">
-                <div className="font-brand text-2xl font-bold text-[#0F2537] tracking-widest">
-                  QARTINIΛ
+            <div className="w-full max-w-md rounded-2xl overflow-hidden border border-[#D5C8B5] bg-gradient-to-b from-[#FAF5EC] to-[#F3EADE] shadow-sm">
+              <div className="p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-24 h-24 rounded-2xl bg-white border border-[#D5C8B5] shadow-xs flex items-center justify-center p-3 mb-5">
+                  <QartiniaCrestSvg className="w-16 h-16" textColor="#0F2038" goldColor="#B89547" />
                 </div>
-                <div className="text-[11px] font-semibold text-slate-600 tracking-widest mt-1">
+                <QartiniaLogo height={32} />
+                <div className="w-20 h-px bg-[#D5C8B5] my-4" />
+                <div className="text-xs font-serif font-bold text-[#0F2038] tracking-widest uppercase">
                   Connecting Minds · Building Tomorrow
                 </div>
-                <div className="text-[11px] text-slate-500 mt-2">
-                  Research · People · Technology · Impact
+                <div className="text-[11px] font-mono text-[#8C6527] mt-1.5 uppercase tracking-wider">
+                  Condition-Aware Deep-Tech Operating System
+                </div>
+                <div className="mt-4 flex items-center gap-2 text-[10px] text-[#5A6E85] font-mono">
+                  <span>TRL 4 &rarr; TRL 9</span>
+                  <span>·</span>
+                  <span>IP Segregation</span>
+                  <span>·</span>
+                  <span>Carthage Standard</span>
                 </div>
               </div>
             </div>
